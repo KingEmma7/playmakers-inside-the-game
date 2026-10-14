@@ -1,0 +1,8 @@
+- minute: 75
+  type: goal_boost
+  team: away
+  label: late_comeback_attempt
+- minute: 80
+  type: press_collapse
+  team: home
+  label: late_comeback_pressure

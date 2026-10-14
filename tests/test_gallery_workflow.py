@@ -25,7 +25,10 @@ async def test_workflow_fan_out_and_grounded_cues(tmp_path: Path) -> None:
     assert len(cues) == 4
     assert {cue.persona for cue in cues} == {"analyst", "casual"}
     assert all(cue.evidence_event_ids == ["e1"] for cue in cues)
-    assert all(cue.payload["metrics"]["difficulty"] == 0.6 for cue in cues)
+    assert all(
+        cue.payload["metrics"]["difficulty"] == 0.6 for cue in cues if cue.persona == "analyst"
+    )
+    assert all(cue.payload["metrics"] == {} for cue in cues if cue.persona == "casual")
     assert {trace.agent for trace in director.last_traces} == {
         "stats",
         "tactics",

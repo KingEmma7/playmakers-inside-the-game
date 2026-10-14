@@ -7,6 +7,7 @@ import sys
 from pitchsim.config import MatchConfig
 from pitchsim.season import generate_season_dataset
 from pitchsim.sim import simulate_match
+from pitchsim.story import load_story
 from pitchsim.validate import print_report, validate_matches
 
 
@@ -17,7 +18,7 @@ def _cmd_validate(args: argparse.Namespace) -> int:
 
 
 def _cmd_simulate(args: argparse.Namespace) -> int:
-    cfg = MatchConfig(seed=args.seed)
+    cfg = MatchConfig(seed=args.seed, story=load_story(args.story) if args.story else [])
     events = simulate_match(cfg)
     for e in events:
         print(json.dumps(e.model_dump(mode="json"), separators=(",", ":")))
@@ -47,6 +48,7 @@ def main(argv: list[str] | None = None) -> int:
         "simulate", help="Simulate one match and print newline-delimited JSON events."
     )
     p_sim.add_argument("--seed", type=int, default=0)
+    p_sim.add_argument("--story", help="Path to planted story YAML")
     p_sim.set_defaults(func=_cmd_simulate)
 
     p_season = sub.add_parser(

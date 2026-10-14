@@ -12,6 +12,7 @@ license = { text = "MIT" }
 authors = [{ name = "King Emmanuel" }]
 dependencies = [
   "stats-mcp>=0.1.0",
+  "gallery-agents>=0.1.0",
   "fastapi>=0.115.0,<1",
   "uvicorn[standard]>=0.30.0,<1",
   "pitchsim>=0.1.0",

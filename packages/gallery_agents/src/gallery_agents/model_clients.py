@@ -29,6 +29,28 @@ class DeterministicMockChatClient(BaseChatClient[Mapping[str, Any]]):
         async def response() -> ChatResponse:
             await self._validate_options(options)
             data = json.loads(next(m.text for m in reversed(messages) if m.role == "user"))
+            if data.get("task") == "what_if_explanation":
+                observed = data["metrics"]["after"]["win"]
+                counter = data["metrics"]["counterfactual"]["win"]
+                relation = (
+                    "higher"
+                    if observed > counter
+                    else "lower"
+                    if observed < counter
+                    else "unchanged"
+                )
+                return ChatResponse(
+                    messages=[
+                        Message(
+                            "assistant",
+                            [
+                                f"The home side's win chance is {relation} in the observed state compared with the alternative: {data['scenario']}. "
+                                "Seeded synthetic continuations estimate the difference."
+                            ],
+                        )
+                    ],
+                    model="gallery-mock",
+                )
             event = data["event"]
             kind = data["kind"]
             text = json.dumps(

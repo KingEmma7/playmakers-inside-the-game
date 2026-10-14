@@ -5,6 +5,7 @@ import json
 import math
 import os
 import re
+import tempfile
 from time import perf_counter
 from typing import Any, Literal
 
@@ -33,6 +34,7 @@ from gallery_stats.types import (
 from pydantic import BaseModel, Field, ValidationError
 
 from gallery_agents import contracts as contract_models
+from gallery_agents.checkpointing import FrameworkRecoveryStorage, RecoveryState, RecoveryStorage
 from gallery_agents.contracts import (
     AgentTraceEvent,
     ComplianceDecision,
@@ -41,7 +43,10 @@ from gallery_agents.contracts import (
     ViewerProfile,
 )
 from gallery_agents.model_clients import DeterministicMockChatClient, create_gallery_chat_client
-from gallery_agents.state_store import InMemoryMatchStore, MatchStore
+from gallery_agents.personalize import personalize
+from gallery_agents.resilience import CircuitBreaker, KillSpec
+from gallery_agents.state_store import InMemoryMatchStore, MatchState, MatchStore
+from gallery_agents.what_if import WhatIfAgent
 
 
 class StatsPacket(BaseModel):
@@ -126,55 +131,71 @@ class StatsExecutor(Executor):
         engine = self.director.engines.setdefault(event.match_id, StatsEngine())
         engine.ingest(event)
         packet = compute_stats(engine, event)
-        if tool := self.director.mcp_tool:
-            await tool.call_tool(
-                "ingest_event", match_id=event.match_id, event=event.model_dump(mode="json")
-            )
-            queries: list[tuple[str, dict[str, Any]]] = [
-                ("possession", {"match_clock_ms": event.clock_ms}),
-                ("momentum", {"match_clock_ms": event.clock_ms}),
-            ]
-            if event.team_id:
-                for name in ("pressure_index", "control_vs_chaos"):
-                    queries.append(
-                        (name, {"team_id": event.team_id, "match_clock_ms": event.clock_ms})
-                    )
-            if event.event_type in ("pass", "shot"):
-                queries.append(
-                    (
-                        "pass_difficulty" if event.event_type == "pass" else "xg",
-                        {"event_id": event.event_id},
-                    )
+        if self.director.mcp_tool:
+            try:
+                await asyncio.wait_for(
+                    self.enrich_mcp(packet), timeout=self.director.timeouts["stats"]
                 )
-            for name, arguments in queries:
-                result = await tool.call_tool(name, match_id=event.match_id, **arguments)
-                if not isinstance(result, str):
-                    raise ValueError("Expected structured MCP JSON")
-                result_types = {
-                    "possession": PossessionResult,
-                    "momentum": MomentumResult,
-                    "pressure_index": PressureIndexResult,
-                    "control_vs_chaos": ControlChaosResult,
-                    "pass_difficulty": PassDifficultyResult,
-                    "xg": XGResult,
-                }
-                validated = result_types[name].model_validate_json(result)
-                data = validated.model_dump()
-                for key, value in data.items():
-                    if isinstance(value, float) and key in packet.metrics:
-                        if not math.isclose(value, packet.metrics[key], abs_tol=1e-9):
-                            raise ValueError("MCP stats differ from local evidence")
-                        if validated.evidence.event_ids != packet.metric_evidence[key]:
-                            raise ValueError("MCP evidence differs from local events")
-                        packet.metrics[key] = value
+            except Exception:
+                await trace(ctx, self.id, "fallback_on", started, "fallback")
         await trace(ctx, self.id, "computed", started)
         await ctx.send_message(packet)
 
+    async def enrich_mcp(self, packet: StatsPacket) -> None:
+        event = packet.event
+        tool = self.director.mcp_tool
+        assert tool is not None
+        await tool.call_tool(
+            "ingest_event", match_id=event.match_id, event=event.model_dump(mode="json")
+        )
+        queries: list[tuple[str, dict[str, Any]]] = [
+            ("possession", {"match_clock_ms": event.clock_ms}),
+            ("momentum", {"match_clock_ms": event.clock_ms}),
+        ]
+        if event.team_id:
+            for name in ("pressure_index", "control_vs_chaos"):
+                queries.append((name, {"team_id": event.team_id, "match_clock_ms": event.clock_ms}))
+        if event.event_type in ("pass", "shot"):
+            queries.append(
+                (
+                    "pass_difficulty" if event.event_type == "pass" else "xg",
+                    {"event_id": event.event_id},
+                )
+            )
+        for name, arguments in queries:
+            result = await tool.call_tool(name, match_id=event.match_id, **arguments)
+            if not isinstance(result, str):
+                raise ValueError("Expected structured MCP JSON")
+            result_types = {
+                "possession": PossessionResult,
+                "momentum": MomentumResult,
+                "pressure_index": PressureIndexResult,
+                "control_vs_chaos": ControlChaosResult,
+                "pass_difficulty": PassDifficultyResult,
+                "xg": XGResult,
+            }
+            validated = result_types[name].model_validate_json(result)
+            data = validated.model_dump()
+            for key, value in data.items():
+                if isinstance(value, float) and key in packet.metrics:
+                    if not math.isclose(value, packet.metrics[key], abs_tol=1e-9):
+                        raise ValueError("MCP stats differ from local evidence")
+                    if validated.evidence.event_ids != packet.metric_evidence[key]:
+                        raise ValueError("MCP evidence differs from local events")
+                    packet.metrics[key] = value
+
 
 class InsightExecutor(Executor):
-    def __init__(self, kind: Literal["tactics", "storyline"], client: BaseChatClient) -> None:
+    def __init__(
+        self, kind: Literal["tactics", "storyline"], client: BaseChatClient, director: Director
+    ) -> None:
         super().__init__(id=kind)
         self.kind = kind
+        self.director = director
+        self.breaker = CircuitBreaker()
+        self.down = False
+        self.agent_sequences: dict[str, int] = {}
+        self.deadlines: dict[tuple[str, int], float] = {}
         self.instructions = (
             f"You are Gallery's {kind} analyst for a synthetic fictional football match. "
             "Return only an Insight JSON object with insight_id, clock_ms, kind, headline, detail, "
@@ -188,6 +209,24 @@ class InsightExecutor(Executor):
         )
 
     async def generate(self, stats: StatsPacket, reasons: list[str] | None = None) -> InsightPacket:
+        if self.down:
+            return InsightPacket(stats=stats, kind=self.kind, error="agent_unavailable")
+        key = (stats.event.match_id, stats.event.sequence)
+        deadline = self.deadlines.setdefault(
+            key, perf_counter() + self.director.timeouts[self.kind]
+        )
+        try:
+            return await asyncio.wait_for(
+                self._generate_raw(stats, reasons), timeout=max(0, deadline - perf_counter())
+            )
+        except Exception:
+            self.down = True
+            self.breaker.fail(stats.event.sequence)
+            return InsightPacket(stats=stats, kind=self.kind, error="agent_unavailable")
+
+    async def _generate_raw(
+        self, stats: StatsPacket, reasons: list[str] | None = None
+    ) -> InsightPacket:
         prompt = json.dumps(
             {
                 "event": stats.event.model_dump(mode="json"),
@@ -209,7 +248,22 @@ class InsightExecutor(Executor):
         self, stats: StatsPacket, ctx: WorkflowContext[InsightPacket, AgentTraceEvent]
     ) -> None:
         started = perf_counter()
+        was_down = self.down
+        if self.down and self.breaker.permits(stats.event.sequence):
+            try:
+                await self.director.recover(self, stats.event.match_id, stats.event.sequence)
+                await trace(ctx, self.id, "restarted_from_checkpoint", started)
+                await trace(ctx, self.id, "caught_up", started)
+            except Exception:
+                self.down = True
+                self.breaker.fail(stats.event.sequence)
         packet = await self.generate(stats)
+        if self.down:
+            if not was_down:
+                await trace(ctx, self.id, "agent_down", started, "error")
+            await trace(ctx, self.id, "fallback_on", started, "fallback")
+        elif packet.insight:
+            self.agent_sequences[stats.event.match_id] = stats.event.sequence
         await trace(ctx, self.id, "insight", started, "ok" if packet.insight else "rejected")
         await ctx.send_message(packet)
 
@@ -273,7 +327,7 @@ class ComplianceExecutor(Executor):
             if not decision.ok:
                 await trace(ctx, self.id, "rejected", started, "rejected")
             for attempt in range(2):
-                if decision.ok:
+                if decision.ok or packet.error == "agent_unavailable":
                     break
                 await trace(ctx, self.id, f"retry_{attempt + 1}", started, "retry")
                 retry_started = perf_counter()
@@ -314,15 +368,37 @@ class ComplianceExecutor(Executor):
 
 
 class GraphicsExecutor(Executor):
-    def __init__(self) -> None:
+    def __init__(self, timeout: float = 1.5) -> None:
         super().__init__(id="graphics")
+        self.timeout = timeout
 
     @handler
     async def handle(
         self, packet: ApprovedPacket, ctx: WorkflowContext[CuePacket, AgentTraceEvent]
     ) -> None:
         started = perf_counter()
-        cues = [
+        try:
+            cues = await asyncio.wait_for(self.render(packet), timeout=self.timeout)
+        except Exception:
+            cues = [
+                OverlayCue(
+                    cue_id=f"{packet.stats.event.event_id}:graphics:template",
+                    clock_ms=packet.stats.event.clock_ms,
+                    template="template_fallback",
+                    payload={
+                        "headline": "Match update",
+                        "detail": "The synthetic match continues.",
+                        "metrics": {},
+                    },
+                    evidence_event_ids=[packet.stats.event.event_id],
+                )
+            ]
+            await trace(ctx, self.id, "fallback_on", started, "fallback")
+        await trace(ctx, self.id, "schema_validated", started)
+        await ctx.send_message(CuePacket(match_id=packet.stats.event.match_id, cues=cues))
+
+    async def render(self, packet: ApprovedPacket) -> list[OverlayCue]:
+        return [
             OverlayCue.model_validate(
                 {
                     "cue_id": insight.insight_id,
@@ -340,14 +416,14 @@ class GraphicsExecutor(Executor):
             )
             for insight in packet.insights
         ]
-        await trace(ctx, self.id, "schema_validated", started)
-        await ctx.send_message(CuePacket(match_id=packet.stats.event.match_id, cues=cues))
 
 
 class AudienceExecutor(Executor):
-    def __init__(self, profiles: list[ViewerProfile], store: MatchStore) -> None:
+    def __init__(
+        self, profiles: list[ViewerProfile], store: MatchStore, client: BaseChatClient
+    ) -> None:
         super().__init__(id="audience")
-        self.profiles, self.store = profiles, store
+        self.profiles, self.store, self.client = profiles, store, client
 
     @handler
     async def handle(
@@ -356,13 +432,8 @@ class AudienceExecutor(Executor):
         started = perf_counter()
         for index, profile in enumerate(self.profiles):
             for cue in packet.cues:
-                shaped = cue.model_copy(
-                    update={
-                        "cue_id": f"{cue.cue_id}:viewer{index}",
-                        "persona": profile.persona,
-                        "language": profile.language,
-                    }
-                )
+                event = self.store.get_or_create(packet.match_id).events[-1]
+                shaped = await personalize(cue, profile, event, self.client, index)
                 self.store.add_overlay_cue(packet.match_id, shaped)
                 await ctx.yield_output(shaped)
         await trace(ctx, self.id, "fan_out", started)
@@ -380,10 +451,30 @@ class Director:
         checkpoint_storage: CheckpointStorage | None = None,
         checkpoint_path: str | None = None,
         stats_mcp_url: str | None = None,
+        recovery_storage: RecoveryStorage | None = None,
+        kill: str | None = None,
+        whatif_rollouts: int = 200,
+        seed: int = 0,
+        timeouts: dict[str, float] | None = None,
     ) -> None:
         self.store = store or InMemoryMatchStore()
+        self.kill = KillSpec.parse(kill)
+        self.killed = False
+        self.timeouts = {
+            "stats": 4.0,
+            "tactics": 4.0,
+            "storyline": 4.0,
+            "graphics": 1.5,
+            **(timeouts or {}),
+        }
+        self._temporary_checkpoints = None
+        if checkpoint_storage is None and checkpoint_path is None:
+            self._temporary_checkpoints = tempfile.TemporaryDirectory(prefix="gallery-")
+            checkpoint_path = self._temporary_checkpoints.name
         self.client = client or create_gallery_chat_client()
         self.engines: dict[str, StatsEngine] = {}
+        self.what_if = WhatIfAgent(self.client, whatif_rollouts, seed)
+        self.profiles = profiles or [ViewerProfile()]
         self.last_traces: list[AgentTraceEvent] = []
         self._lock = asyncio.Lock()
         self.mcp_tool: MCPStreamableHTTPTool | None = None
@@ -409,14 +500,15 @@ class Director:
                 checkpoint_path, allowed_checkpoint_types=allowed
             )
         self.checkpoint_storage = checkpoint_storage
+        self.recovery_storage = recovery_storage or FrameworkRecoveryStorage(checkpoint_storage)
         stats = StatsExecutor(self)
         self.writers = [
-            InsightExecutor("tactics", self.client),
-            InsightExecutor("storyline", self.client),
+            InsightExecutor("tactics", self.client, self),
+            InsightExecutor("storyline", self.client, self),
         ]
         self.compliance = ComplianceExecutor(self.store, self.writers)
-        graphics = GraphicsExecutor()
-        audience = AudienceExecutor(profiles or [ViewerProfile()], self.store)
+        self.graphics = graphics = GraphicsExecutor(self.timeouts["graphics"])
+        audience = AudienceExecutor(self.profiles, self.store, self.client)
         self.workflow = (
             WorkflowBuilder(
                 name="gallery-director-v1",
@@ -455,15 +547,106 @@ class Director:
         return self
 
     async def __aexit__(self, *args: Any) -> None:
-        if self.mcp_tool:
-            await self.mcp_tool.__aexit__(*args)
+        try:
+            if self.mcp_tool:
+                await self.mcp_tool.__aexit__(*args)
+        finally:
+            await self.what_if.close()
+            if self._temporary_checkpoints:
+                self._temporary_checkpoints.cleanup()
+
+    async def restore(self, match_id: str) -> bool:
+        """Restore a fresh Director's shared state before consuming the next event."""
+        saved = await self.recovery_storage.load(match_id)
+        if saved is None:
+            return False
+        if self.store.get_or_create(match_id).events:
+            raise ValueError("Restore requires an empty match store")
+        engine = StatsEngine()
+        for event in saved.match.events:
+            self.store.ingest_event(match_id, event)
+            engine.ingest(event)
+        self.engines[match_id] = engine
+        for writer in self.writers:
+            writer.agent_sequences[match_id] = saved.agent_sequences.get(writer.kind, -1)
+        return True
+
+    async def recover(self, writer: InsightExecutor, match_id: str, current_sequence: int) -> None:
+        saved = await self.recovery_storage.load(match_id)
+        last = saved.agent_sequences.get(writer.kind, -1) if saved else -1
+        # Replace the failed model Agent; preserve MCP tools through the configured prototype.
+        writer.agent = Agent(
+            self.client,
+            name=writer.kind,
+            instructions=writer.instructions,
+            tools=[f for f in self.mcp_tool.functions if f.name != "ingest_event"]
+            if self.mcp_tool
+            else None,
+            default_options={"max_tokens": 800},
+        )
+        engine = StatsEngine()
+        for event in self.store.get_or_create(match_id).events:
+            if event.sequence >= current_sequence:
+                break
+            engine.ingest(event)
+            if event.sequence > last:
+                packet = await asyncio.wait_for(
+                    writer._generate_raw(compute_stats(engine, event)),
+                    timeout=self.timeouts[writer.kind],
+                )
+                if not self.compliance.validate(packet).ok:
+                    raise ValueError("Replay failed compliance")
+                writer.agent_sequences[match_id] = event.sequence
+        writer.down = False
+        writer.breaker.reset()
 
     async def on_event(self, event: MatchEvent) -> list[OverlayCue]:
         if self.stats_mcp_url and not self.mcp_tool:
             raise RuntimeError("Use async with Director() to connect MCP")
         async with self._lock:
             self.store.ingest_event(event.match_id, event)
+            injected = False
+            if self.kill and not self.killed and event.clock_ms >= self.kill.minute * 60000:
+                writer = self.writers[0]
+                writer.down = True
+                writer.breaker.fail(event.sequence)
+                self.killed = injected = True
             result = await self.workflow.run(event)
             outputs = result.get_outputs()
             self.last_traces = [row for row in outputs if isinstance(row, AgentTraceEvent)]
-            return [row for row in outputs if isinstance(row, OverlayCue)]
+            if injected:
+                self.last_traces.insert(
+                    0,
+                    AgentTraceEvent(
+                        agent="tactics", action="agent_down", latency_ms=0, status="error"
+                    ),
+                )
+            cues = [row for row in outputs if isinstance(row, OverlayCue)]
+            started = perf_counter()
+            extra = await self.what_if.evaluate(self.store.get_or_create(event.match_id).events)
+            if extra:
+                for index, profile in enumerate(self.profiles):
+                    shaped = await personalize(extra, profile, event, self.client, index)
+                    cues.append(shaped)
+                    self.store.add_overlay_cue(event.match_id, shaped)
+                self.last_traces.append(
+                    AgentTraceEvent(
+                        agent="what_if",
+                        action="rollouts_verified",
+                        latency_ms=(perf_counter() - started) * 1000,
+                    )
+                )
+            state = self.store.get_or_create(event.match_id)
+            await self.recovery_storage.save(
+                RecoveryState(
+                    match=MatchState(
+                        match_id=event.match_id,
+                        events=state.events,
+                        last_sequence=state.last_sequence,
+                    ),
+                    agent_sequences={
+                        w.kind: w.agent_sequences.get(event.match_id, -1) for w in self.writers
+                    },
+                )
+            )
+            return cues

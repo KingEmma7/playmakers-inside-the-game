@@ -5,7 +5,8 @@
   simulation, the 380-match season export and a replay SSE smoke check.
 - **Phase 2A is implemented and green**: deterministic stats, streamable MCP, typed contracts,
   a real Agent Framework Director workflow and the offline CLI. No Azure credentials required.
-- **Phase 2B is next**: recovery, What-If, richer personalization and gallery API streams.
+- **Phase 2B is implemented**: recovery, seeded What-If, audience shaping, planted scripts and gallery streams.
+- See the Phase 2B notes below for validation and limits.
 - `salvage/phase2/` remains reference only. No installed code imports it.
 - Commits could not be created in this workspace because `.git` is mounted read-only.
 
@@ -55,10 +56,45 @@ python -m stats_mcp
 uvicorn replay_api.main:app --reload --port 8000
 ```
 
-Remaining Phase 2B: per-agent deadlines/circuit breakers, kill/restart/catch-up from checkpoints
-and restored shared state, seeded parallel What-If rollouts, story scripts, persona-specific
-caption content/translation, `/gallery/sse` and `/gallery/ws`. Azure authentication/models and
-Cosmos deployment still need Phase 4 verification. The CLI has no `--kill` option yet.
+Phase 2B validation (14 Oct 2026):
+- Phase 2A baseline: Ruff clean, 31 offline tests passed, demo CLI emitted cues/traces.
+- Phase 2B: Ruff format/check and git diff whitespace checks clean; 40 offline tests pass.
+- Clean Python 3.13 environment installs all packages and passes tests; pip check is clean.
+- PitchSim validation: all five calibration checks OK across 50 matches (unchanged baseline).
+- Full CLI `--seed 7 --speed 50 --persona analyst --kill tactics@20 --whatif-rollouts 200`:
+  3,147 cues, 9,428 traces, one same-event fallback cue, all four required recovery steps,
+  nine What-If cards. What-If wall latency 33–1,142ms in this run; all cues have evidence.
+- Separate initial 200-rollout first-goal benchmark: 1.70s including process startup.
+
+Phase 2B implementation:
+- `checkpointing.py`: versioned recovery state behind `RecoveryStorage`, backed by the actual
+  Agent Framework `CheckpointStorage` protocol / FileCheckpointStorage. Captures match event
+  history and each writer's successful sequence. `Director.restore(match_id)` rebuilds shared
+  state and StatsEngine in a fresh Director. Workflow superstep checkpoints remain enabled.
+- Tactics kill injection (`--kill tactics@20`, API `kill=tactics@20`), deadlines (Tactics 4s,
+  Graphics 1.5s), circuit breaker with bounded exponential event backoff, same-event templates,
+  recreated Agent and verified replay of missed events. Recovery traces use the required names.
+- `pitchsim/whatif.py` ports snapshot + event-model continuation; `what_if.py` runs before,
+  after and counterfactual scenarios in a 3-worker ProcessPoolExecutor using paired seeds.
+  Default N=200 per scenario; tests use N=20. First seed-7 goal benchmark: 1.70s including startup.
+  Metrics have home-side win/draw/loss distributions and win_prob_before/after/delta, with evidence.
+  Explanation calls the configured Agent/model client (mock offline).
+- `personalize.py`: analyst metrics/tactical labels vs casual plain captions; viewer-scoped ★
+  favourites/player_cam; en/es/fr offline phrase table and live LLM translation with fallback.
+- `pitchsim/story.py`, `stories/*.yaml`, CLI `--story` plant deterministic labeled style changes.
+- API `/gallery/sse` + `/gallery/ws`: event/cue/trace JSON, requested viewer/kill/rollout params,
+  isolated temporary checkpoint directories, CORS localhost:5173; existing mounted stats MCP retained.
+- API now depends on gallery-agents: CI and README install gallery-agents before replay-api.
+
+Limits / next work:
+- Azure/Foundry model calls, credentials, Cosmos state/checkpoints, deployment and tracing require
+  Phase 4 and have not been exercised against Azure. All acceptance tests are offline.
+- What-If is an approximate event-model continuation, not real-world calibrated probabilities.
+  Snapshot styles include observed red-card effects; arbitrary scripted style changes are not
+  reconstructed. `late_comeback.yaml` plants a labeled comeback attempt, not a guaranteed win.
+- Phrase-table translations are intentionally small; live translation quality needs cloud evals.
+- API session history is ephemeral; CLI checkpoints persist. No automatic multi-session resumption.
+- No commits created: operator will commit (read-only .git).
 
 Suggested conventional commit split once Git is writable:
 1. `feat(stats): add deterministic stats engine and streamable MCP service`

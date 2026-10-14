@@ -1,0 +1,4 @@
+- minute: 60
+  type: press_collapse
+  team: home
+  label: press_collapse_after_60

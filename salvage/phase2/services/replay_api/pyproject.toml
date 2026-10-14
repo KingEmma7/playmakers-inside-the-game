@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=74", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "replay-api"
+version = "0.1.0"
+description = "FastAPI service for replaying PitchSim match events via SSE/WebSocket."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "King Emmanuel" }]
+dependencies = [
+  "fastapi>=0.115.0,<1",
+  "uvicorn[standard]>=0.30.0,<1",
+  "pitchsim>=0.1.0",
+  "gallery-agents>=0.1.0",
+  "stats-mcp>=0.1.0",
+  "mcp>=1.24.0,<2",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+

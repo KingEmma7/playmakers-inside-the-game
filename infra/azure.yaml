@@ -1,0 +1,12 @@
+name: gallery
+metadata:
+  template: gallery-phase1
+services:
+  replay-api:
+    project: ../services/replay_api
+    language: python
+    host: containerapp
+infra:
+  provider: bicep
+  path: .
+

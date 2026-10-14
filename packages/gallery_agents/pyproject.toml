@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=74", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gallery-agents"
+version = "0.1.0"
+description = "Placeholder agent package layout for Gallery (no LLM calls in Phase 1)."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "King Emmanuel" }]
+dependencies = [
+  "gallery-schema>=0.1.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+

@@ -80,13 +80,29 @@ async def replay_ws(ws: WebSocket, seed: int = 0, speed: float = 1.0) -> None:
 
 
 async def gallery_messages(
-    seed: int, speed: float, profile: ViewerProfile, kill: str | None, whatif_rollouts: int
+    seed: int,
+    speed: float,
+    profile: ViewerProfile,
+    kill: str | None,
+    whatif_rollouts: int,
+    replay_from_ms: int = 0,
 ) -> AsyncGenerator[dict[str, Any], None]:
     events = await asyncio.to_thread(simulate_match, MatchConfig(seed=seed))
     async with Director(
         profiles=[profile], seed=seed, kill=kill, whatif_rollouts=whatif_rollouts
     ) as director:
-        async for event in replay_events(events, speed=speed):
+
+        async def paced_events() -> AsyncGenerator[Any, None]:
+            # Rebuild the exact deterministic prefix quickly on a failure-injection replay.
+            split = next(
+                (i for i, e in enumerate(events) if e.clock_ms >= replay_from_ms), len(events)
+            )
+            async for event in replay_events(events[:split], speed=0):
+                yield event
+            async for event in replay_events(events[split:], speed=speed):
+                yield event
+
+        async for event in paced_events():
             yield {"type": "event", **event.model_dump(mode="json")}
             cues = await director.on_event(event)
             for trace in director.last_traces:
@@ -97,6 +113,7 @@ async def gallery_messages(
 
 @app.get("/gallery/sse")
 async def gallery_sse(
+    replay_from_ms: Annotated[int, Query(ge=0, le=5_400_000)] = 0,
     seed: int = 7,
     speed: float = 50,
     persona: Literal["analyst", "casual"] = "analyst",
@@ -118,7 +135,9 @@ async def gallery_sse(
     )
 
     async def stream() -> AsyncGenerator[str, None]:
-        async for message in gallery_messages(seed, speed, profile, kill, whatif_rollouts):
+        async for message in gallery_messages(
+            seed, speed, profile, kill, whatif_rollouts, replay_from_ms
+        ):
             yield "data: " + json.dumps(message, separators=(",", ":")) + "\n\n"
 
     return StreamingResponse(

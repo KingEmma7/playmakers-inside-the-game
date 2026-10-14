@@ -264,3 +264,70 @@ websocat "ws://127.0.0.1:8000/replay/ws?seed=123&speed=10"
 - **Synthetic-only**: no real match data, no Premier League marks.
 - **Deterministic numbers**: downstream explanation agents must cite event IDs; no invented stats.
 
+
+## Broadcast gallery UI (Phase 3)
+
+The React + Vite + TypeScript gallery shows **Analyst** and **Fan** feeds side by side,
+with a shared event clock, a Canvas pitch, timed evidence-backed overlays and a live agent trace.
+All clubs and crest shapes are fictional. `/about` explains the architecture and current deployment status.
+
+With the Python packages installed using the instructions above, run these in separate terminals:
+
+```bash
+# Repository root; offline mock models require no credentials
+uvicorn replay_api.main:app --port 8000
+
+# Frontend (Node 20.19+)
+cd web
+npm ci
+npm run dev
+```
+
+Open **http://localhost:5173**. `VITE_API_BASE` defaults to `http://localhost:8000`;
+set it in `web/.env.local` for another API origin. The local API allows the Vite
+`http://localhost:5173` origin. The client uses one EventSource per audience, retries
+with bounded backoff and deduplicates the deterministic replay after reconnection.
+The slower stream determines the shared event clock.
+
+- Choose seed and speed (1×, 10×, 50×); changing either restarts both feeds.
+- Fan controls select Spanish/French and a fictional roster number. Changing the fan
+  profile replays that feed until it synchronises with the analyst.
+- Pause freezes the displayed program; network feeds continue buffering. Start returns to live.
+- Toggle safe-area guides. Cue timing uses the match clock, duration, priority and one winner per slot.
+- **Kill Tactics agent** restarts both deterministic sessions with failure at the current minute.
+  The API fast-forwards the prefix (`replay_from_ms`) before returning to the selected pace.
+  Look for `agent down → fallback on → restarted from checkpoint → caught up` in both feeds.
+  One injected failure per replay; changing seed/speed resets the button.
+- Score/clock, storyline/tactical lower thirds, momentum, pass difficulty, xG shots,
+  favourite tags and What-If probability cards respond to actual events/cues.
+
+![Gallery split view connected to the local API](web/e2e-screenshot.png)
+
+Screenshot/GIF placeholder for the submission: replace or supplement this capture with
+`docs/media/hero.png` and a short kill/recover recording once the final theme is locked.
+
+```bash
+cd web
+npm run types:generate   # json-schema-to-typescript; output in src/generated is versioned
+npm run lint
+npm test
+npm run build
+npx playwright install chromium
+npm run screenshot      # API :8000 + Vite :5173 must already be running
+```
+
+The Chromium script captures `web/e2e-screenshot.png` at 1920×1080 and checks live persona
+content, equal panel clocks, pause/start, kill/recover traces and `/about`. On restricted
+machines use `PLAYWRIGHT_BROWSERS_PATH=/tmp/gallery-playwright` for both installation and execution.
+CI runs npm ci, contract drift detection, lint, unit tests and production build on Node 20.
+
+Current visual limits: PitchSim emits ball/action positions but no full player tracking frames
+in its default replay. The 22 dots therefore use formation-based motion around the observed ball;
+tracking frames are supported when present. Pause/resume is a local program freeze, not server pause.
+Reconnect rebuilds ephemeral server sessions rather than resuming a stored session. Offline fan
+translations use the small phrase table. What-If probabilities remain synthetic approximations.
+Azure deployment, Cosmos persistence and cloud observability are Phase 4 work.
+
+What-If snapshots now replay scripted style-change metadata from events (including YAML stories),
+as well as red cards. A supplied story schedule supports older recordings and future rollout changes;
+recorded changes take precedence so they are not applied twice.

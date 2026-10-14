@@ -1,6 +1,7 @@
 # HANDOFF — current state (as of Wed 14 Oct 2026)
 
 ## TL;DR
+- **Phase 3 is implemented**: React split view, typed SSE, broadcast overlays, trace, Chromium capture.
 - **Phase 1 remains green**; baseline verified before implementation, including calibration,
   simulation, the 380-match season export and a replay SSE smoke check.
 - **Phase 2A is implemented and green**: deterministic stats, streamable MCP, typed contracts,
@@ -9,6 +10,41 @@
 - See the Phase 2B notes below for validation and limits.
 - `salvage/phase2/` remains reference only. No installed code imports it.
 - Commits could not be created in this workspace because `.git` is mounted read-only.
+
+## Phase 3 implementation and validation (14 Oct 2026)
+
+- `web/`: React 19 + Vite + TypeScript, ESLint, Vitest/Testing Library, Node 20 lockfile.
+  `npm run types:generate` derives the three versioned TypeScript contracts from checked-in JSON Schemas;
+  CI regenerates and checks for drift before lint/test/build. Generated files are ready for the operator to commit.
+- Two independent personalised EventSources share the minimum received event sequence for display.
+  Reconnect uses bounded exponential backoff and deduplicates replayed events/cues/traces. Full-time closes cleanly.
+  Buffering covers one synthetic match; pause freezes the displayed program while streams continue.
+- Canvas pitch, fictional SVG crests, ball interpolation, 22 formation-based dots, observed pass arcs;
+  score/clock, safe guides, storyline/tactical lower thirds, momentum, pass-difficulty arc, xG shot card,
+  favourite tags and What-If before/after/delta cards. Overlay selection uses match time, duration and priority.
+- Seed/speed, fan Spanish/French and roster controls; agent handoffs/latencies/lifecycle status; failure injection
+  in both feeds. New SSE `replay_from_ms` parameter rebuilds the deterministic prefix without replay delays,
+  then resumes normal pacing at the requested minute. It preserves all events for correct score/evidence.
+- `/about` distinguishes the running offline implementation from planned Azure deployment.
+- PitchSim attaches applied scripted `style_changes` to the first subsequent event's ground truth.
+  Snapshots reconstruct those styles plus red cards in order; supplied schedules support old recordings and
+  future rollout changes. Continuations apply pending changes once, with deterministic tests.
+- Validation: **43 Python tests**, Ruff format/check, pip check; 50-match calibration all five OK with
+  unchanged means. **5 web tests**, lint and build pass. npm audit clean after updating Vitest.
+- Chromium script `npm run screenshot` passed against the actual local API and Vite: personalised content,
+  synced clocks, pause/start, Tactics down/caught-up, and `/about`, with no uncaught browser errors.
+  Capture is `web/e2e-screenshot.png` (1920×1080). Run API :8000 + Vite :5173 first;
+  restricted hosts can use `PLAYWRIGHT_BROWSERS_PATH=/tmp/gallery-playwright` for install/run.
+- README documents setup, controls, screenshots, tests and limits. No commits made (operator commits).
+
+Rough edges / Phase 4 boundaries:
+- Default simulator has no full player tracking frames; formation-based player motion is explicitly labelled.
+- Profile changes restart only the fan stream and temporarily hold the shared clock while it catches up.
+  Seed/speed changes restart the match; Start after pause jumps to the buffered live position.
+- Reconnect restarts ephemeral API sessions; no persistent resume. Failure injection is once per replay,
+  reset via seed/speed. Large fast-forward prefixes still run the complete agent workflow and checkpoints.
+- Casual offline wording uses the existing small phrase table; cloud models, Cosmos persistence,
+  deployment, eval gates and observability remain Phase 4 work.
 
 ## Phase 2A implementation and validation (14 Oct 2026)
 
@@ -90,8 +126,7 @@ Limits / next work:
 - Azure/Foundry model calls, credentials, Cosmos state/checkpoints, deployment and tracing require
   Phase 4 and have not been exercised against Azure. All acceptance tests are offline.
 - What-If is an approximate event-model continuation, not real-world calibrated probabilities.
-  Snapshot styles include observed red-card effects; arbitrary scripted style changes are not
-  reconstructed. `late_comeback.yaml` plants a labeled comeback attempt, not a guaranteed win.
+  Snapshot styles now include recorded scripted style changes and observed red-card effects. `late_comeback.yaml` plants a labeled comeback attempt, not a guaranteed win.
 - Phrase-table translations are intentionally small; live translation quality needs cloud evals.
 - API session history is ephemeral; CLI checkpoints persist. No automatic multi-session resumption.
 - No commits created: operator will commit (read-only .git).

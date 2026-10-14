@@ -37,3 +37,7 @@ data/
 .env.*
 !.env.example
 data/checkpoints/
+node_modules/
+*.tsbuildinfo
+web/playwright-report/
+web/test-results/

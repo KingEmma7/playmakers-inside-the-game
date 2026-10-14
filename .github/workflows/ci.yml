@@ -21,8 +21,11 @@ jobs:
           python -m pip install -r requirements-dev.txt
           python -m pip install -e packages/gallery_schema
           python -m pip install -e packages/pitchsim
+          python -m pip install -e packages/gallery_stats
+          python -m pip install -e services/stats_mcp
           python -m pip install -e services/replay_api
           python -m pip install -e packages/gallery_agents
+          python -m pip check
 
       - name: Lint (ruff)
         run: |

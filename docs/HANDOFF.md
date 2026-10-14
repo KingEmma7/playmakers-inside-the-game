@@ -1,12 +1,71 @@
 # HANDOFF — current state (as of Wed 14 Oct 2026)
 
 ## TL;DR
-- **Phase 1 (foundation) is done**, tested, and is what's in this repo.
-- **Phase 2 (agents) crashed before committing.** Its code was recovered into `salvage/phase2/` as
-  reference. It is *not* wired in, *not* tested. Restart Phase 2 using it as a head start.
-- Previous builder (Cursor cloud agent) is out of usage; work continues in **Codex**.
+- **Phase 1 remains green**; baseline verified before implementation, including calibration,
+  simulation, the 380-match season export and a replay SSE smoke check.
+- **Phase 2A is implemented and green**: deterministic stats, streamable MCP, typed contracts,
+  a real Agent Framework Director workflow and the offline CLI. No Azure credentials required.
+- **Phase 2B is next**: recovery, What-If, richer personalization and gallery API streams.
+- `salvage/phase2/` remains reference only. No installed code imports it.
+- Commits could not be created in this workspace because `.git` is mounted read-only.
 
-## What exists and works (Phase 1)
+## Phase 2A implementation and validation (14 Oct 2026)
+
+- `packages/gallery_stats`: six deterministic stats with Pydantic evidence, bounded event history,
+  sequence/match validation, and inclusive time windows. Control vs chaos uses normalized entropy
+  of completed directed pass edges and failed-pass share. Floating-point entropy is clamped to
+  [0,1]. Nullable shot ground truth is handled safely; goals use required scoring_team_id.
+- `services/stats_mcp`: FastMCP factory, `python -m stats_mcp` on port 8765 (`/mcp`), and
+  replay API mount at `/stats-mcp/`, with explicit session-manager lifespan. Event unions are
+  validated using TypeAdapter, not MatchEvent.model_validate. Tool outputs are Pydantic models.
+- `gallery_agents/contracts.py`: Pydantic profiles, insights, cues, Compliance decisions and
+  versioned trace events. Cues require evidence and include layer/safe_area. Overlay/trace schemas
+  are exported by `python -m gallery_agents.export_schemas` into gallery_schema's v1 directory.
+- `gallery_agents/workflow.py`: WorkflowBuilder Stats → fan-out Tactics/Storyline Agents →
+  synchronized Compliance join → Graphics → Audience. Each executor emits traces. Compliance
+  recomputes from stored event prefixes, verifies numeric metrics and prose against cited evidence,
+  retries at most twice per insight and then templates. Audience stamps/fans out profiles only.
+- `model_clients.py`: deterministic mock with streaming/non-streaming support; actual installed
+  OpenAIChatCompletionClient for Azure and FoundryChatClient for Foundry, using DefaultAzureCredential.
+  Live Stats invokes MCPStreamableHTTPTool, validates results against local evidence, and gives
+  the explanation Agents read-only MCP functions. Live Azure calls have not yet been exercised.
+- `state_store.py`: MatchStore Protocol and Pydantic MatchState backed by InMemoryMatchStore.
+- Framework superstep checkpoints use FileCheckpointStorage with explicit Gallery type allowlists.
+  Tests reload saved checkpoints. Complete match-store restoration/catch-up belongs to Phase 2B.
+- Dependencies: agent-framework-core 1.21.0, agent-framework-openai 1.16.0,
+  agent-framework-foundry 1.14.1, mcp>=1.24,<2 (resolved 1.30.0), openai resolved 3.31.0.
+  No openai<2 constraint or framework meta-package. Real installed source APIs were inspected;
+  checkpoint storage is a WorkflowBuilder constructor argument in this version.
+- Validation: **31 offline tests pass** (including actual standalone/mounted HTTP MCP transport,
+  Agent Framework MCP calls, verifier rejection/retry/fallback, fan-out, checkpoint reload,
+  current JSON Schemas, client selection, deterministic cues and entropy boundary regressions).
+  Ruff format/check and pip check pass. A separate clean Python 3.13 venv installs all packages
+  and runs all tests. CI retains Python 3.12 and installs both new packages plus pip check.
+- Full CLI command completed: `python -m gallery_agents demo --seed 7 --speed 50 --persona analyst`:
+  1,569 events, **3,138 cues + 9,414 trace records**, with evidence, and file checkpoints.
+  The framework emits two harmless mock-client function-invocation capability warnings to stderr.
+  Stats tools run directly offline; the mock does not request function calls.
+
+Run after root README editable installs:
+
+```bash
+python -m gallery_agents demo --seed 7 --speed 50 --persona analyst
+python -m gallery_agents demo --seed 7 --speed 0 --limit 10
+python -m stats_mcp
+uvicorn replay_api.main:app --reload --port 8000
+```
+
+Remaining Phase 2B: per-agent deadlines/circuit breakers, kill/restart/catch-up from checkpoints
+and restored shared state, seeded parallel What-If rollouts, story scripts, persona-specific
+caption content/translation, `/gallery/sse` and `/gallery/ws`. Azure authentication/models and
+Cosmos deployment still need Phase 4 verification. The CLI has no `--kill` option yet.
+
+Suggested conventional commit split once Git is writable:
+1. `feat(stats): add deterministic stats engine and streamable MCP service`
+2. `feat(agents): add typed Director workflow and offline demo`
+3. `docs: document Phase 2A setup and handoff`
+
+## Phase 1 foundation (historical baseline)
 | Area | Path | Status |
 |---|---|---|
 | Event contract | `packages/gallery_schema` | Pydantic `MatchEvent` + JSON Schema v1 (`schemas/v1/match_event.schema.json`), export script |
@@ -23,7 +82,7 @@ Note: the original Cursor repo was a hidden draft and couldn't be fetched, so th
 byte-for-byte from the build transcript's edit log; tests and calibration numbers match the original run
 exactly. The only edit is `extend-exclude = ["salvage"]` in `pyproject.toml` so ruff ignores the salvage folder.
 
-## What Phase 2 attempted (in `salvage/phase2/`)
+## Original Phase 2 attempt (historical salvage reference)
 - `packages/gallery_stats/` — deterministic `StatsEngine`: `possession`, `pressure_index`, `pass_difficulty`,
   `xg`, `momentum`, each returning Pydantic results with `Evidence` (event_ids).
 - `services/stats_mcp/` — FastMCP server exposing those 5 tools (`ingest_event` too); also mounted into
@@ -45,7 +104,7 @@ exactly. The only edit is `extend-exclude = ["salvage"]` in `pyproject.toml` so 
   (params: seed, speed, persona, language, favourites, kill flag).
 - `tests/test_gallery_pipeline.py` — kill→fallback→recover and Spanish What-If tests.
 
-### Known issues in the salvage (fix when porting)
+### Known issues in the salvage (fixed or deferred as noted above)
 1. `pipeline.py`: `@dataclass(frozen=True)` with `home_style: TeamStyle = TeamStyle(...)` → **ValueError
    (mutable default)**. Use `field(default_factory=...)`.
 2. `gallery_agents/pyproject.toml` pins `openai>=1.40,<2` → **conflicts** with agent-framework-devui

@@ -3,14 +3,27 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import PlainTextResponse, StreamingResponse
 from pitchsim.config import MatchConfig
 from pitchsim.replay import replay_events
 from pitchsim.sim import simulate_match
+from stats_mcp.server import create_mcp
 
-app = FastAPI(title="Gallery Replay API", version="0.1.0")
+stats_server = create_mcp(path="/")
+stats_app = stats_server.streamable_http_app()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    async with stats_server.session_manager.run():
+        yield
+
+
+app = FastAPI(title="Gallery Replay API", version="0.2.0", lifespan=lifespan)
+app.mount("/stats-mcp", stats_app)
 
 
 @app.get("/healthz")

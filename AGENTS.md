@@ -88,7 +88,7 @@ Planned additions: `packages/gallery_stats/`, `services/stats_mcp/`, `web/` (Rea
 python3 -m venv .venv && source .venv/bin/activate        # Python 3.12+ (3.13 also works)
 python -m pip install -U pip
 python -m pip install -r requirements-dev.txt
-python -m pip install -e packages/gallery_schema -e packages/pitchsim -e services/replay_api -e packages/gallery_agents
+python -m pip install -e packages/gallery_schema -e packages/pitchsim -e packages/gallery_stats -e services/stats_mcp -e services/replay_api -e packages/gallery_agents
 ruff format --check . && ruff check .                     # lint (ruff 0.17.0, pinned)
 pytest                                                    # tests
 python -m pitchsim validate --matches 50                  # calibration report (all lines must say OK)

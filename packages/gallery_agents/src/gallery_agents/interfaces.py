@@ -1,26 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Protocol
 
 from gallery_schema.models import MatchEvent
+from gallery_stats.types import GalleryStatsBaseModel
 
-
-@dataclass(frozen=True)
-class ViewerProfile:
-    persona: str = "analyst"  # "analyst" | "casual" | ...
-    favorite_team_id: str | None = None
-    favorite_player_id: str | None = None
-    language: str = "en"
-
-
-@dataclass(frozen=True)
-class OverlayCue:
-    clock_ms: int
-    template: str
-    payload: dict
-    duration_ms: int = 4000
-    priority: int = 0
+from gallery_agents.contracts import ComplianceDecision, Insight, OverlayCue
+from gallery_agents.contracts import ViewerProfile as ViewerProfile
 
 
 class Director(Protocol):
@@ -28,24 +14,24 @@ class Director(Protocol):
 
 
 class StatsAgent(Protocol):
-    async def on_event(self, event: MatchEvent) -> dict: ...
+    async def on_event(self, event: MatchEvent) -> dict[str, GalleryStatsBaseModel]: ...
 
 
 class TacticsAgent(Protocol):
-    async def on_event(self, event: MatchEvent) -> dict: ...
+    async def on_event(self, event: MatchEvent) -> Insight: ...
 
 
 class StorylineAgent(Protocol):
-    async def on_event(self, event: MatchEvent) -> dict: ...
+    async def on_event(self, event: MatchEvent) -> Insight: ...
 
 
 class GraphicsAgent(Protocol):
-    async def build_cues(self, insights: dict) -> list[OverlayCue]: ...
+    async def build_cues(self, insights: list[Insight]) -> list[OverlayCue]: ...
 
 
 class ComplianceAgent(Protocol):
-    async def validate(self, cue: OverlayCue) -> tuple[bool, list[str]]: ...
+    async def validate(self, cue: OverlayCue) -> ComplianceDecision: ...
 
 
 class WhatIfAgent(Protocol):
-    async def run(self, match_id: str, clock_ms: int, query: str) -> dict: ...
+    async def run(self, match_id: str, clock_ms: int, query: str) -> Insight: ...

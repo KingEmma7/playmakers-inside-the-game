@@ -32,3 +32,8 @@ Thumbs.db
 uploads/
 data/
 
+
+.env
+.env.*
+!.env.example
+data/checkpoints/

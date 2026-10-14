@@ -141,6 +141,7 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
     story_queue = sorted(config.story, key=lambda s: s.minute)
     next_story_idx = 0
     active_story_labels: list[str] = []
+    pending_style_changes: list[StoryEvent] = []
 
     # Event rate calibration: tuned to land near ~900-1100 passes with default styles.
     base_event_rate_per_s = 0.235
@@ -150,6 +151,16 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
 
     def add(ev: MatchEvent) -> None:
         nonlocal seq
+        if pending_style_changes:
+            ev = ev.model_copy(
+                update={
+                    "ground_truth": {
+                        **(ev.ground_truth or {}),
+                        "style_changes": [change.model_dump() for change in pending_style_changes],
+                    }
+                }
+            )
+            pending_style_changes.clear()
         events.append(ev)
         seq += 1
 
@@ -242,6 +253,7 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
         minute = clock_ms // 60000
         while next_story_idx < len(story_queue) and story_queue[next_story_idx].minute <= minute:
             se = story_queue[next_story_idx]
+            pending_style_changes.append(se)
             next_story_idx += 1
             if se.team == "home":
                 updated, labels = _apply_story(home.style, se)

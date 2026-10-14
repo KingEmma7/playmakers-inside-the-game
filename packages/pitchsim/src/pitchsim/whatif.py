@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+from dataclasses import replace
 from typing import Literal
 
 from gallery_schema.models import MatchEvent, Vec2
@@ -13,6 +14,7 @@ from pitchsim.sim import (
     PITCH_WIDTH_M,
     Team,
     _advance_ball_after_turnover,
+    _apply_story,
     _clamp,
     _expovariate_ms,
     _sample_ball_start,
@@ -35,7 +37,11 @@ class MatchSnapshot(BaseModel):
 
 
 def snapshot_from_events(
-    events: list[MatchEvent], *, home_style: TeamStyle, away_style: TeamStyle
+    events: list[MatchEvent],
+    *,
+    home_style: TeamStyle,
+    away_style: TeamStyle,
+    story: list[StoryEvent] | None = None,
 ) -> MatchSnapshot:
     if not events:
         raise ValueError("Cannot snapshot empty event list.")
@@ -46,13 +52,24 @@ def snapshot_from_events(
     away_score = 0
     possession = "home"
     ball = Vec2(x=52.5, y=34.0)
-    story: list[StoryEvent] = []
+    pending = sorted(story or [], key=lambda change: change.minute)
+    recorded = any((e.ground_truth or {}).get("style_changes") for e in events)
 
     for e in events:
+        changes = [
+            StoryEvent.model_validate(raw)
+            for raw in (e.ground_truth or {}).get("style_changes", [])
+        ]
+        if not recorded:
+            while pending and pending[0].minute * 60000 <= e.clock_ms:
+                changes.append(pending.pop(0))
+        for change in changes:
+            if change.team == "home":
+                home_style, _ = _apply_story(home_style, change)
+            else:
+                away_style, _ = _apply_story(away_style, change)
         t = e.event_type  # type: ignore[attr-defined]
         if t == "card" and e.color == "red":
-            from pitchsim.sim import _apply_story
-
             if (e.team_id or "").endswith("_HOME"):
                 home_style, _ = _apply_story(
                     home_style, StoryEvent(minute=0, type="red_card", team="home")
@@ -75,7 +92,7 @@ def snapshot_from_events(
         if t == "possession_change":
             bp = e.ball_position
             ball = bp
-            team = getattr(e, "team_id", None)
+            team = e.to_team_id
             possession = "home" if (team or "").endswith("_HOME") else "away"
 
     return MatchSnapshot(
@@ -87,7 +104,7 @@ def snapshot_from_events(
         away_score=away_score,
         home_style=home_style,
         away_style=away_style,
-        story=story,
+        story=[change for change in pending if change.minute * 60000 > last.clock_ms],
     )
 
 
@@ -132,8 +149,17 @@ def rollout_from_snapshot(snapshot: MatchSnapshot, *, rollout_seed: int) -> tupl
     def opp_for(pos: str) -> Team:
         return away if pos == "home" else home
 
+    pending = sorted(snapshot.story, key=lambda change: change.minute)
     while clock_ms < MATCH_MS:
         minute = clock_ms // 60000
+        while pending and pending[0].minute <= minute:
+            change = pending.pop(0)
+            target = home if change.team == "home" else away
+            updated, _ = _apply_story(target.style, change)
+            if change.team == "home":
+                home = replace(home, style=updated)
+            else:
+                away = replace(away, style=updated)
 
         this_team = team_for(possession)
         opp_team = opp_for(possession)

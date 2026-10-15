@@ -1,4 +1,25 @@
-# HANDOFF — current state (as of Wed 14 Oct 2026)
+# HANDOFF — current state (as of Thu 15 Oct 2026)
+
+## Review follow-up (15 Oct 2026)
+
+- B1: shared process-local SSE session with replay history, explicit profiles,
+  server-side cue filtering and last-subscriber teardown. Both web EventSources
+  send the same analyst/fan list; What-If runs once and uses 200 rollouts again.
+- H8: recovery snapshots every 25 sequences, first event, kill/recover and full time;
+  writer progress remains current in memory. Restore replays the unsaved tail.
+- Frontend batches every 75 ms; events/traces/recent cues capped at 2500/2400/400,
+  retaining still-active cues too. Long pauses can outlive retained presentation history.
+- Added CORS_ORIGINS, WS replay_from_ms, structural clock/jersey compliance exceptions,
+  plain translated favourite labels, and Chromium screenshot execution in Ubuntu CI.
+- Multi-stage non-root API image, Node-to-nginx web image, runtime config.js, unbuffered
+  same-origin API proxy and docker compose demo added. Stats MCP stays mounted in API.
+  Docker image builds were not run locally because the Docker CLI is absent.
+- Validation: 62 offline Python tests, Ruff format/check, pip check, 10 web tests,
+  web lint/build pass. Live screenshot passed with 200 rollouts (both feeds, What-If,
+  clocks, recovery, About). CI/Compose YAML and runtime shell syntax checked.
+  docs/CODE-REVIEW.md records every finding as Fixed/Open/Partial. No commits/deployments.
+- Limits: sessions do not span API processes, final disconnect discards replay history,
+  running process-pool batches finish normally, public rate limiting/Azure remain deferred.
 
 ## Playmakers rename (15 Oct 2026)
 

@@ -101,6 +101,10 @@ function Playmakers() {
     window.addEventListener("keydown", toggle);
     return () => window.removeEventListener("keydown", toggle);
   }, []);
+  const viewer_profiles = JSON.stringify([
+    { persona: "analyst", language: "en" },
+    { persona: "casual", language, favorite_player_id: favourite ? `match_${seed}_${favourite}` : null },
+  ]);
   const analyst = usePlaymakersStream({
     seed,
     speed,
@@ -108,7 +112,8 @@ function Playmakers() {
     language: "en",
     kill,
     replay_from_ms: replayFrom,
-    whatif_rollouts: 40,
+    whatif_rollouts: 200,
+    viewer_profiles,
   });
   const fan = usePlaymakersStream({
     seed,
@@ -118,7 +123,8 @@ function Playmakers() {
     favourite_player_id: favourite ? `match_${seed}_${favourite}` : undefined,
     kill,
     replay_from_ms: replayFrom,
-    whatif_rollouts: 40,
+    whatif_rollouts: 200,
+    viewer_profiles,
   });
   const shared = Math.min(
     analyst.events.at(-1)?.sequence ?? -1,
@@ -173,11 +179,11 @@ function Playmakers() {
                 aria-label="MATCH SEED"
                 type="number"
                 min="0"
-                max="999999"
+                max="10000"
                 value={seed}
                 onChange={(e) => {
                   setSeed(
-                    Math.max(0, Math.min(999999, Number(e.target.value))),
+                    Math.max(0, Math.min(10000, Number(e.target.value))),
                   );
                   restart();
                 }}

@@ -105,7 +105,7 @@ async def test_profiles_differ_and_favorites_are_scoped() -> None:
         assert analyst.payload["metrics"]["pressure_index"] == 0.4
         assert analyst.payload["tactical_label"]
         assert spanish.payload["metrics"] == {}
-        assert "★" in spanish.payload["headline"]
+        assert "Favorito:" in spanish.payload["headline"]
         assert spanish.payload["player_cam"]["player_id"] == "a"
         assert "próximo" in spanish.payload["headline"]
         assert "attaque" in french.payload["headline"]

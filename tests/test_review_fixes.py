@@ -53,3 +53,36 @@ async def test_compliance_validates_against_stats_packet() -> None:
             error="agent_unavailable",
         )
         assert not director.compliance.validate(bad).ok
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("prose", "allowed"),
+    [
+        ("Shirt 9 moves at 20:35", True),
+        ("Number 99 presses", True),
+        ("Pressure is 73%", False),
+        ("Jersey 100 advances", False),
+        ("Pressure is 9", False),
+    ],
+)
+async def test_structural_numbers_do_not_hide_unverified_metrics(prose: str, allowed: bool) -> None:
+    from playmakers_agents.contracts import Insight
+
+    async with Director() as director:
+        event = passing()
+        await director.on_event(event)
+        stats = compute_stats(director.engines[event.match_id], event)
+        packet = InsightPacket(
+            stats=stats,
+            kind="tactics",
+            insight=Insight(
+                insight_id="structural",
+                kind="tactics",
+                clock_ms=event.clock_ms,
+                headline=prose,
+                detail="Movement",
+                evidence_event_ids=[event.event_id],
+            ),
+        )
+        assert director.compliance.validate(packet).ok is allowed

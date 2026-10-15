@@ -1,21 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ViewPanel, Crest } from "./Overlay";
+import { playerName } from "./players";
 import TracePanel from "./TracePanel";
 import { useGalleryStream, clockLabel } from "./stream";
 function About() {
   return (
     <main className="about">
-      <div className="about-nav">
-        <a className="brand" href="/">
-          Gallery
-        </a>
-        <nav className="segmented" aria-label="Main navigation">
-          <a href="/">Replay</a>
-          <a href="/about" aria-current="page">
-            About
-          </a>
-        </nav>
-      </div>
       <h1>
         One match.
         <br />
@@ -27,9 +17,15 @@ function About() {
         and match is fictional.
       </p>
       <div className="architecture">
-        PitchSim → Replay API → Director
-        <br />↙ Stats MCP · Tactics · Storyline · What-If ↘<br />
-        Compliance → Graphics → Audience → Your screen
+        <p>
+          <b>Source</b> PitchSim synthetic events · Replay API
+        </p>
+        <p>
+          <b>Production</b> Director · Stats MCP · Tactics · Storyline · What-If
+        </p>
+        <p>
+          <b>Delivery</b> Compliance · Graphics · Audience · Your screen
+        </p>
       </div>
       <h2>A specialist crew. One verified story.</h2>
       <p>
@@ -51,6 +47,7 @@ function About() {
         configured. Cosmos DB, Container Apps deployment and cloud observability
         are planned for Phase 4; this page does not claim they are deployed.
       </p>
+      <p className="muted">Press D on Replay to toggle broadcast safe areas.</p>
       <p className="muted">
         Player motion is a formation-based visualisation around observed
         ball/action positions; it is not real tracking data. What-If
@@ -60,7 +57,7 @@ function About() {
   );
 }
 export default function App() {
-  return location.pathname === "/about" ? <About /> : <Gallery />;
+  return <Gallery />;
 }
 function Gallery() {
   const [seed, setSeed] = useState(7);
@@ -72,9 +69,28 @@ function Gallery() {
   const [pausedSequence, setPausedSequence] = useState(-1);
   const [replayFrom, setReplayFrom] = useState(0);
   const [kill, setKill] = useState<string>();
-  const [notice, setNotice] = useState(
-    "Two audiences. One shared match clock.",
-  );
+  const [about, setAbout] = useState(location.pathname === "/about");
+  function navigate(path: string) {
+    history.pushState(null, "", path);
+    setAbout(path === "/about");
+  }
+  useEffect(() => {
+    const back = () => setAbout(location.pathname === "/about");
+    window.addEventListener("popstate", back);
+    return () => window.removeEventListener("popstate", back);
+  }, []);
+  useEffect(() => {
+    const toggle = (e: KeyboardEvent) => {
+      if (
+        e.key.toLowerCase() === "d" &&
+        !(e.target instanceof HTMLInputElement) &&
+        !(e.target instanceof HTMLSelectElement)
+      )
+        setSafe((value) => !value);
+    };
+    window.addEventListener("keydown", toggle);
+    return () => window.removeEventListener("keydown", toggle);
+  }, []);
   const analyst = useGalleryStream({
     seed,
     speed,
@@ -107,7 +123,6 @@ function Gallery() {
     setReplayFrom(0);
     setKill(undefined);
     setRunning(true);
-    setNotice("Replay restarted for both audiences.");
   }
   return (
     <div className="app-shell">
@@ -116,10 +131,26 @@ function Gallery() {
           Gallery
         </a>
         <nav className="segmented" aria-label="Main navigation">
-          <a href="/" aria-current="page">
+          <a
+            href="/"
+            onClick={(e) => {
+              e.preventDefault();
+              navigate("/");
+            }}
+            aria-current={!about ? "page" : undefined}
+          >
             Replay
           </a>
-          <a href="/about">About</a>
+          <a
+            href="/about"
+            onClick={(e) => {
+              e.preventDefault();
+              navigate("/about");
+            }}
+            aria-current={about ? "page" : undefined}
+          >
+            About
+          </a>
         </nav>
         <section className="toolbar" aria-label="Replay controls">
           <div className="control">
@@ -173,7 +204,6 @@ function Gallery() {
               value={language}
               onChange={(e) => {
                 setLanguage(e.target.value as "es" | "fr");
-                setNotice("Fan feed replaying to synchronise the new profile.");
               }}
             >
               <option value="es">Español</option>
@@ -194,141 +224,131 @@ function Gallery() {
                   const id = `${team}${String(i + 1).padStart(2, "0")}`;
                   return (
                     <option key={id} value={id}>
-                      {team === "H" ? "Northbridge" : "Southport"} #{i + 1}
+                      {playerName(id)}
                     </option>
                   );
                 }),
               )}
             </select>
           </div>
-          <label className="safe-toggle">
-            <input
-              type="checkbox"
-              checked={safe}
-              onChange={(e) => setSafe(e.target.checked)}
-            />
-            Safe areas
-          </label>
         </section>
       </header>
-      <div className="hero">
-        <span>Northbridge Rovers</span>
-        <Crest />
-        <strong>
-          {
-            analyst.events.filter(
-              (e) =>
-                e.sequence <= sequence &&
-                e.event_type === "goal" &&
-                e.scoring_team_id.endsWith("_HOME"),
-            ).length
-          }
-        </strong>
-        <div>
-          <time className="shared-clock">{clockLabel(clock)}</time>
-          <small>{event?.period === 2 ? "Second half" : "First half"}</small>
-        </div>
-        <strong>
-          {
-            analyst.events.filter(
-              (e) =>
-                e.sequence <= sequence &&
-                e.event_type === "goal" &&
-                !e.scoring_team_id.endsWith("_HOME"),
-            ).length
-          }
-        </strong>
-        <Crest away />
-        <span>Southport Athletic</span>
-      </div>
-      <main className="gallery-layout">
-        <div className="program-area">
-          <div className="split-view">
-            <ViewPanel
-              title="Analyst"
-              persona="analyst"
-              event={event}
-              events={analyst.events}
-              cues={analyst.cues}
-              clock={clock}
-              safe={safe}
-              running={running}
-              status={analyst.status}
-            />
-            <ViewPanel
-              title="For you"
-              persona="casual"
-              event={fan.events.find((e) => e.sequence === sequence)}
-              events={fan.events}
-              cues={fan.cues}
-              clock={clock}
-              safe={safe}
-              running={running}
-              status={fan.status}
-            />
+      {about ? (
+        <About />
+      ) : (
+        <>
+          <div className="hero">
+            <span>Northbridge Rovers</span>
+            <Crest />
+            <strong>
+              {
+                analyst.events.filter(
+                  (e) =>
+                    e.sequence <= sequence &&
+                    e.event_type === "goal" &&
+                    e.scoring_team_id.endsWith("_HOME"),
+                ).length
+              }
+            </strong>
+            <div>
+              <time className="shared-clock">{clockLabel(clock)}</time>
+              <small>
+                {event?.period === 2 ? "Second half" : "First half"}
+              </small>
+            </div>
+            <strong>
+              {
+                analyst.events.filter(
+                  (e) =>
+                    e.sequence <= sequence &&
+                    e.event_type === "goal" &&
+                    !e.scoring_team_id.endsWith("_HOME"),
+                ).length
+              }
+            </strong>
+            <Crest away />
+            <span>Southport Athletic</span>
           </div>
-          <div className="session-note" role="status">
-            <span className="pulse" />
-            {running
-              ? notice
-              : "Program paused. Incoming events are buffered; Start returns to the live clock."}
-            <span>
-              {sequence >= 0
-                ? `Event ${String(sequence).padStart(4, "0")} · Synced`
-                : "Syncing feeds"}
-            </span>
-          </div>
-        </div>
-        <TracePanel
-          traces={traces}
-          disabled={!event || !running || Boolean(kill)}
-          onKill={() => {
-            const minute = Math.floor(clock / 60000);
-            setReplayFrom(Math.floor(clock / 60000) * 60000);
-            setKill(`tactics@${minute}`);
-            setNotice(
-              `Both feeds restarted · Tactics failure scheduled at ${minute}′. Recovery traces will appear at that moment.`,
-            );
-          }}
-        />
-      </main>
-      <section className="timeline" aria-label="Match timeline">
-        <div>
-          <b>Match so far</b>
-          <span>
-            {
-              analyst.events.filter(
-                (e) => e.sequence <= sequence && e.event_type === "shot",
-              ).length
-            }{" "}
-            shots · Synthetic match
-          </span>
-        </div>
-        <div className="timeline-track">
-          <i style={{ width: `${Math.min(100, (clock / 5400000) * 100)}%` }} />
-          {analyst.events
-            .filter(
-              (e) =>
-                e.sequence <= sequence &&
-                ["goal", "shot", "card"].includes(e.event_type),
-            )
-            .map((e) => (
-              <span
-                key={e.event_id}
-                className={`timeline-event ${e.event_type}`}
-                style={{
-                  left: `${Math.min(100, (e.clock_ms / 5400000) * 100)}%`,
-                }}
-                title={`${e.event_type} · ${clockLabel(e.clock_ms)}`}
+          <main className="gallery-layout">
+            <div className="program-area">
+              <div className="split-view">
+                <ViewPanel
+                  title="Analyst"
+                  persona="analyst"
+                  event={event}
+                  events={analyst.events}
+                  cues={analyst.cues}
+                  clock={clock}
+                  safe={safe}
+                  running={running}
+                  status={analyst.status}
+                />
+                <ViewPanel
+                  title="For you"
+                  persona="casual"
+                  event={fan.events.find((e) => e.sequence === sequence)}
+                  events={fan.events}
+                  cues={fan.cues}
+                  clock={clock}
+                  safe={safe}
+                  running={running}
+                  status={fan.status}
+                  favourite={favourite}
+                />
+              </div>
+            </div>
+            <TracePanel
+              traces={traces}
+              recoveryClock={replayFrom}
+              disabled={!event || !running || Boolean(kill)}
+              onKill={() => {
+                const minute = Math.floor(clock / 60000);
+                setReplayFrom(Math.floor(clock / 60000) * 60000);
+                setKill(`tactics@${minute}`);
+              }}
+            />
+          </main>
+          <section className="timeline" aria-label="Match timeline">
+            <div>
+              <b>Match so far</b>
+              <span>
+                {
+                  analyst.events.filter(
+                    (e) => e.sequence <= sequence && e.event_type === "shot",
+                  ).length
+                }{" "}
+                shots · Synthetic match
+              </span>
+            </div>
+            <div className="timeline-track">
+              <i
+                style={{ width: `${Math.min(100, (clock / 5400000) * 100)}%` }}
               />
-            ))}
-        </div>
-        <div className="timeline-ticks">
-          {[0, 15, 30, 45, 60, 75, 90].map((n) => (
-            <span key={n}>{n}′</span>
-          ))}
-        </div>
-      </section>
+              {analyst.events
+                .filter(
+                  (e) =>
+                    e.sequence <= sequence &&
+                    ["goal", "shot", "card"].includes(e.event_type),
+                )
+                .map((e) => (
+                  <span
+                    key={e.event_id}
+                    className={`timeline-event ${e.event_type}`}
+                    style={{
+                      left: `${Math.min(100, (e.clock_ms / 5400000) * 100)}%`,
+                    }}
+                    title={`${e.event_type} · ${clockLabel(e.clock_ms)}`}
+                  />
+                ))}
+            </div>
+            <div className="timeline-ticks">
+              {[0, 15, 30, 45, 60, 75, 90].map((n) => (
+                <span key={n}>{n}′</span>
+              ))}
+            </div>
+          </section>
+        </>
+      )}
     </div>
   );
 }

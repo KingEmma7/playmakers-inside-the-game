@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { playerName } from "./players";
 import type { MatchEvent } from "./stream";
 type Point = { x: number; y: number };
 function ballFor(event?: MatchEvent): Point | undefined {
@@ -12,16 +13,20 @@ function ballFor(event?: MatchEvent): Point | undefined {
 export default function Pitch({
   event,
   running,
+  favourite,
+  shots = 0,
 }: {
   event?: MatchEvent;
   running: boolean;
+  favourite?: string;
+  shots?: number;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const current = useRef<Point>({ x: 52.5, y: 34 });
-  const target = useRef({ event, running });
+  const target = useRef({ event, running, favourite, shots });
   useEffect(() => {
-    target.current = { event, running };
-  }, [event, running]);
+    target.current = { event, running, favourite, shots };
+  }, [event, running, favourite, shots]);
   useEffect(() => {
     const ctx = canvas.current?.getContext("2d");
     if (!ctx) return;
@@ -31,7 +36,7 @@ export default function Pitch({
       if (!ctx) return;
       const dt = Math.min(50, time - previous || 16);
       previous = time;
-      const { event, running } = target.current;
+      const { event, running, favourite, shots } = target.current;
       const goal = ballFor(event) ?? current.current;
       if (running) {
         const blend = 1 - Math.exp(-dt / 180);
@@ -63,21 +68,68 @@ export default function Pitch({
       for (let team = 0; team < 2; team++) {
         for (let i = 0; i < 11; i++) {
           const tracked = tracking?.[team * 11 + i];
-          const row = i === 0 ? 0 : Math.ceil(i / 4);
-          const baseX = i === 0 ? 7 : 15 + row * 16;
-          const baseY = i === 0 ? 34 : 10 + ((i - 1) % 4) * 16;
-          let x = (team ? 105 - baseX : baseX) + (ball.x - 52.5) * 0.16;
-          let y = baseY + (ball.y - 34) * 0.13;
+          const shape = [
+            [7, 34],
+            [22, 12],
+            [20, 27],
+            [21, 43],
+            [24, 56],
+            [39, 21],
+            [42, 35],
+            [38, 51],
+            [59, 17],
+            [62, 34],
+            [57, 55],
+          ];
+          const [baseX, baseY] = shape[i];
+          const seed = Number(event?.match_id.match(/\d+/)?.[0] || 7);
+          const jitter = (axis: number) =>
+            Math.sin((i + 1) * 17.3 + team * 29 + seed + axis * 43) * 2.5;
+          let x =
+            (team ? 105 - baseX : baseX) +
+            (ball.x - 52.5) * (i ? 0.16 : 0.03) +
+            jitter(0);
+          let y = baseY + (ball.y - 34) * 0.13 + jitter(1);
           if (tracked) {
             x = tracked.position.x;
             y = tracked.position.y;
           }
-          const active = event?.player_id?.endsWith(
+          const actor =
+            event &&
+            ("shooter_player_id" in event
+              ? event.shooter_player_id
+              : "from_player_id" in event
+                ? event.from_player_id
+                : event.player_id);
+          const active = actor?.endsWith(
             `${team ? "A" : "H"}${String(i + 1).padStart(2, "0")}`,
           );
           if (active && !tracked) {
             x = ball.x - 1.2;
             y = ball.y + 1.2;
+          }
+          const followed =
+            favourite ===
+            `${team ? "A" : "H"}${String(i + 1).padStart(2, "0")}`;
+          if (followed) {
+            ctx.strokeStyle = "#2442B5";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(x * 10, y * 10, 27, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.lineWidth = 2;
+            const label = `${playerName(favourite!)} · ${shots} tiros`;
+            ctx.font = "500 25px Inter";
+            const width = ctx.measureText(label).width + 32;
+            const left = Math.max(16, Math.min(1034 - width, x * 10 + 32));
+            const top = Math.max(16, y * 10 - 82);
+            ctx.fillStyle = "#FFFFFF";
+            ctx.beginPath();
+            ctx.roundRect(left, top, width, 56, 16);
+            ctx.fill();
+            ctx.fillStyle = "#1D1D1F";
+            ctx.textAlign = "left";
+            ctx.fillText(label, left + 16, top + 36);
           }
           ctx.shadowColor = "transparent";
           ctx.shadowBlur = 0;

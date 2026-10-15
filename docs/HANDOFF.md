@@ -1,5 +1,24 @@
 # HANDOFF — current state (as of Wed 14 Oct 2026)
 
+## Calm polish pass (15 Oct 2026)
+
+- Inline label/value replay controls, fictional player names (Okafor by default), D safe-area
+  shortcut, no floating session line; shared full-width Replay/About header and readable About list.
+- Both audience cards retain their latest insight. Fan What-If persists after its on-air cue,
+  keeps the actual rollout count, and includes a Spanish scenario, before/after bar and dominance.
+  Evidence shows the last three cited IDs, with the complete list on hover.
+- Analyst pitch chips retain the latest pass and shot. Metrics derive from received events:
+  possession uses team-tagged event share, PPDA opposition passes per home defensive action,
+  field tilt the home share of final-third pass entries. These are synthetic event proxies.
+- Seeded staggered formations move with the ball; the followed player has a ring and a shot-count
+  chip. Tactics failure displays Recovering/replaying and Graphics Fallback/template mode;
+  actual caught-up traces restore Running. Stop remains disabled after the once-per-replay injection.
+- Screenshot script waits for persistent What-If and Recovering, captures while Pause is visible,
+  checks horizontal overflow and viewport clipping at 1440×900 and 1920×1080, then verifies
+  both feeds' lifecycle history and About. API :8000 + Vite :5173; `cd web && npm run screenshot`.
+- Validation: 44 offline Python tests, 7 frontend tests, Ruff format/check, frontend lint/build
+  and pip check pass. Operator commits; no deployment or dependency changes.
+
 ## Calm restyle (15 Oct 2026)
 
 - Entire web app now follows the Calm light direction: locally bundled Inter (SIL OFL),

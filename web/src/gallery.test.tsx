@@ -94,7 +94,7 @@ describe("broadcast cues", () => {
       "Sigue la emoción",
     );
     expect(screen.getAllByText("Dominance")).toHaveLength(1);
-    expect(screen.getByText(/H09 · favourite player/)).toBeInTheDocument();
+    expect(screen.getByText(/Okafor · favourite player/)).toBeInTheDocument();
   });
   it("shows before/after win probabilities and delta", () => {
     render(
@@ -113,6 +113,46 @@ describe("broadcast cues", () => {
     expect(screen.getByText("30%")).toBeInTheDocument();
     expect(screen.getByText("60%")).toBeInTheDocument();
   });
+  it("retains the latest What-If after its on-air duration without showing future results", () => {
+    const props = {
+      title: "For you",
+      persona: "casual",
+      events: [],
+      safe: false,
+      running: true,
+      status: "live",
+    };
+    const { rerender } = render(
+      <ViewPanel
+        {...props}
+        clock={10000}
+        cues={[
+          cue({
+            template: "what_if",
+            payload: {
+              headline: "Retained result",
+              detail: "Saved shot",
+              metrics: {
+                win_prob_before: 0.3,
+                win_prob_after: 0.6,
+                delta: 0.3,
+              },
+            },
+          }),
+          cue({
+            cue_id: "future",
+            clock_ms: 20000,
+            template: "what_if",
+            payload: { headline: "Future result" },
+          }),
+        ]}
+      />,
+    );
+    expect(screen.getByText("Retained result")).toBeInTheDocument();
+    expect(screen.queryByText("Future result")).not.toBeInTheDocument();
+    rerender(<ViewPanel {...props} clock={0} cues={[]} />);
+    expect(screen.queryByText("Retained result")).not.toBeInTheDocument();
+  });
   it("updates trace, latency and recovery status, and dispatches kill", () => {
     const kill = vi.fn();
     const { rerender } = render(
@@ -121,8 +161,8 @@ describe("broadcast cues", () => {
     fireEvent.click(screen.getByRole("button", { name: /Stop Tactics/ }));
     expect(kill).toHaveBeenCalledOnce();
     for (const [action, status] of [
-      ["agent_down", "Down"],
-      ["fallback_on", "Fallback"],
+      ["agent_down", "Recovering"],
+      ["fallback_on", "Recovering"],
       ["restarted_from_checkpoint", "Recovering"],
       ["caught_up", "Running"],
     ]) {

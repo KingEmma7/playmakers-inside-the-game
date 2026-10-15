@@ -1,3 +1,4 @@
+import { playerName } from "./players";
 import Pitch from "./Pitch";
 import { activeCues, type MatchEvent, type OverlayCue } from "./stream";
 export function Crest({ away = false }: { away?: boolean }) {
@@ -17,46 +18,65 @@ export function CueCard({ cue }: { cue: OverlayCue }) {
       style={{ zIndex: (cue.priority ?? 0) + 1 }}
       data-testid="cue-card"
     >
-      <div className="eyebrow">
-        {whatif
-          ? "What-If · Home win probability"
-          : cue.template === "template_fallback"
-            ? "Safe template"
-            : cue.template === "storyline"
-              ? "Storyline"
-              : "Insight"}
-        <span title={cue.evidence_event_ids.join(", ")}>
-          {cue.evidence_event_ids.length} cited events
-        </span>
-      </div>
       <h3>
         {String(payload.headline || cue.template)
           .replaceAll("★", "")
           .trim()}
       </h3>
-      <p>{String(payload.detail || "")}</p>
+      <p>
+        {whatif && cue.language === "es"
+          ? {
+              "if the shot had been saved":
+                "¿Y si ese disparo se hubiera detenido?",
+              "if the chance had been scored":
+                "¿Y si esa ocasión hubiera sido gol?",
+              "if the red card had not been shown":
+                "¿Y si no hubiera habido tarjeta roja?",
+            }[String(payload.scenario)] ||
+            "¿Y si el desenlace hubiera sido diferente?"
+          : String(payload.detail || "")}
+      </p>
+      {!whatif && (
+        <small className="evidence" title={cue.evidence_event_ids.join(", ")}>
+          {cue.language === "es" ? "Basado en los eventos" : "From events"}{" "}
+          {cue.evidence_event_ids
+            .slice(-3)
+            .map((id) => String(Number(id.split(/[:_]/).at(-1))))
+            .join(", ")}{" "}
+          {cue.language === "es" ? "" : "· Verified"}
+        </small>
+      )}
       {Boolean(payload.player_cam) && (
         <div className="favourite">
-          {String(record(payload.player_cam).player_id).split("_").at(-1)} ·
-          favourite player
+          {playerName(String(record(payload.player_cam).player_id))} · favourite
+          player
         </div>
       )}
       {whatif && (
         <>
-          <div className="probabilities">
-            <span>
-              {(Number(metrics.win_prob_before) * 100).toFixed(0)}%{" "}
-              <small>Before</small>
-            </span>
-            <b>→</b>
-            <span>
-              {(Number(metrics.win_prob_after) * 100).toFixed(0)}%{" "}
-              <small>After</small>
-            </span>
-            <strong>
-              {Number(metrics.delta) >= 0 ? "+" : ""}
-              {(Number(metrics.delta) * 100).toFixed(1)} pp
-            </strong>
+          <div className="probability-summary">
+            <small>
+              {cue.language === "es"
+                ? "Probabilidad de victoria"
+                : "Win probability"}{" "}
+              · {String(metrics.rollouts ?? "—")}{" "}
+              {cue.language === "es" ? "simulaciones" : "simulations"}
+            </small>
+            <div className="probabilities">
+              <span>
+                {(Number(metrics.win_prob_before) * 100).toFixed(0)}%{" "}
+                <small>Before</small>
+              </span>
+              <b>→</b>
+              <span>
+                {(Number(metrics.win_prob_after) * 100).toFixed(0)}%{" "}
+                <small>After</small>
+              </span>
+              <strong>
+                {Number(metrics.delta) >= 0 ? "+" : ""}
+                {(Number(metrics.delta) * 100).toFixed(1)} pp
+              </strong>
+            </div>
           </div>
           <div className="delta-track">
             <span
@@ -66,8 +86,7 @@ export function CueCard({ cue }: { cue: OverlayCue }) {
             <i
               style={{
                 width: `${Math.min(100, Number(metrics.win_prob_after) * 100)}%`,
-                background:
-                  Number(metrics.delta) >= 0 ? "var(--home)" : "var(--red)",
+                background: "var(--home)",
               }}
             />
           </div>
@@ -89,6 +108,7 @@ export function ViewPanel({
   safe,
   running,
   status,
+  favourite = "H09",
 }: {
   title: string;
   persona: string;
@@ -99,11 +119,18 @@ export function ViewPanel({
   safe: boolean;
   running: boolean;
   status: string;
+  favourite?: string;
 }) {
   const active = activeCues(cues, clock);
   // One winner per slot; incoming cues replace lower-priority captions instead of covering the pitch.
-  const primary = active.find((c) => c.template !== "what_if");
-  const whatif = active.find((c) => c.template === "what_if");
+  const primary =
+    active.find((c) => c.template !== "what_if") ??
+    cues
+      .filter((c) => c.template !== "what_if" && c.clock_ms <= clock)
+      .sort((a, b) => b.clock_ms - a.clock_ms)[0];
+  const whatif = cues
+    .filter((c) => c.template === "what_if" && c.clock_ms <= clock)
+    .sort((a, b) => b.clock_ms - a.clock_ms)[0];
   const storyline = active.find(
     (c) =>
       c.template === "storyline" &&
@@ -116,8 +143,7 @@ export function ViewPanel({
       (e) =>
         e.event_type === "shot" &&
         e.sequence <= (event?.sequence ?? -1) &&
-        e.clock_ms <= clock &&
-        clock < e.clock_ms + 6000,
+        e.clock_ms <= clock,
     )
     .at(-1);
   const visibleEvents = events.filter(
@@ -138,6 +164,28 @@ export function ViewPanel({
   );
   const passes = visibleEvents.filter((e) => e.event_type === "pass");
   const homePasses = passes.filter((e) => e.team_id?.endsWith("_HOME")).length;
+  const lastPass = passes.at(-1);
+  const possession = visibleEvents.filter((e) => e.team_id);
+  const homePossession =
+    (possession.filter((e) => e.team_id?.endsWith("_HOME")).length /
+      (possession.length || 1)) *
+    100;
+  const defensiveActions = visibleEvents.filter(
+    (e) =>
+      ["tackle", "interception", "foul"].includes(e.event_type) &&
+      e.team_id?.endsWith("_HOME"),
+  ).length;
+  const territory = passes.filter(
+    (e) =>
+      e.event_type === "pass" &&
+      (e.team_id?.endsWith("_HOME")
+        ? e.end_position.x > 70
+        : e.end_position.x < 35),
+  );
+  const fieldTilt =
+    (territory.filter((e) => e.team_id?.endsWith("_HOME")).length /
+      (territory.length || 1)) *
+    100;
   const metrics = record(primary?.payload.metrics);
   const momentum = Number(metrics.home_momentum ?? 0);
   return (
@@ -152,20 +200,31 @@ export function ViewPanel({
           <small>
             {persona === "analyst"
               ? "Tactics and verified metrics"
-              : `${primary?.language === "fr" ? "Français" : "Español"} · Your match`}
+              : `${primary?.language === "fr" ? "Français" : "Español"} · ${playerName(favourite)}`}
           </small>
         </div>
         <span className="connection">{status}</span>
       </div>
       <div className="broadcast">
-        <Pitch event={event} running={running} />
+        <Pitch
+          event={event}
+          running={running}
+          favourite={persona === "casual" ? favourite : undefined}
+          shots={
+            shots.filter(
+              (e) =>
+                e.event_type === "shot" &&
+                e.shooter_player_id.endsWith(favourite),
+            ).length
+          }
+        />
         <div className="vignette" />
         {safe && (
           <div className="safe-guides">
             <span>90% broadcast safe</span>
           </div>
         )}
-        {persona === "analyst" && event?.event_type === "pass" && (
+        {persona === "analyst" && lastPass?.event_type === "pass" && (
           <div className="pass-stat">
             <svg viewBox="0 0 100 60">
               <path
@@ -181,20 +240,20 @@ export function ViewPanel({
                 fill="none"
                 stroke="var(--home)"
                 strokeWidth="5"
-                strokeDasharray={`${event.difficulty * 100} 100`}
+                strokeDasharray={`${lastPass.difficulty * 100} 100`}
               />
             </svg>
-            <b>{(event.difficulty * 100).toFixed(0)}%</b>
+            <b>{lastPass.difficulty.toFixed(2)}</b>
             <small>Pass difficulty</small>
           </div>
         )}
-        {shot?.event_type === "shot" && (
+        {persona === "analyst" && shot?.event_type === "shot" && (
           <div className="shot-card">
             <span>Shot quality</span>
             <b>
               {shot.xg.toFixed(2)} <small>xG</small>
             </b>
-            <small>{shot.outcome.replace("_", " ")}</small>
+            <small>{playerName(shot.shooter_player_id)}</small>
           </div>
         )}
         {!event && (
@@ -211,22 +270,30 @@ export function ViewPanel({
             <span>xG · {awayXg.toFixed(2)}</span>
           </div>
           <div>
-            <b>{shots.length}</b>
-            <span>Shots</span>
+            <b>{homePossession.toFixed(0)}%</b>
+            <span>Possession</span>
           </div>
           <div>
-            <b>{homePasses}</b>
-            <span>Home passes</span>
+            <b>
+              {defensiveActions
+                ? ((passes.length - homePasses) / defensiveActions).toFixed(1)
+                : "—"}
+            </b>
+            <span title="Opposition passes per home defensive action">
+              PPDA · home
+            </span>
           </div>
           <div>
-            <b>{passes.length - homePasses}</b>
-            <span>Away passes</span>
+            <b>{fieldTilt.toFixed(0)}%</b>
+            <span>Field tilt · final third</span>
           </div>
         </div>
       )}
       <div className="lower-thirds">
         {primary && <CueCard key={primary.template} cue={primary} />}
-        {whatif && <CueCard key={whatif.cue_id} cue={whatif} />}
+        {persona === "casual" && whatif && (
+          <CueCard key={whatif.cue_id} cue={whatif} />
+        )}
         {!whatif && storyline && (
           <details className="storyline-detail">
             <summary>
@@ -236,10 +303,10 @@ export function ViewPanel({
           </details>
         )}
       </div>
-      {persona === "analyst" && (
+      {
         <div className="momentum">
           <div>
-            <span>Dominance</span>
+            <span>{persona === "casual" ? "Dominio" : "Dominance"}</span>
             <b>{momentum > 0 ? "NBR" : momentum < 0 ? "SPA" : "EVEN"}</b>
           </div>
           <svg
@@ -273,7 +340,7 @@ export function ViewPanel({
               })}
           </svg>
         </div>
-      )}
+      }
     </section>
   );
 }

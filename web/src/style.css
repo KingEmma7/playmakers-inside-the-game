@@ -695,4 +695,206 @@ summary {
 .timeline {
   margin-top: var(--space-4);
 }
-.timeline{margin-top:var(--space-2);padding:var(--space-3) var(--space-5) var(--space-2)}
+.timeline {
+  margin-top: var(--space-2);
+  padding: var(--space-3) var(--space-5) var(--space-2);
+}
+/* Calm polish: compact inline controls and balanced, bounded card content. */
+header {
+  gap: 48px;
+  height: 60px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.toolbar {
+  gap: 24px;
+}
+.control {
+  gap: 4px;
+}
+.control input,
+.control select {
+  font-weight: 600;
+  padding: 4px 0;
+  appearance: none;
+}
+.control input {
+  width: 16px;
+  appearance: textfield;
+}
+.control input::-webkit-inner-spin-button {
+  appearance: none;
+}
+.control select {
+  cursor: pointer;
+}
+.hero {
+  padding: 16px 0;
+}
+.view-heading {
+  margin-bottom: 8px;
+}
+.view {
+  min-height: 596px;
+}
+.gallery-layout {
+  align-items: stretch;
+}
+.trace-panel {
+  align-self: stretch;
+}
+.agent-grid > div {
+  align-items: baseline;
+}
+.kill:disabled {
+  opacity: 1;
+  background: #f2eeee;
+  color: #986163;
+  border: 1px solid #e6d9da;
+}
+.evidence {
+  display: block;
+  margin-top: 8px;
+}
+.cue h3 {
+  margin-top: 0;
+}
+.cue.whatif {
+  border-top: 1px solid var(--rule);
+  padding-top: 8px;
+}
+.cue.whatif h3 {
+  display: none;
+}
+.cue.whatif p {
+  margin-bottom: 8px;
+}
+.cue.whatif > small:last-child {
+  display: none;
+}
+.probabilities {
+  justify-content: flex-end;
+  margin: -24px 0 8px;
+}
+.probabilities > span {
+  font-size: 18px;
+  color: var(--muted);
+}
+.probabilities > span:nth-of-type(2) {
+  font-size: 28px;
+  color: var(--ink);
+}
+.probabilities small,
+.probabilities strong {
+  display: none;
+}
+.probabilities > b {
+  color: var(--muted);
+  font-weight: 400;
+}
+.momentum {
+  width: 100%;
+  overflow: hidden;
+}
+.dominance-bars {
+  width: 0;
+  flex: 1 1 0;
+}
+.momentum > div:first-child {
+  flex-shrink: 0;
+}
+.timeline {
+  margin-top: 24px;
+  padding: 16px 20px 8px;
+}
+.about {
+  margin: 32px;
+  max-width: 1044px;
+  font-size: 15px;
+}
+.about h1 {
+  margin-top: 0;
+}
+.about p {
+  max-width: 900px;
+}
+.architecture b {
+  display: inline-block;
+  width: 104px;
+}
+@media (min-width: 1700px) {
+  .view {
+    min-height: 704px;
+  }
+}
+.stat-row span {
+  white-space: nowrap;
+  font-size: 12px;
+}
+.cue .favourite {
+  display: none;
+}
+.about {
+  padding: 24px 32px;
+}
+.about h1 {
+  font-size: 40px;
+  margin-bottom: 24px;
+}
+.about h2 {
+  margin-top: 16px;
+}
+.about .muted {
+  margin-top: 16px;
+}
+.architecture {
+  margin: 24px 0;
+}
+.stat-row span {
+  font-size: 11px;
+}
+.cue.whatif .probabilities {
+  margin-top: 0;
+}
+.cue.whatif > small {
+  display: block;
+}
+.about {
+  margin-top: 24px;
+  margin-bottom: 24px;
+}
+.about .architecture {
+  margin: 16px 0;
+}
+.about h1 {
+  margin-bottom: 16px;
+}
+.cue.whatif > small:first-of-type {
+  padding-right: 128px;
+  min-height: 24px;
+}
+.cue.whatif .probabilities {
+  margin-top: -32px;
+}
+.agent-grid > div {
+  line-height: 1.2;
+}
+.trace-panel details {
+  margin-top: 8px;
+}
+.timeline {
+  margin-bottom: 24px;
+}
+.probability-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.probability-summary > small {
+  flex: 1;
+}
+.cue.whatif .probability-summary .probabilities {
+  margin: 0;
+  flex-shrink: 0;
+}

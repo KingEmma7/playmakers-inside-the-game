@@ -1,4 +1,4 @@
-import { agentStatus, type Trace } from "./stream";
+import { clockLabel, agentStatus, type Trace } from "./stream";
 const agents = [
   "director",
   "stats",
@@ -13,10 +13,12 @@ export default function TracePanel({
   traces,
   onKill,
   disabled,
+  recoveryClock = 0,
 }: {
   traces: Trace[];
   onKill: () => void;
   disabled: boolean;
+  recoveryClock?: number;
 }) {
   const latest = new Map<string, Trace>();
   const byView = new Map<string, Trace>();
@@ -63,11 +65,18 @@ export default function TracePanel({
           const t =
             latest.get(agent) ??
             (agent === "director" ? traces.at(-1) : undefined);
-          const status = t
+          let status = t
             ? agent === "director"
               ? "up"
               : agentStatus(t)
             : "waiting";
+          if (agent === "tactics" && ["down", "fallback"].includes(status))
+            status = "recovering";
+          if (
+            agent === "graphics" &&
+            ["down", "fallback", "recovering"].includes(recoveryStatus)
+          )
+            status = "fallback";
           return (
             <div key={agent}>
               <div>
@@ -77,11 +86,15 @@ export default function TracePanel({
                     : agent[0].toUpperCase() + agent.slice(1)}
                 </span>
                 <small>
-                  {agent === "director"
-                    ? "Orchestrating the gallery"
-                    : t
-                      ? `${t.action.replaceAll("_", " ")} · ${t.latency_ms.toFixed(1)} ms`
-                      : "Waiting for match events"}
+                  {agent === "tactics" && status === "recovering"
+                    ? `replaying from ${clockLabel(recoveryClock)}`
+                    : agent === "graphics" && status === "fallback"
+                      ? "template mode"
+                      : agent === "director"
+                        ? "Orchestrating the gallery"
+                        : t
+                          ? `${t.action.replaceAll("_", " ")} · ${t.latency_ms.toFixed(1)} ms`
+                          : "Waiting for match events"}
                 </small>
               </div>
               <b className={`status ${status}`}>

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from gallery_agents.contracts import ViewerProfile
+from gallery_agents.contracts import OverlayCue, ViewerProfile
 from gallery_agents.model_clients import DeterministicMockChatClient
 from gallery_agents.resilience import KillSpec
 from gallery_agents.what_if import WhatIfAgent
@@ -110,6 +110,36 @@ async def test_profiles_differ_and_favorites_are_scoped() -> None:
         assert "próximo" in spanish.payload["headline"]
         assert "attaque" in french.payload["headline"]
         assert all("player_cam" not in cue.payload for cue in (analyst, french))
+
+
+@pytest.mark.asyncio
+async def test_casual_whatif_preserves_rollout_count() -> None:
+    from gallery_agents.personalize import personalize
+
+    cue = OverlayCue(
+        cue_id="whatif",
+        clock_ms=0,
+        template="what_if",
+        evidence_event_ids=["e"],
+        payload={
+            "headline": "What if?",
+            "detail": "Alternate outcome",
+            "metrics": {
+                "win_prob_before": 0.3,
+                "win_prob_after": 0.6,
+                "delta": 0.3,
+                "rollouts": 20,
+            },
+        },
+    )
+    result = await personalize(
+        cue,
+        ViewerProfile(persona="casual", language="es"),
+        passing(),
+        DeterministicMockChatClient(),
+        0,
+    )
+    assert result.payload["metrics"]["rollouts"] == 20
 
 
 @pytest.mark.asyncio

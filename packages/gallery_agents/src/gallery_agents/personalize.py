@@ -56,7 +56,7 @@ async def personalize(
             payload["metrics"] = {
                 key: value
                 for key, value in cue.payload["metrics"].items()
-                if key in ("win_prob_before", "win_prob_after", "delta")
+                if key in ("win_prob_before", "win_prob_after", "delta", "rollouts")
             }
         payload["tone"] = "fan"
     else:

@@ -1,4 +1,4 @@
-/* global document */
+/* global document, window */
 // Start the API on :8000 and Vite on :5173 before running npm run screenshot.
 import { chromium } from "playwright";
 import assert from "node:assert/strict";
@@ -39,7 +39,8 @@ try {
     undefined,
     { timeout: 240000 },
   );
-  await page.getByRole("button", { name: "Pause" }).click();
+  await page.locator(".casual .whatif").waitFor({ timeout: 240000 });
+  await page.getByRole("button", { name: "Pause", exact: true }).waitFor();
   await page.screenshot({
     path: new URL("../e2e-screenshot.png", import.meta.url).pathname,
     fullPage: false,
@@ -49,10 +50,11 @@ try {
       await page.evaluate(
         () =>
           document.documentElement.scrollWidth <=
-          document.documentElement.clientWidth,
+            document.documentElement.clientWidth &&
+          document.documentElement.scrollHeight <= window.innerHeight,
       ),
       true,
-      "no horizontal overflow",
+      "no horizontal overflow or vertical clipping",
     );
   }
   await checkLayout();
@@ -61,29 +63,25 @@ try {
   await page.screenshot({
     path: new URL("../shots/main.png", import.meta.url).pathname,
   });
-  await page.getByRole("button", { name: "Start" }).click();
+
   await page.getByRole("button", { name: /Stop Tactics/ }).click();
   await page.waitForFunction(
     () => {
-      if (
-        !document.querySelector(
-          ".agent-grid > div:nth-child(3) .recovering, .agent-grid > div:nth-child(3) .fallback, .agent-grid > div:nth-child(3) .down",
-        )
-      )
-        return false;
-      const pause = [...document.querySelectorAll("button")].find(
-        (b) => b.textContent === "Pause",
+      return (
+        Boolean(
+          document.querySelector(".agent-grid > div:nth-child(3) .recovering"),
+        ) && Boolean(document.querySelector(".casual .whatif"))
       );
-      pause?.click();
-      return true;
     },
     undefined,
     { timeout: 60000 },
   );
+  await checkLayout();
+  await page.getByRole("button", { name: "Pause" }).waitFor();
   await page.screenshot({
     path: new URL("../shots/kill.png", import.meta.url).pathname,
   });
-  await page.getByRole("button", { name: "Start" }).click();
+  await page.getByRole("button", { name: "Pause" }).waitFor();
   await page.getByText("Handoffs and recovery history").click();
   for (const view of ["A", "F"]) {
     for (const action of [
@@ -113,7 +111,7 @@ try {
   });
   assert.deepEqual(errors, [], "browser should have no uncaught errors");
   console.log(
-    "Split view, SSE content, synced clocks, pause, kill/recover and /about passed; screenshot saved to web/e2e-screenshot.png",
+    "Playing split view, persistent What-If, synced clocks, kill/recover and /about passed; screenshot saved to web/e2e-screenshot.png",
   );
 } finally {
   await browser.close();

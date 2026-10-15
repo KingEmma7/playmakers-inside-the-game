@@ -336,3 +336,14 @@ Azure deployment, Cosmos persistence and cloud observability are Phase 4 work.
 What-If snapshots now replay scripted style-change metadata from events (including YAML stories),
 as well as red cards. A supplied story schedule supports older recordings and future rollout changes;
 recorded changes take precedence so they are not applied twice.
+
+### Calm replay controls
+
+Choose a seed, speed, language and fictional favourite player in the header; press **D** to
+show broadcast safe areas. The For you card retains the latest What-If result until a newer
+simulation arrives. Pitch player motion is a seeded formation visualisation. Analyst possession
+is team-tagged event share, PPDA is opposition passes per home defensive action, and field tilt
+is home share of final-third pass entries; these are synthetic event proxies.
+
+With API on :8000 and Vite on :5173, `cd web && npm run screenshot` captures the playing replay,
+Tactics recovery and About in `web/shots/`, and checks both 1440×900 and 1920×1080 for clipping.

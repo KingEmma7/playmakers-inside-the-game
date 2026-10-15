@@ -1,5 +1,20 @@
 # HANDOFF — current state (as of Wed 14 Oct 2026)
 
+## Final Calm polish and worker lifecycle (15 Oct 2026)
+
+- Favourite pitch chip counts actual observed shots, falling back to passes/touches or the
+  player name before any involvement. About hides replay controls and centres a 720px text
+  column in the shared full-content card (maximum 1392px).
+- Dominance strips stretch from a consistent label column within card padding; the What-If
+  before tick sits above the after fill.
+- API lifespan owns one shared spawn-based What-If pool, capped at three workers per API
+  process. Shutdown waits for running batches and cancels queued futures. Stream cancellation
+  cancels its queued rollouts and explicitly closes its Director; already executing batches
+  finish normally. CLI Directors retain ownership of their standalone pool.
+- Validation: 47 offline Python tests, 9 frontend tests, Ruff format/check, frontend lint/build,
+  pip check and the live screenshot flow pass. Captures refreshed in `web/shots/` and
+  `web/e2e-screenshot.png`. No dependency changes or commits.
+
 ## Calm polish pass (15 Oct 2026)
 
 - Inline label/value replay controls, fictional player names (Okafor by default), D safe-area

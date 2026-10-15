@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import multiprocessing
+import os
 from concurrent.futures import ProcessPoolExecutor
 
 from agent_framework import Agent, BaseChatClient
@@ -39,14 +41,30 @@ def run_batch(snapshot: MatchSnapshot, seeds: list[int]) -> Probabilities:
     )
 
 
+def create_rollout_pool() -> ProcessPoolExecutor:
+    # Spawn avoids inheriting the API event loop, sockets and shutdown signal handlers.
+    return ProcessPoolExecutor(
+        max_workers=min(3, os.cpu_count() or 1),
+        mp_context=multiprocessing.get_context("spawn"),
+    )
+
+
 class WhatIfAgent:
     """Paired seeded PitchSim continuations; probabilities always refer to the home side."""
 
-    def __init__(self, client: BaseChatClient, rollouts: int = 200, seed: int = 0) -> None:
+    def __init__(
+        self,
+        client: BaseChatClient,
+        rollouts: int = 200,
+        seed: int = 0,
+        pool: ProcessPoolExecutor | None = None,
+    ) -> None:
         if not 1 <= rollouts <= 2000:
             raise ValueError("whatif_rollouts must be between 1 and 2000")
         self.client, self.rollouts, self.seed = client, rollouts, seed
-        self.pool: ProcessPoolExecutor | None = None
+        self.pool = pool
+        self._owns_pool = pool is None
+        self._pending: set[asyncio.Future[Probabilities]] = set()
 
     @staticmethod
     def triggers(event: MatchEvent) -> bool:
@@ -57,7 +75,9 @@ class WhatIfAgent:
         )
 
     async def close(self) -> None:
-        if self.pool:
+        for future in self._pending:
+            future.cancel()
+        if self.pool and self._owns_pool:
             await asyncio.to_thread(self.pool.shutdown, wait=True, cancel_futures=True)
             self.pool = None
 
@@ -97,14 +117,19 @@ class WhatIfAgent:
         base = int.from_bytes(hashlib.sha256(f"{self.seed}:{event.event_id}".encode()).digest()[:8])
         seeds = [base + i for i in range(self.rollouts)]
         if self.pool is None:
-            self.pool = ProcessPoolExecutor(max_workers=3)
+            self.pool = create_rollout_pool()
         loop = asyncio.get_running_loop()
-        probabilities = await asyncio.gather(
-            *(
-                loop.run_in_executor(self.pool, run_batch, snapshot, seeds)
-                for snapshot in (before, after, counter)
-            )
-        )
+        futures = [
+            loop.run_in_executor(self.pool, run_batch, snapshot, seeds)
+            for snapshot in (before, after, counter)
+        ]
+        self._pending.update(futures)
+        try:
+            probabilities = await asyncio.gather(*futures)
+        finally:
+            for future in futures:
+                future.cancel()
+            self._pending.difference_update(futures)
         p0, p1, pc = probabilities
         metrics = WhatIfMetrics(
             before=p0,

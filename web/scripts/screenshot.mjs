@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 const browser = await chromium.launch({
   headless: true,
-  args: ["--no-sandbox"],
+  args: ["--no-sandbox", "--host-resolver-rules=MAP localhost 127.0.0.1"],
 });
 await mkdir(new URL("../shots/", import.meta.url), { recursive: true });
 try {
@@ -102,6 +102,26 @@ try {
     }
   }
   await page.getByRole("link", { name: "About" }).click();
+  assert.equal(await page.getByLabel("Replay controls").count(), 0);
+  assert.equal(
+    await page.getByRole("button", { name: "Pause", exact: true }).count(),
+    0,
+  );
+  assert.equal(
+    await page.evaluate(() => {
+      const card = document.querySelector(".about").getBoundingClientRect();
+      const copy = document
+        .querySelector(".about-copy")
+        .getBoundingClientRect();
+      return (
+        Math.abs(card.left - (window.innerWidth - card.width) / 2) < 1 &&
+        card.width <= 1392 &&
+        copy.width <= 720
+      );
+    }),
+    true,
+    "About uses a centred full-width card and readable text column",
+  );
   await page
     .getByRole("heading", { name: "One match. An entire AI crew." })
     .waitFor();

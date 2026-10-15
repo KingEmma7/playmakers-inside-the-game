@@ -6,53 +6,60 @@ import { useGalleryStream, clockLabel } from "./stream";
 function About() {
   return (
     <main className="about">
-      <h1>
-        One match.
-        <br />
-        An entire AI crew.
-      </h1>
-      <p>
-        Gallery turns a seeded, synthetic football match into evidence-backed
-        broadcast overlays and a personalised second screen. Every club, player
-        and match is fictional.
-      </p>
-      <div className="architecture">
+      <div className="about-copy">
+        <h1>
+          One match.
+          <br />
+          An entire AI crew.
+        </h1>
         <p>
-          <b>Source</b> PitchSim synthetic events · Replay API
+          Gallery turns a seeded, synthetic football match into evidence-backed
+          broadcast overlays and a personalised second screen. Every club,
+          player and match is fictional.
         </p>
+        <div className="architecture">
+          <p>
+            <b>Source</b> PitchSim synthetic events · Replay API
+          </p>
+          <p>
+            <b>Production</b> Director · Stats MCP · Tactics · Storyline ·
+            What-If
+          </p>
+          <p>
+            <b>Delivery</b> Compliance · Graphics · Audience · Your screen
+          </p>
+        </div>
+        <h2>A specialist crew. One verified story.</h2>
         <p>
-          <b>Production</b> Director · Stats MCP · Tactics · Storyline · What-If
+          Microsoft Agent Framework coordinates specialist agents. Deterministic
+          Stats tools provide numbers through MCP. Compliance checks claims
+          against event IDs. Graphics validates timed cues, and Audience shapes
+          the same moment for analysts and fans in English, Spanish or French.
         </p>
+        <h2>Built to keep broadcasting.</h2>
         <p>
-          <b>Delivery</b> Compliance · Graphics · Audience · Your screen
+          Kill Tactics during a match: deterministic captions take over within
+          one event. The agent reloads its checkpoint and catches up. What-If
+          uses parallel, seeded PitchSim continuations to explain alternative
+          outcomes.
+        </p>
+        <h2>What is running here?</h2>
+        <p>
+          The local demo uses an offline mock model, in-memory state and file
+          checkpoints. Foundry/Azure OpenAI model clients are available when
+          configured. Cosmos DB, Container Apps deployment and cloud
+          observability are planned for Phase 4; this page does not claim they
+          are deployed.
+        </p>
+        <p className="muted">
+          Press D on Replay to toggle broadcast safe areas.
+        </p>
+        <p className="muted">
+          Player motion is a formation-based visualisation around observed
+          ball/action positions; it is not real tracking data. What-If
+          probabilities are illustrative synthetic continuations.
         </p>
       </div>
-      <h2>A specialist crew. One verified story.</h2>
-      <p>
-        Microsoft Agent Framework coordinates specialist agents. Deterministic
-        Stats tools provide numbers through MCP. Compliance checks claims
-        against event IDs. Graphics validates timed cues, and Audience shapes
-        the same moment for analysts and fans in English, Spanish or French.
-      </p>
-      <h2>Built to keep broadcasting.</h2>
-      <p>
-        Kill Tactics during a match: deterministic captions take over within one
-        event. The agent reloads its checkpoint and catches up. What-If uses
-        parallel, seeded PitchSim continuations to explain alternative outcomes.
-      </p>
-      <h2>What is running here?</h2>
-      <p>
-        The local demo uses an offline mock model, in-memory state and file
-        checkpoints. Foundry/Azure OpenAI model clients are available when
-        configured. Cosmos DB, Container Apps deployment and cloud observability
-        are planned for Phase 4; this page does not claim they are deployed.
-      </p>
-      <p className="muted">Press D on Replay to toggle broadcast safe areas.</p>
-      <p className="muted">
-        Player motion is a formation-based visualisation around observed
-        ball/action positions; it is not real tracking data. What-If
-        probabilities are illustrative synthetic continuations.
-      </p>
     </main>
   );
 }
@@ -152,86 +159,90 @@ function Gallery() {
             About
           </a>
         </nav>
-        <section className="toolbar" aria-label="Replay controls">
-          <div className="control">
-            <label htmlFor="seed">Seed</label>
-            <input
-              id="seed"
-              aria-label="MATCH SEED"
-              type="number"
-              min="0"
-              max="999999"
-              value={seed}
-              onChange={(e) => {
-                setSeed(Math.max(0, Math.min(999999, Number(e.target.value))));
-                restart();
-              }}
-            />
-          </div>
-          <div className="control">
-            <label htmlFor="speed">Speed</label>
-            <select
-              id="speed"
-              aria-label="REPLAY SPEED"
-              value={speed}
-              onChange={(e) => {
-                setSpeed(Number(e.target.value));
-                restart();
-              }}
-            >
-              {[1, 10, 50].map((n) => (
-                <option key={n} value={n}>
-                  {n}×
-                </option>
-              ))}
-            </select>
-          </div>
-          <button
-            className="play"
-            onClick={() => {
-              if (running) setPausedSequence(shared);
-              setRunning(!running);
-            }}
-          >
-            {running ? "Pause" : "Start"}
-          </button>
-          <span className="toolbar-divider" />
-          <div className="control">
-            <label htmlFor="language">Language</label>
-            <select
-              id="language"
-              aria-label="FAN LANGUAGE"
-              value={language}
-              onChange={(e) => {
-                setLanguage(e.target.value as "es" | "fr");
-              }}
-            >
-              <option value="es">Español</option>
-              <option value="fr">Français</option>
-            </select>
-          </div>
-          <div className="control favourite-control">
-            <label htmlFor="favourite">Following</label>
-            <select
-              id="favourite"
-              aria-label="FAVOURITE PLAYER"
-              value={favourite}
-              onChange={(e) => setFavourite(e.target.value)}
-            >
-              <option value="">No favourite</option>
-              {["H", "A"].flatMap((team) =>
-                Array.from({ length: 11 }, (_, i) => {
-                  const id = `${team}${String(i + 1).padStart(2, "0")}`;
-                  return (
-                    <option key={id} value={id}>
-                      {playerName(id)}
-                    </option>
+        {!about && (
+          <section className="toolbar" aria-label="Replay controls">
+            <div className="control">
+              <label htmlFor="seed">Seed</label>
+              <input
+                id="seed"
+                aria-label="MATCH SEED"
+                type="number"
+                min="0"
+                max="999999"
+                value={seed}
+                onChange={(e) => {
+                  setSeed(
+                    Math.max(0, Math.min(999999, Number(e.target.value))),
                   );
-                }),
-              )}
-            </select>
-          </div>
-        </section>
+                  restart();
+                }}
+              />
+            </div>
+            <div className="control">
+              <label htmlFor="speed">Speed</label>
+              <select
+                id="speed"
+                aria-label="REPLAY SPEED"
+                value={speed}
+                onChange={(e) => {
+                  setSpeed(Number(e.target.value));
+                  restart();
+                }}
+              >
+                {[1, 10, 50].map((n) => (
+                  <option key={n} value={n}>
+                    {n}×
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              className="play"
+              onClick={() => {
+                if (running) setPausedSequence(shared);
+                setRunning(!running);
+              }}
+            >
+              {running ? "Pause" : "Start"}
+            </button>
+            <span className="toolbar-divider" />
+            <div className="control">
+              <label htmlFor="language">Language</label>
+              <select
+                id="language"
+                aria-label="FAN LANGUAGE"
+                value={language}
+                onChange={(e) => {
+                  setLanguage(e.target.value as "es" | "fr");
+                }}
+              >
+                <option value="es">Español</option>
+                <option value="fr">Français</option>
+              </select>
+            </div>
+            <div className="control favourite-control">
+              <label htmlFor="favourite">Following</label>
+              <select
+                id="favourite"
+                aria-label="FAVOURITE PLAYER"
+                value={favourite}
+                onChange={(e) => setFavourite(e.target.value)}
+              >
+                <option value="">No favourite</option>
+                {["H", "A"].flatMap((team) =>
+                  Array.from({ length: 11 }, (_, i) => {
+                    const id = `${team}${String(i + 1).padStart(2, "0")}`;
+                    return (
+                      <option key={id} value={id}>
+                        {playerName(id)}
+                      </option>
+                    );
+                  }),
+                )}
+              </select>
+            </div>
+          </section>
+        )}
       </header>
       {about ? (
         <About />

@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react";
-import { playerName } from "./players";
 import type { MatchEvent } from "./stream";
 type Point = { x: number; y: number };
 function ballFor(event?: MatchEvent): Point | undefined {
@@ -14,19 +13,19 @@ export default function Pitch({
   event,
   running,
   favourite,
-  shots = 0,
+  involvement = "",
 }: {
   event?: MatchEvent;
   running: boolean;
   favourite?: string;
-  shots?: number;
+  involvement?: string;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const current = useRef<Point>({ x: 52.5, y: 34 });
-  const target = useRef({ event, running, favourite, shots });
+  const target = useRef({ event, running, favourite, involvement });
   useEffect(() => {
-    target.current = { event, running, favourite, shots };
-  }, [event, running, favourite, shots]);
+    target.current = { event, running, favourite, involvement };
+  }, [event, running, favourite, involvement]);
   useEffect(() => {
     const ctx = canvas.current?.getContext("2d");
     if (!ctx) return;
@@ -36,7 +35,7 @@ export default function Pitch({
       if (!ctx) return;
       const dt = Math.min(50, time - previous || 16);
       previous = time;
-      const { event, running, favourite, shots } = target.current;
+      const { event, running, favourite, involvement } = target.current;
       const goal = ballFor(event) ?? current.current;
       if (running) {
         const blend = 1 - Math.exp(-dt / 180);
@@ -118,7 +117,7 @@ export default function Pitch({
             ctx.arc(x * 10, y * 10, 27, 0, Math.PI * 2);
             ctx.stroke();
             ctx.lineWidth = 2;
-            const label = `${playerName(favourite!)} · ${shots} tiros`;
+            const label = involvement;
             ctx.font = "500 25px Inter";
             const width = ctx.measureText(label).width + 32;
             const left = Math.max(16, Math.min(1034 - width, x * 10 + 32));

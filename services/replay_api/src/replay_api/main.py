@@ -3,14 +3,16 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from concurrent.futures import ProcessPoolExecutor
+from contextlib import aclosing, asynccontextmanager
 from typing import Annotated, Any, Literal
 
-from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse, StreamingResponse
 from gallery_agents.contracts import ViewerProfile
 from gallery_agents.resilience import KillSpec
+from gallery_agents.what_if import create_rollout_pool
 from gallery_agents.workflow import Director
 from pitchsim.config import MatchConfig
 from pitchsim.replay import replay_events
@@ -27,8 +29,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     for route in app.routes:
         if isinstance(route, Mount) and route.path == "/stats-mcp":
             route.app = stats_app
-    async with stats_server.session_manager.run():
-        yield
+    pool = create_rollout_pool()
+    app.state.whatif_pool = pool
+    try:
+        async with stats_server.session_manager.run():
+            yield
+    finally:
+        await asyncio.to_thread(pool.shutdown, wait=True, cancel_futures=True)
+        app.state.whatif_pool = None
 
 
 app = FastAPI(title="Gallery Replay API", version="0.2.0", lifespan=lifespan)
@@ -86,10 +94,15 @@ async def gallery_messages(
     kill: str | None,
     whatif_rollouts: int,
     replay_from_ms: int = 0,
+    whatif_pool: ProcessPoolExecutor | None = None,
 ) -> AsyncGenerator[dict[str, Any], None]:
     events = await asyncio.to_thread(simulate_match, MatchConfig(seed=seed))
     async with Director(
-        profiles=[profile], seed=seed, kill=kill, whatif_rollouts=whatif_rollouts
+        profiles=[profile],
+        seed=seed,
+        kill=kill,
+        whatif_rollouts=whatif_rollouts,
+        whatif_pool=whatif_pool,
     ) as director:
 
         async def paced_events() -> AsyncGenerator[Any, None]:
@@ -113,6 +126,7 @@ async def gallery_messages(
 
 @app.get("/gallery/sse")
 async def gallery_sse(
+    request: Request,
     replay_from_ms: Annotated[int, Query(ge=0, le=5_400_000)] = 0,
     seed: int = 7,
     speed: float = 50,
@@ -135,10 +149,20 @@ async def gallery_sse(
     )
 
     async def stream() -> AsyncGenerator[str, None]:
-        async for message in gallery_messages(
-            seed, speed, profile, kill, whatif_rollouts, replay_from_ms
-        ):
-            yield "data: " + json.dumps(message, separators=(",", ":")) + "\n\n"
+        # Closing the wrapper must also close the Director if suspended at a yield.
+        async with aclosing(
+            gallery_messages(
+                seed,
+                speed,
+                profile,
+                kill,
+                whatif_rollouts,
+                replay_from_ms,
+                whatif_pool=request.app.state.whatif_pool,
+            )
+        ) as messages:
+            async for message in messages:
+                yield "data: " + json.dumps(message, separators=(",", ":")) + "\n\n"
 
     return StreamingResponse(
         stream(),
@@ -172,8 +196,18 @@ async def gallery_ws(
     )
     await ws.accept()
     try:
-        async for message in gallery_messages(seed, speed, profile, kill, whatif_rollouts):
-            await ws.send_json(message)
+        async with aclosing(
+            gallery_messages(
+                seed,
+                speed,
+                profile,
+                kill,
+                whatif_rollouts,
+                whatif_pool=ws.app.state.whatif_pool,
+            )
+        ) as messages:
+            async for message in messages:
+                await ws.send_json(message)
     except WebSocketDisconnect:
         return
     else:

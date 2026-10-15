@@ -6,6 +6,7 @@ import math
 import os
 import re
 import tempfile
+from concurrent.futures import ProcessPoolExecutor
 from time import perf_counter
 from typing import Any, Literal
 
@@ -454,6 +455,7 @@ class Director:
         recovery_storage: RecoveryStorage | None = None,
         kill: str | None = None,
         whatif_rollouts: int = 200,
+        whatif_pool: ProcessPoolExecutor | None = None,
         seed: int = 0,
         timeouts: dict[str, float] | None = None,
     ) -> None:
@@ -473,7 +475,7 @@ class Director:
             checkpoint_path = self._temporary_checkpoints.name
         self.client = client or create_gallery_chat_client()
         self.engines: dict[str, StatsEngine] = {}
-        self.what_if = WhatIfAgent(self.client, whatif_rollouts, seed)
+        self.what_if = WhatIfAgent(self.client, whatif_rollouts, seed, pool=whatif_pool)
         self.profiles = profiles or [ViewerProfile()]
         self.last_traces: list[AgentTraceEvent] = []
         self._lock = asyncio.Lock()

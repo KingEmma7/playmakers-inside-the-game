@@ -898,3 +898,50 @@ header {
   margin: 0;
   flex-shrink: 0;
 }
+
+/* Shared Calm content bounds and stable probability/dominance geometry. */
+.gallery-layout,
+.timeline,
+.about {
+  width: calc(100% - 64px);
+  max-width: 1392px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.about {
+  padding: 24px 32px;
+}
+.about-copy {
+  max-width: 720px;
+  margin: 0 auto;
+}
+.about p {
+  max-width: 720px;
+}
+.momentum {
+  width: auto;
+}
+.momentum > div:first-child {
+  min-width: 92px;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+.dominance-bars {
+  display: block;
+}
+.probability-marker {
+  z-index: 1;
+  width: 2px;
+  transform: translateX(-1px);
+  background: var(--ink);
+}
+@media (max-width: 900px) {
+  .gallery-layout,
+  .timeline,
+  .about {
+    width: calc(100% - 32px);
+  }
+  .about {
+    padding: 24px;
+  }
+}

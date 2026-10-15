@@ -280,3 +280,107 @@ async def test_live_translation_and_number_preserving_fallback(
     fallback = await module.personalize(cue, profile, passing(), object(), 0)
     assert fallback.payload["headline"] == "Analyse du match"
     assert "99" not in str(fallback.payload)
+
+
+@pytest.mark.asyncio
+async def test_cancel_rollouts_keeps_shared_pool_usable() -> None:
+    from concurrent.futures import Future
+    from unittest.mock import Mock
+
+    pending = [Future() for _ in range(3)]
+    pool = Mock()
+    pool.submit.side_effect = pending
+    agent = WhatIfAgent(DeterministicMockChatClient(), rollouts=2, pool=pool)
+    task = asyncio.create_task(
+        agent.evaluate([shot().model_copy(update={"xg": 0.5, "outcome": "saved"})])
+    )
+    await asyncio.sleep(0)
+    assert pool.submit.call_count == 3
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    await asyncio.sleep(0)
+    assert all(future.cancelled() for future in pending)
+    await agent.close()
+    pool.shutdown.assert_not_called()
+    assert not agent._pending
+
+
+def test_api_lifespan_reaps_workers_and_can_restart() -> None:
+    from gallery_agents.what_if import run_batch
+
+    snapshot = snapshot_from_events(
+        [shot()], home_style=MatchConfig().home_style, away_style=MatchConfig().away_style
+    )
+    pools = []
+    for _ in range(2):
+        with TestClient(api.app) as client:
+            pool = api.app.state.whatif_pool
+            pools.append(pool)
+            pool.submit(run_batch, snapshot, [1]).result(timeout=30)
+            workers = list(pool._processes.values())
+            assert workers and pool._max_workers <= 3
+            assert client.get("/healthz").status_code == 200
+        assert all(not worker.is_alive() for worker in workers)
+        assert api.app.state.whatif_pool is None
+    assert pools[0] is not pools[1]
+
+
+@pytest.mark.asyncio
+async def test_sse_disconnect_cancels_inflight_director(monkeypatch: pytest.MonkeyPatch) -> None:
+    started, cancelled, closed = asyncio.Event(), asyncio.Event(), asyncio.Event()
+
+    class StalledDirector:
+        def __init__(self, **kwargs):
+            assert kwargs["whatif_pool"] is api.app.state.whatif_pool
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            closed.set()
+
+        async def on_event(self, event):
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.set()
+
+    monkeypatch.setattr(api, "Director", StalledDirector)
+    monkeypatch.setattr(api, "simulate_match", lambda config: [shot()])
+    received = False
+
+    async def receive():
+        nonlocal received
+        if not received:
+            received = True
+            return {"type": "http.request", "body": b""}
+        await started.wait()
+        return {"type": "http.disconnect"}
+
+    async def send(message):
+        pass
+
+    async with api.lifespan(api.app):
+        await asyncio.wait_for(
+            api.app(
+                {
+                    "type": "http",
+                    "asgi": {"version": "3.0", "spec_version": "2.0"},
+                    "method": "GET",
+                    "path": "/gallery/sse",
+                    "query_string": b"speed=0",
+                    "headers": [],
+                    "scheme": "http",
+                    "server": ("test", 80),
+                    "client": ("test", 123),
+                    "root_path": "",
+                },
+                receive,
+                send,
+            ),
+            timeout=5,
+        )
+    assert cancelled.is_set()
+    assert closed.is_set()

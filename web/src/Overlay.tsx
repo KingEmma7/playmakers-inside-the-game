@@ -1,4 +1,4 @@
-import { playerName } from "./players";
+import { involvementLabel, playerName } from "./players";
 import Pitch from "./Pitch";
 import { activeCues, type MatchEvent, type OverlayCue } from "./stream";
 export function Crest({ away = false }: { away?: boolean }) {
@@ -210,13 +210,7 @@ export function ViewPanel({
           event={event}
           running={running}
           favourite={persona === "casual" ? favourite : undefined}
-          shots={
-            shots.filter(
-              (e) =>
-                e.event_type === "shot" &&
-                e.shooter_player_id.endsWith(favourite),
-            ).length
-          }
+          involvement={involvementLabel(visibleEvents, favourite)}
         />
         <div className="vignette" />
         {safe && (
@@ -312,6 +306,7 @@ export function ViewPanel({
           <svg
             className="dominance-bars"
             viewBox="0 0 320 32"
+            preserveAspectRatio="none"
             role="img"
             aria-label="Recent possession by team"
           >

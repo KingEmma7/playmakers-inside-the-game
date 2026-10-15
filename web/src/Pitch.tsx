@@ -41,13 +41,9 @@ export default function Pitch({
       const w = 1050,
         h = 680;
       ctx.clearRect(0, 0, w, h);
-      ctx.fillStyle = "#123d35";
+      ctx.fillStyle = "#E6EFE7";
       ctx.fillRect(0, 0, w, h);
-      for (let i = 0; i < 10; i++) {
-        ctx.fillStyle = i % 2 ? "#ffffff03" : "#0000000a";
-        ctx.fillRect(i * 105, 0, 105, h);
-      }
-      ctx.strokeStyle = "#9ed0b54a";
+      ctx.strokeStyle = "#FFFFFF";
       ctx.lineWidth = 2;
       ctx.strokeRect(30, 30, 990, 620);
       ctx.beginPath();
@@ -83,21 +79,23 @@ export default function Pitch({
             x = ball.x - 1.2;
             y = ball.y + 1.2;
           }
-          ctx.shadowColor = "#0008";
-          ctx.shadowBlur = 12;
-          ctx.fillStyle = team ? "#ffba72" : "#83d9e4";
-          ctx.beginPath();
-          ctx.arc(x * 10, y * 10, active ? 10 : 8, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.shadowColor = "transparent";
           ctx.shadowBlur = 0;
-          ctx.fillStyle = "#e2f3ed99";
-          ctx.font = "11px system-ui";
+          ctx.fillStyle = team ? "#FFFFFF" : "#1F3FA8";
+          ctx.beginPath();
+          ctx.arc(x * 10, y * 10, active ? 18 : 16, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = team ? "#C98A00" : "#FFFFFF";
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = team ? "#7A5200" : "#FFFFFF";
+          ctx.font = "600 13px Inter";
           ctx.textAlign = "center";
-          ctx.fillText(String(i + 1), x * 10, y * 10 + 23);
+          ctx.fillText(String(i + 1), x * 10, y * 10 + 4);
         }
       }
       if (event?.event_type === "pass") {
-        ctx.strokeStyle = "#d6f9b3aa";
+        ctx.strokeStyle = "#1D1D1F";
         ctx.setLineDash([6, 8]);
         ctx.beginPath();
         ctx.moveTo(event.start_position.x * 10, event.start_position.y * 10);
@@ -110,7 +108,7 @@ export default function Pitch({
         ctx.stroke();
         ctx.setLineDash([]);
       }
-      ctx.fillStyle = "#fff";
+      ctx.fillStyle = "#1D1D1F";
       ctx.beginPath();
       ctx.arc(ball.x * 10, ball.y * 10, 5, 0, Math.PI * 2);
       ctx.fill();

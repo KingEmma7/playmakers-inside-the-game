@@ -1,0 +1,40 @@
+@font-face {
+  font-family: Inter;
+  src: url("/fonts/Inter-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+:root {
+  color-scheme: light;
+  --background: #f5f5f7;
+  --surface: #fff;
+  --ink: #1d1d1f;
+  --secondary: #515154;
+  --muted: #737378;
+  --rule: #e5e5ea;
+  --track: #efeff2;
+  --home: #1f3fa8;
+  --away: #c98a00;
+  --pitch: #e6efe7;
+  --green: #248a3d;
+  --orange: #b25000;
+  --red: #c4282d;
+  --soft-red: #fbeaea;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 17px;
+  --text-lg: 20px;
+  --text-xl: 28px;
+  --text-score: 46px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --radius-sm: 4px;
+  --radius: 8px;
+  --radius-card: 16px;
+}

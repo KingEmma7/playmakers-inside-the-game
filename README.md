@@ -294,7 +294,7 @@ The slower stream determines the shared event clock.
   profile replays that feed until it synchronises with the analyst.
 - Pause freezes the displayed program; network feeds continue buffering. Start returns to live.
 - Toggle safe-area guides. Cue timing uses the match clock, duration, priority and one winner per slot.
-- **Kill Tactics agent** restarts both deterministic sessions with failure at the current minute.
+- **Stop Tactics agent** restarts both deterministic sessions with failure at the current minute.
   The API fast-forwards the prefix (`replay_from_ms`) before returning to the selected pace.
   Look for `agent down → fallback on → restarted from checkpoint → caught up` in both feeds.
   One injected failure per replay; changing seed/speed resets the button.
@@ -317,7 +317,12 @@ npm run screenshot      # API :8000 + Vite :5173 must already be running
 ```
 
 The Chromium script captures `web/e2e-screenshot.png` at 1920×1080 and checks live persona
-content, equal panel clocks, pause/start, kill/recover traces and `/about`. On restricted
+content, the shared clock, pause/start, kill/recover traces and `/about`. It also saves
+1440×900 captures to `web/shots/main.png` (mid-match insights), `kill.png` (recovery)
+and `about.png`, and asserts no horizontal overflow at both viewport sizes.
+The Calm light theme uses locally bundled Inter (SIL OFL), a single `web/src/tokens.css`
+for design tokens, a shared scoreboard, two audience cards, an Agents list with expandable
+handoff history, and an event-driven match timeline. On restricted
 machines use `PLAYWRIGHT_BROWSERS_PATH=/tmp/gallery-playwright` for both installation and execution.
 CI runs npm ci, contract drift detection, lint, unit tests and production build on Node 20.
 

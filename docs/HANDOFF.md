@@ -1,5 +1,24 @@
 # HANDOFF — current state (as of Wed 14 Oct 2026)
 
+## Calm restyle (15 Oct 2026)
+
+- Entire web app now follows the Calm light direction: locally bundled Inter (SIL OFL),
+  shared tokens in `web/src/tokens.css`, inline replay controls and Replay/About navigation,
+  centred scoreboard, Analyst/For you cards, plain Agents status list, soft-red stop control,
+  light pitch chips, What-If probability track, event-derived metrics/dominance and match timeline.
+- Detailed storyline and handoff history remain available in expandable sections. Original
+  stream/control accessibility names are preserved; visible button/status wording follows Calm.
+- Fixed status aggregation: a rejected insight no longer overwrites a lifecycle fallback;
+  the Agents list reflects failure in either audience feed. Recovery history survives the
+  rolling recent-handoff window. Added a regression test.
+- Verified frontend lint, **6 tests**, production build; backend Ruff format/check and
+  **43 offline tests**, plus pip check. Live Chromium script passes with no page errors,
+  mid-match content, pause/start, both feeds' recovery lifecycle and About navigation.
+- Captures: `web/e2e-screenshot.png` (1920×1080), `web/shots/main.png`,
+  `kill.png` and `about.png` (1440×900). Script checks horizontal overflow at both sizes.
+  Run API :8000 and Vite :5173, then `cd web && npm run screenshot`; allow time to reach 20 minutes.
+- No backend or dependency changes; no Azure deployment. Operator commits.
+
 ## TL;DR
 - **Phase 3 is implemented**: React split view, typed SSE, broadcast overlays, trace, Chromium capture.
 - **Phase 1 remains green**; baseline verified before implementation, including calibration,

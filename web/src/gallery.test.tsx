@@ -93,7 +93,7 @@ describe("broadcast cues", () => {
     expect(screen.getByRole("region", { name: "FAN view" })).toHaveTextContent(
       "Sigue la emoción",
     );
-    expect(screen.getAllByText("CONTROL / MOMENTUM")).toHaveLength(1);
+    expect(screen.getAllByText("Dominance")).toHaveLength(1);
     expect(screen.getByText(/H09 · favourite player/)).toBeInTheDocument();
   });
   it("shows before/after win probabilities and delta", () => {
@@ -118,13 +118,13 @@ describe("broadcast cues", () => {
     const { rerender } = render(
       <TracePanel traces={[trace()]} onKill={kill} disabled={false} />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /Kill Tactics/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Stop Tactics/ }));
     expect(kill).toHaveBeenCalledOnce();
     for (const [action, status] of [
-      ["agent_down", "down"],
-      ["fallback_on", "fallback"],
-      ["restarted_from_checkpoint", "recovering"],
-      ["caught_up", "up"],
+      ["agent_down", "Down"],
+      ["fallback_on", "Fallback"],
+      ["restarted_from_checkpoint", "Recovering"],
+      ["caught_up", "Running"],
     ]) {
       rerender(
         <TracePanel
@@ -135,12 +135,26 @@ describe("broadcast cues", () => {
           disabled={false}
         />,
       );
-      expect(screen.getByText(status)).toBeInTheDocument();
+      expect(screen.getAllByText(status)[0]).toBeInTheDocument();
       expect(screen.getByRole("log")).toHaveTextContent(
         action.replaceAll("_", " "),
       );
       expect(screen.getByRole("log")).toHaveTextContent("12.3");
     }
+  });
+  it("keeps fallback visible after rejected output and across audience feeds", () => {
+    render(
+      <TracePanel
+        traces={[
+          trace({ action: "fallback_on", status: "fallback" }),
+          trace({ action: "insight", status: "rejected" }),
+          trace({ view: "casual", action: "insight", status: "ok" }),
+        ]}
+        onKill={() => {}}
+        disabled={false}
+      />,
+    );
+    expect(screen.getByText("Fallback")).toBeInTheDocument();
   });
 });
 class MockSource {

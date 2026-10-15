@@ -22,20 +22,20 @@ PHRASES = {
     "en": (
         "Here comes the next attack!",
         "Follow the action as the match unfolds.",
-        "Your team",
-        "Player cam",
+        "Favourite",
+        "Favourite",
     ),
     "es": (
         "¡Llega el próximo ataque!",
         "Sigue la emoción del partido.",
-        "Tu equipo",
-        "Cámara del jugador",
+        "Favorito",
+        "Favorito",
     ),
     "fr": (
         "Voici la prochaine attaque !",
         "Suivez les émotions du match.",
-        "Votre équipe",
-        "Caméra du joueur",
+        "Favori",
+        "Favori",
     ),
 }
 
@@ -107,7 +107,7 @@ async def personalize(
     if profile.favorite_team_id and profile.favorite_team_id == (
         getattr(event, "scoring_team_id", None) or event.team_id
     ):
-        payload["headline"] = f"★ {team_label}: {payload['headline']}"
+        payload["headline"] = f"{team_label}: {payload['headline']}"
         payload["favorite_team_id"] = profile.favorite_team_id
     involved = {
         getattr(event, name, None)
@@ -125,7 +125,7 @@ async def personalize(
         )
     }
     if profile.favorite_player_id and profile.favorite_player_id in involved:
-        payload["headline"] = f"★ {player_label}: {payload['headline']}"
+        payload["headline"] = f"{player_label}: {payload['headline']}"
         payload["player_cam"] = {"player_id": profile.favorite_player_id}
     return cue.model_copy(
         update={

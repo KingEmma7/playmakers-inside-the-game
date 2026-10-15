@@ -107,7 +107,7 @@ failures back off for 1, 2, 4, 8, then 16 events. Traces expose `agent_down`, `f
 not rebroadcast as stale cues.
 
 Framework `FileCheckpointStorage` saves both workflow supersteps and a versioned
-match-history/agent-progress checkpoint. `RecoveryStorage` separates restoration from
+match-history/agent-progress checkpoint on the first event, every 25 sequences, kill/recovery boundaries and full time. Agent progress stays current in memory between saves. After a crash, restore the last checkpoint and replay the unsaved tail. `RecoveryStorage` separates restoration from
 its backend; a fresh Director can call `await director.restore(match_id)` before
 consuming later events. Checkpoint folders are local development data, not a multi-user
 service database. API sessions use isolated temporary folders cleaned on disconnect;
@@ -156,7 +156,7 @@ websocat "ws://localhost:8000/playmakers/ws?seed=7&speed=50&persona=analyst&kill
 Both endpoints accept `seed`, `speed` (0 = no waits), `persona`, `language`,
 `favourite_team_id`, `favourite_player_id`, `kill`, and `whatif_rollouts` (1–2000).
 Messages are flat JSON objects with `type: "event" | "cue" | "trace"`; SSE uses ordinary
-`data:` frames suitable for `EventSource.onmessage`. CORS allows `http://localhost:5173`.
+`data:` frames suitable for `EventSource.onmessage`. CORS defaults to `http://localhost:5173`; set `CORS_ORIGINS` to a comma-separated allowlist before starting the API.
 The stats MCP service remains mounted at `/stats-mcp/`.
 
 Validation: 40 offline tests cover the workflow, recovery/replay, timeout/crash backoff,
@@ -286,8 +286,7 @@ npm run dev
 ```
 
 Open **http://localhost:5173**. `VITE_API_BASE` defaults to `http://localhost:8000`;
-set it in `web/.env.local` for another API origin. The local API allows the Vite
-`http://localhost:5173` origin. The client uses one EventSource per audience, retries
+set it in `web/.env.local` for another API origin. Set `CORS_ORIGINS` on the API to allow other web origins (default `http://localhost:5173`). The client uses one EventSource per audience, backed by one shared Director and 200-rollout What-If session, and retries
 with bounded backoff and deduplicates the deterministic replay after reconnection.
 The slower stream determines the shared event clock.
 
@@ -350,3 +349,34 @@ is home share of final-third pass entries; these are synthetic event proxies.
 
 With API on :8000 and Vite on :5173, `cd web && npm run screenshot` captures the playing replay,
 Tactics recovery and About in `web/shots/`, and checks both 1440×900 and 1920×1080 for clipping.
+
+
+Shared SSE sessions use `(seed, speed, kill, whatif_rollouts, replay_from_ms)` plus
+an explicit viewer configuration. Both web requests send the same `viewer_profiles`
+JSON array (Pydantic `ViewerProfile` fields, including `favorite_player_id`), and
+select their own `persona`/`language`. Different viewer configurations are isolated.
+Without the array, the API includes all six persona/language combinations; requests
+with the same configuration share a producer. Cues are filtered per subscriber;
+events and lifecycle traces are broadcast to both. Late subscribers read the
+session's history from kickoff. Disconnecting one viewer leaves the other running;
+the last disconnect cancels the producer and closes its Director. Sessions are
+in-memory and scoped to one API process; use one worker for this demo. No durable
+resume or cross-process session coordination is claimed.
+
+React flushes incoming messages every 75 ms, retaining the last 2,500 events,
+2,400 traces, and active cues plus the latest 400 cues. Pausing freezes the displayed
+sequence while streams continue; a pause longer than the retained window can lose
+old presentation history. Ordinary reconnects replay retained backend history while
+another subscriber keeps the session alive; otherwise they rebuild the seeded match.
+
+Run the container demo from the repository root with `docker compose up --build`,
+then open **http://localhost:5173**. The API listens on :8000; Stats MCP is mounted
+at `/stats-mcp/`, so no separate MCP container is needed. The web image builds with
+Node and serves with nginx, including an unbuffered same-origin `/api` proxy.
+`API_BASE` writes `/config.js` at container startup (default `/api`), so the built
+image can use another API URL without rebuilding. Use an API URL/path containing
+only letters, digits, `:`, `/`, `.`, `_`, or `-`. The API image runs as an unprivileged
+user. Local file checkpoints are temporary; this is Phase 4 preparation, not an Azure deployment.
+
+CI now installs Chromium and runs `npm run screenshot` against the real local API
+and Vite. Failures fail the job; screenshots and API/web logs are uploaded as artifacts.

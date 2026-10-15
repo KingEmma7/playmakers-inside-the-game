@@ -21,6 +21,18 @@ from starlette.routing import Mount
 from stats_mcp.server import create_mcp
 
 
+def _whatif_pool(app: FastAPI) -> ProcessPoolExecutor | None:
+    pool = getattr(app.state, "whatif_pool", None)
+    if pool is not None and getattr(pool, "_broken", False):
+        try:
+            pool.shutdown(wait=False, cancel_futures=True)
+        except Exception:
+            pass
+        pool = create_rollout_pool()
+        app.state.whatif_pool = pool
+    return pool
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # MCP 1.x session managers are single-use: build one per application lifespan.
@@ -40,6 +52,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 
 app = FastAPI(title="Playmakers Replay API", version="0.2.0", lifespan=lifespan)
+app.state.whatif_pool = None
 app.mount("/stats-mcp", FastAPI())
 app.add_middleware(
     CORSMiddleware,
@@ -63,7 +76,10 @@ async def _sse_stream(seed: int, speed: float) -> AsyncGenerator[bytes, None]:
 
 
 @app.get("/replay/sse")
-async def replay_sse(seed: int = 0, speed: float = 1.0) -> StreamingResponse:
+async def replay_sse(
+    seed: Annotated[int, Query(ge=0, le=10_000)] = 0,
+    speed: Annotated[float, Query(ge=0, le=100)] = 1.0,
+) -> StreamingResponse:
     return StreamingResponse(
         _sse_stream(seed=seed, speed=speed),
         media_type="text/event-stream",
@@ -75,15 +91,21 @@ async def replay_sse(seed: int = 0, speed: float = 1.0) -> StreamingResponse:
 
 
 @app.websocket("/replay/ws")
-async def replay_ws(ws: WebSocket, seed: int = 0, speed: float = 1.0) -> None:
+async def replay_ws(
+    ws: WebSocket,
+    seed: Annotated[int, Query(ge=0, le=10_000)] = 0,
+    speed: Annotated[float, Query(ge=0, le=100)] = 1.0,
+) -> None:
     await ws.accept()
     try:
         events = simulate_match(MatchConfig(seed=seed))
         async for ev in replay_events(events, speed=speed):
             await ws.send_text(json.dumps(ev.model_dump(mode="json"), separators=(",", ":")))
+    except WebSocketDisconnect:
+        return
     except asyncio.CancelledError:
         raise
-    finally:
+    else:
         await ws.close()
 
 
@@ -128,8 +150,8 @@ async def playmakers_messages(
 async def playmakers_sse(
     request: Request,
     replay_from_ms: Annotated[int, Query(ge=0, le=5_400_000)] = 0,
-    seed: int = 7,
-    speed: float = 50,
+    seed: Annotated[int, Query(ge=0, le=10_000)] = 7,
+    speed: Annotated[float, Query(ge=0, le=100)] = 50,
     persona: Literal["analyst", "casual"] = "analyst",
     language: Literal["en", "es", "fr"] = "en",
     favourite_team_id: str | None = None,
@@ -158,7 +180,7 @@ async def playmakers_sse(
                 kill,
                 whatif_rollouts,
                 replay_from_ms,
-                whatif_pool=request.app.state.whatif_pool,
+                whatif_pool=_whatif_pool(request.app),
             )
         ) as messages:
             async for message in messages:
@@ -174,8 +196,8 @@ async def playmakers_sse(
 @app.websocket("/playmakers/ws")
 async def playmakers_ws(
     ws: WebSocket,
-    seed: int = 7,
-    speed: float = 50,
+    seed: Annotated[int, Query(ge=0, le=10_000)] = 7,
+    speed: Annotated[float, Query(ge=0, le=100)] = 50,
     persona: Literal["analyst", "casual"] = "analyst",
     language: Literal["en", "es", "fr"] = "en",
     favourite_team_id: str | None = None,
@@ -203,7 +225,7 @@ async def playmakers_ws(
                 profile,
                 kill,
                 whatif_rollouts,
-                whatif_pool=ws.app.state.whatif_pool,
+                whatif_pool=_whatif_pool(ws.app),
             )
         ) as messages:
             async for message in messages:

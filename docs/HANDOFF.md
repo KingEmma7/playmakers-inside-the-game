@@ -269,3 +269,8 @@ exactly. The only edit is `extend-exclude = ["salvage"]` in `pyproject.toml` so 
 - Azure subscription with credits (free account gives $200 / 30 days) — needed from Phase 4 (~20 Oct).
 - Foundry project + a model deployment (e.g. a small GPT model) — Phase 4.
 - Video recording tool (OBS is free) and a YouTube account — Phase 5.
+
+
+## Cleanup (15 Oct 2026)
+
+- Removed `salvage/` (ported Phase 2 recovery code; no longer needed).

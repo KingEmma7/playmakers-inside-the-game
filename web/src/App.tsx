@@ -108,6 +108,7 @@ function Playmakers() {
     language: "en",
     kill,
     replay_from_ms: replayFrom,
+    whatif_rollouts: 40,
   });
   const fan = usePlaymakersStream({
     seed,
@@ -117,6 +118,7 @@ function Playmakers() {
     favourite_player_id: favourite ? `match_${seed}_${favourite}` : undefined,
     kill,
     replay_from_ms: replayFrom,
+    whatif_rollouts: 40,
   });
   const shared = Math.min(
     analyst.events.at(-1)?.sequence ?? -1,

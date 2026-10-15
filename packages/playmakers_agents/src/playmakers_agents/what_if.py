@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import hashlib
 import json
 import multiprocessing
@@ -119,17 +120,31 @@ class WhatIfAgent:
         if self.pool is None:
             self.pool = create_rollout_pool()
         loop = asyncio.get_running_loop()
-        futures = [
-            loop.run_in_executor(self.pool, run_batch, snapshot, seeds)
-            for snapshot in (before, after, counter)
-        ]
-        self._pending.update(futures)
+
+        async def _run(snapshots: tuple[MatchSnapshot, MatchSnapshot, MatchSnapshot]):
+            futures = [
+                loop.run_in_executor(self.pool, run_batch, snapshot, seeds)
+                for snapshot in snapshots
+            ]
+            self._pending.update(futures)
+            try:
+                return await asyncio.gather(*futures)
+            finally:
+                for future in futures:
+                    future.cancel()
+                self._pending.difference_update(futures)
+
+        snapshots = (before, after, counter)
         try:
-            probabilities = await asyncio.gather(*futures)
-        finally:
-            for future in futures:
-                future.cancel()
-            self._pending.difference_update(futures)
+            probabilities = await _run(snapshots)
+        except concurrent.futures.process.BrokenProcessPool:
+            # Rebuild once (owned or shared). Shared callers should also refresh app.state.
+            old = self.pool
+            self.pool = create_rollout_pool()
+            self._owns_pool = True
+            if old is not None:
+                await asyncio.to_thread(old.shutdown, wait=False, cancel_futures=True)
+            probabilities = await _run(snapshots)
         p0, p1, pc = probabilities
         metrics = WhatIfMetrics(
             before=p0,
@@ -175,5 +190,8 @@ class WhatIfAgent:
                 "metrics": metrics.model_dump(),
                 "perspective": "home",
             },
-            evidence_event_ids=[row.event_id for row in events],
+            evidence_event_ids=[
+                *(row.event_id for row in events[max(0, len(events) - 8) : -1]),
+                event.event_id,
+            ],
         )

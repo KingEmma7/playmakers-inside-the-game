@@ -287,11 +287,9 @@ class ComplianceExecutor(Executor):
             reasons.append("Insight kind or clock differs from handoff")
         if not insight.evidence_event_ids:
             reasons.append("Missing evidence")
-        engine = StatsEngine()
-        for row in self.store.get_or_create(event.match_id).events:
-            if row.sequence <= event.sequence:
-                engine.ingest(row)
-        expected = compute_stats(engine, event)
+        # Trust StatsPacket from StatsExecutor (same deterministic engine) — O(1), and
+        # consistent with kill-recover which recomputes stats on a prefix engine.
+        expected = packet.stats
         cited = set(insight.evidence_event_ids)
         if not cited.issubset(set(expected.evidence_event_ids)) or event.event_id not in cited:
             reasons.append("Evidence includes unknown/future events or omits current event")

@@ -12,6 +12,7 @@ export type Params = {
   favourite_player_id?: string;
   kill?: string;
   replay_from_ms?: number;
+  whatif_rollouts?: number;
 };
 export type Stream = {
   events: MatchEvent[];

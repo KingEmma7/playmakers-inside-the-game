@@ -4,12 +4,12 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 import pytest
-from gallery_agents.contracts import AgentTraceEvent, OverlayCue
-from gallery_schema.models import MatchEvent
 from pitchsim.config import MatchConfig, StoryEvent
 from pitchsim.sim import _apply_story, simulate_match
 from pitchsim.story import load_story
 from pitchsim.whatif import rollout_from_snapshot, snapshot_from_events
+from playmakers_agents.contracts import AgentTraceEvent, OverlayCue
+from playmakers_schema.models import MatchEvent
 
 
 def test_snapshot_reconstructs_scripted_styles_and_rollouts() -> None:
@@ -66,8 +66,10 @@ def test_future_style_change_applied_once_in_rollout() -> None:
 
 
 @pytest.mark.asyncio
-async def test_gallery_failure_replay_fast_forwards_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
-    from gallery_agents.contracts import ViewerProfile
+async def test_playmakers_failure_replay_fast_forwards_prefix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from playmakers_agents.contracts import ViewerProfile
     from replay_api import main as api
 
     events = simulate_match(MatchConfig(seed=3))[:5]
@@ -99,7 +101,7 @@ async def test_gallery_failure_replay_fast_forwards_prefix(monkeypatch: pytest.M
     cutoff = events[3].clock_ms
     messages = [
         message
-        async for message in api.gallery_messages(
+        async for message in api.playmakers_messages(
             3, 10, ViewerProfile(), "tactics@0", 2, replay_from_ms=cutoff
         )
     ]

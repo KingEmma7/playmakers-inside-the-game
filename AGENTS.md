@@ -5,7 +5,7 @@ Read this file fully before changing anything. Then read `docs/HANDOFF.md` (curr
 
 ## 1. Project goal
 
-**Gallery** is a multi-agent "virtual TV production gallery" for football. Specialised AI agents
+**Playmakers** is an AI production crew for football. Specialised AI agents
 (Director, Stats, Tactics, Storyline, Graphics, Compliance, What-If, Audience/Personalizer) watch a
 live **synthetic** match event stream and produce:
 
@@ -59,7 +59,7 @@ PitchSim (synthetic events) ──► replay_api (FastAPI: SSE/WS) ──► ing
                        ├─ Graphics agent (schema-validated OverlayCue JSON; template fallback)
                        └─ Audience/Personalizer (fan-out per ViewerProfile)
                                    │
-                         /gallery/sse, /gallery/ws  ──► web/ (React + Vite overlay UI, agent trace panel)
+                         /playmakers/sse, /playmakers/ws  ──► web/ (React + Vite overlay UI, agent trace panel)
 Azure: Container Apps (api, stats-mcp, web), Cosmos DB (state + checkpoints), Foundry (models, evals,
 tracing → App Insights), azd + Bicep in infra/, GitHub Actions CI with a Foundry eval gate.
 ```
@@ -70,17 +70,17 @@ client** otherwise. Everything (tests, CI, local demo) MUST run with **no creden
 ## 4. Repository layout
 
 ```
-packages/gallery_schema/   Versioned MatchEvent contract (Pydantic + JSON Schema v1). Shared by all.
+packages/playmakers_schema/   Versioned MatchEvent contract (Pydantic + JSON Schema v1). Shared by all.
 packages/pitchsim/         Seeded simulator, calibration validator, replay generator, season dataset.
-packages/gallery_agents/   Agents (Phase 1 = interfaces only; Phase 2 builds the real thing).
-services/replay_api/       FastAPI: /healthz, /replay/sse, /replay/ws (Phase 2 adds /gallery/*).
+packages/playmakers_agents/   Agents (Phase 1 = interfaces only; Phase 2 builds the real thing).
+services/replay_api/       FastAPI: /healthz, /replay/sse, /replay/ws (Phase 2 adds /playmakers/*).
 infra/                     azd (azure.yaml) + Bicep stubs: Container Apps, Cosmos DB, Event Hubs. Not deployed yet.
 tests/                     pytest: determinism, schema validity, calibration.
 salvage/phase2/            REFERENCE ONLY: uncommitted Phase 2 code recovered from a crashed run.
                            Not installed, not linted, not tested. Port pieces into the real tree; don't import from here.
 docs/                      HANDOFF.md (state), PLAN.md (phased plan + prompts).
 ```
-Planned additions: `packages/gallery_stats/`, `services/stats_mcp/`, `web/` (React/Vite), `evals/`.
+Planned additions: `packages/playmakers_stats/`, `services/stats_mcp/`, `web/` (React/Vite), `evals/`.
 
 ## 5. Commands
 
@@ -88,7 +88,7 @@ Planned additions: `packages/gallery_stats/`, `services/stats_mcp/`, `web/` (Rea
 python3 -m venv .venv && source .venv/bin/activate        # Python 3.12+ (3.13 also works)
 python -m pip install -U pip
 python -m pip install -r requirements-dev.txt
-python -m pip install -e packages/gallery_schema -e packages/pitchsim -e packages/gallery_stats -e services/stats_mcp -e services/replay_api -e packages/gallery_agents
+python -m pip install -e packages/playmakers_schema -e packages/pitchsim -e packages/playmakers_stats -e services/stats_mcp -e services/replay_api -e packages/playmakers_agents
 ruff format --check . && ruff check .                     # lint (ruff 0.17.0, pinned)
 pytest                                                    # tests
 python -m pitchsim validate --matches 50                  # calibration report (all lines must say OK)

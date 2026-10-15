@@ -27,7 +27,7 @@ const initial = (generation: string): Stream => ({
   status: "connecting",
   generation,
 });
-export function useGalleryStream(params: Params): Stream {
+export function usePlaymakersStream(params: Params): Stream {
   const query = new URLSearchParams(
     Object.entries(params)
       .filter(([, v]) => v !== undefined)
@@ -47,7 +47,7 @@ export function useGalleryStream(params: Params): Stream {
     setState(initial(query));
     function connect() {
       source = new EventSource(
-        `${import.meta.env.VITE_API_BASE || "http://localhost:8000"}/gallery/sse?${query}`,
+        `${import.meta.env.VITE_API_BASE || "http://localhost:8000"}/playmakers/sse?${query}`,
       );
       source.onopen = () => {
         delay = 1000;

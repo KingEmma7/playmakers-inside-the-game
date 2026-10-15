@@ -1,6 +1,6 @@
-name: gallery
+name: playmakers
 metadata:
-  template: gallery-phase1
+  template: playmakers-phase1
 services:
   replay-api:
     project: ../services/replay_api

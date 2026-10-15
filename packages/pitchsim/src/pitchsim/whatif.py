@@ -4,7 +4,7 @@ import random
 from dataclasses import replace
 from typing import Literal
 
-from gallery_schema.models import MatchEvent, Vec2
+from playmakers_schema.models import MatchEvent, Vec2
 from pydantic import BaseModel, ConfigDict, Field
 
 from pitchsim.config import StoryEvent, TeamStyle

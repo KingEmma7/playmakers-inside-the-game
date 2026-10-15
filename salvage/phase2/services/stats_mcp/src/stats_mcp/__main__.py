@@ -14,7 +14,7 @@ def main() -> None:
     args = parser.parse_args()
 
     service = StatsMcpService()
-    mcp = FastMCP(name="gallery-stats", host=args.host, port=args.port, streamable_http_path="/mcp")
+    mcp = FastMCP(name="playmakers-stats", host=args.host, port=args.port, streamable_http_path="/mcp")
 
     @mcp.tool()
     def ingest_event(match_id: str, event: dict) -> dict:

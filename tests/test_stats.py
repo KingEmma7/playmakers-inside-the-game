@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import pytest
-from gallery_schema.models import GoalEvent, PassEvent, ShotEvent, Vec2
-from gallery_stats.engine import StatsEngine
+from playmakers_schema.models import GoalEvent, PassEvent, ShotEvent, Vec2
+from playmakers_stats.engine import StatsEngine
 
 
 def passing(

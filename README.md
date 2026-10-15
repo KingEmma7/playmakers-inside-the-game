@@ -1,6 +1,6 @@
-# Gallery — “Inside the Game” Hackathon (Microsoft x Premier League)
+# Playmakers — “Inside the Game” Hackathon (Microsoft x Premier League)
 
-**Gallery** is a multi-agent “virtual broadcast production gallery” that turns a live football match event stream into explainable, timed overlay cues and personalized audience output.
+**Playmakers** is an AI production crew that turns a live football match event stream into explainable, timed overlay cues and personalized audience output.
 
 This repository is being built for the **Microsoft x Premier League “Inside the Game” developer hackathon**. It uses **synthetic, football-realistic data only**, with **fictional clubs and players** (no Premier League marks).
 
@@ -31,9 +31,9 @@ validates the cue schema, including timing, layer and broadcast safe area.
 Run offline with no credentials:
 
 ```bash
-python -m gallery_agents demo --seed 7 --speed 50 --persona analyst
+python -m playmakers_agents demo --seed 7 --speed 50 --persona analyst
 # Quick smoke check; --speed 0 runs without replay waits:
-python -m gallery_agents demo --seed 7 --speed 0 --limit 10
+python -m playmakers_agents demo --seed 7 --speed 0 --limit 10
 python -m stats_mcp
 ```
 
@@ -60,8 +60,8 @@ locally, managed identity when deployed). Incomplete Azure OpenAI configuration 
 the mock; a Foundry endpoint without a model deployment raises a clear configuration
 error. Cloud responses have not been exercised yet; offline tests require no Azure.
 
-Regenerate overlay/trace JSON Schemas with `python -m gallery_agents.export_schemas`.
-Schemas are committed under `packages/gallery_schema/src/gallery_schema/schemas/v1/`.
+Regenerate overlay/trace JSON Schemas with `python -m playmakers_agents.export_schemas`.
+Schemas are committed under `packages/playmakers_schema/src/playmakers_schema/schemas/v1/`.
 
 ## How the agents work (Phase 2B)
 
@@ -133,10 +133,10 @@ models translate captions, with phrase-table fallback on timeout or invalid outp
 Run the signature demo or a short recovery smoke check:
 
 ```bash
-python -m gallery_agents demo --seed 7 --speed 50 --persona analyst --kill tactics@20
-python -m gallery_agents demo --speed 0 --limit 5 --kill tactics@0 --whatif-rollouts 20
-python -m gallery_agents demo --speed 50 --persona casual --language es --favourite-player-id match_7_H09
-python -m gallery_agents demo --seed 7 --story stories/press_collapse.yaml --speed 50
+python -m playmakers_agents demo --seed 7 --speed 50 --persona analyst --kill tactics@20
+python -m playmakers_agents demo --speed 0 --limit 5 --kill tactics@0 --whatif-rollouts 20
+python -m playmakers_agents demo --speed 50 --persona casual --language es --favourite-player-id match_7_H09
+python -m playmakers_agents demo --seed 7 --story stories/press_collapse.yaml --speed 50
 python -m pitchsim simulate --seed 7 --story stories/late_comeback.yaml
 ```
 
@@ -147,8 +147,8 @@ not a guaranteed scoreline.
 Start `uvicorn replay_api.main:app --port 8000`, then:
 
 ```bash
-curl -N "http://localhost:8000/gallery/sse?seed=7&speed=50&persona=casual&language=es&kill=tactics@20&whatif_rollouts=200"
-websocat "ws://localhost:8000/gallery/ws?seed=7&speed=50&persona=analyst&kill=tactics@20"
+curl -N "http://localhost:8000/playmakers/sse?seed=7&speed=50&persona=casual&language=es&kill=tactics@20&whatif_rollouts=200"
+websocat "ws://localhost:8000/playmakers/ws?seed=7&speed=50&persona=analyst&kill=tactics@20"
 ```
 
 Both endpoints accept `seed`, `speed` (0 = no waits), `persona`, `language`,
@@ -194,11 +194,11 @@ flowchart LR
 
 ## Repo layout
 
-- `packages/gallery_schema/`: versioned event contracts (JSON Schema + Pydantic models)
+- `packages/playmakers_schema/`: versioned event contracts (JSON Schema + Pydantic models)
 - `packages/pitchsim/`: simulator + validation CLI (`python -m pitchsim ...`)
 - `services/replay_api/`: FastAPI SSE/WS replay endpoints
-- `packages/gallery_agents/`: Director workflow, typed handoffs, model clients, Compliance and CLI
-- `packages/gallery_stats/`: deterministic stats engine with evidence
+- `packages/playmakers_agents/`: Director workflow, typed handoffs, model clients, Compliance and CLI
+- `packages/playmakers_stats/`: deterministic stats engine with evidence
 - `services/stats_mcp/`: streamable HTTP stats tools, standalone or API-mounted
 - `infra/`: `azd` + Bicep stubs for Azure resources
 
@@ -216,11 +216,11 @@ python -m pip install -U pip
 python -m pip install -r requirements-dev.txt
 
 # editable installs (monorepo)
-python -m pip install -e packages/gallery_schema
+python -m pip install -e packages/playmakers_schema
 python -m pip install -e packages/pitchsim
-python -m pip install -e packages/gallery_stats
+python -m pip install -e packages/playmakers_stats
 python -m pip install -e services/stats_mcp
-python -m pip install -e packages/gallery_agents
+python -m pip install -e packages/playmakers_agents
 python -m pip install -e services/replay_api
 python -m pip check
 ```
@@ -265,9 +265,9 @@ websocat "ws://127.0.0.1:8000/replay/ws?seed=123&speed=10"
 - **Deterministic numbers**: downstream explanation agents must cite event IDs; no invented stats.
 
 
-## Broadcast gallery UI (Phase 3)
+## Playmakers broadcast UI (Phase 3)
 
-The React + Vite + TypeScript gallery shows **Analyst** and **Fan** feeds side by side,
+The React + Vite + TypeScript Playmakers app shows **Analyst** and **Fan** feeds side by side,
 with a shared event clock, a Canvas pitch, timed evidence-backed overlays and a live agent trace.
 All clubs and crest shapes are fictional. `/about` explains the architecture and current deployment status.
 
@@ -301,7 +301,7 @@ The slower stream determines the shared event clock.
 - Score/clock, storyline/tactical lower thirds, momentum, pass difficulty, xG shots,
   favourite tags and What-If probability cards respond to actual events/cues.
 
-![Gallery split view connected to the local API](web/e2e-screenshot.png)
+![Playmakers split view connected to the local API](web/e2e-screenshot.png)
 
 Screenshot/GIF placeholder for the submission: replace or supplement this capture with
 `docs/media/hero.png` and a short kill/recover recording once the final theme is locked.
@@ -323,7 +323,8 @@ and `about.png`, and asserts no horizontal overflow at both viewport sizes.
 The Calm light theme uses locally bundled Inter (SIL OFL), a single `web/src/tokens.css`
 for design tokens, a shared scoreboard, two audience cards, an Agents list with expandable
 handoff history, and an event-driven match timeline. On restricted
-machines use `PLAYWRIGHT_BROWSERS_PATH=/tmp/gallery-playwright` for both installation and execution.
+machines use `PLAYWRIGHT_BROWSERS_PATH=/tmp/playmakers-playwright` for both installation and execution.
+Set `PLAYMAKERS_WEB_URL` to override the screenshot target URL (default `http://localhost:5173`).
 CI runs npm ci, contract drift detection, lint, unit tests and production build on Node 20.
 
 Current visual limits: PitchSim emits ball/action positions but no full player tracking frames

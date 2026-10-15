@@ -5,13 +5,13 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pitchsim"
 version = "0.1.0"
-description = "PitchSim: deterministic synthetic football match-event simulator for Gallery."
+description = "PitchSim: deterministic synthetic football match-event simulator for Playmakers."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [{ name = "King Emmanuel" }]
 dependencies = [
-  "gallery-schema>=0.1.0",
+  "playmakers-schema>=0.1.0",
   "pydantic>=2.7,<3",
   "PyYAML>=6.0.2,<7",
 ]

@@ -1,11 +1,11 @@
 # stats-mcp
 
-Streamable HTTP MCP server exposing deterministic stats tools for Gallery.
+Streamable HTTP MCP server exposing deterministic stats tools for Playmakers.
 
 Run:
 
 ```bash
-python -m pip install -e services/stats_mcp -e packages/gallery_stats -e packages/gallery_schema
+python -m pip install -e services/stats_mcp -e packages/playmakers_stats -e packages/playmakers_schema
 python -m stats_mcp --port 43124
 ```
 

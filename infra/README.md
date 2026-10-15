@@ -1,7 +1,7 @@
 # Azure scaffolding (Phase 1 stub)
 
 This directory contains **non-deployed** Azure Developer CLI (`azd`) + Bicep stubs for the planned
-Gallery architecture:
+Playmakers architecture:
 
 - Azure Container Apps (ACA)
 - Cosmos DB (blackboard store)

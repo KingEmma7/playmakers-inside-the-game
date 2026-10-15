@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from gallery_schema.models import MatchEvent
+from playmakers_schema.models import MatchEvent
 
 
 @dataclass(frozen=True)

@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=74", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "playmakers-schema"
+version = "0.1.0"
+description = "Shared, versioned event schema for Playmakers (Inside the Game hackathon)."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "King Emmanuel" }]
+dependencies = [
+  "pydantic>=2.7,<3",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools.package-data]
+playmakers_schema = ["schemas/**/*.json"]
+

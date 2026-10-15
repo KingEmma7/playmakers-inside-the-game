@@ -1,6 +1,6 @@
 import { compileFromFile } from "json-schema-to-typescript";
 import { mkdir, writeFile } from "node:fs/promises";
-const root = "../packages/gallery_schema/src/gallery_schema/schemas/v1/";
+const root = "../packages/playmakers_schema/src/playmakers_schema/schemas/v1/";
 await mkdir("src/generated", { recursive: true });
 for (const [file, name] of [
   ["match_event", "MatchEvent"],

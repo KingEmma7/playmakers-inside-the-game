@@ -149,7 +149,7 @@ select {
 .crest.away {
   background: var(--away);
 }
-.gallery-layout {
+.playmakers-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 312px;
   gap: var(--space-5);
@@ -541,7 +541,7 @@ summary {
   margin-top: var(--space-6);
 }
 @media (min-width: 1700px) {
-  .gallery-layout {
+  .playmakers-layout {
     grid-template-columns: minmax(0, 1fr) 336px;
   }
   .broadcast {
@@ -559,7 +559,7 @@ summary {
   .toolbar {
     flex-wrap: wrap;
   }
-  .gallery-layout {
+  .playmakers-layout {
     grid-template-columns: minmax(0, 1fr) 280px;
   }
   .view-heading > div {
@@ -571,7 +571,7 @@ summary {
   }
 }
 @media (max-width: 900px) {
-  .gallery-layout {
+  .playmakers-layout {
     grid-template-columns: 1fr;
   }
   .split-view {
@@ -586,7 +586,7 @@ summary {
   header {
     padding: var(--space-4);
   }
-  .gallery-layout {
+  .playmakers-layout {
     margin: 0 var(--space-4);
   }
   .timeline {
@@ -689,7 +689,7 @@ summary {
 .session-note .pulse {
   display: none;
 }
-.gallery-layout {
+.playmakers-layout {
   align-items: start;
 }
 .timeline {
@@ -737,7 +737,7 @@ header {
 .view {
   min-height: 596px;
 }
-.gallery-layout {
+.playmakers-layout {
   align-items: stretch;
 }
 .trace-panel {
@@ -900,7 +900,7 @@ header {
 }
 
 /* Shared Calm content bounds and stable probability/dominance geometry. */
-.gallery-layout,
+.playmakers-layout,
 .timeline,
 .about {
   width: calc(100% - 64px);
@@ -936,7 +936,7 @@ header {
   background: var(--ink);
 }
 @media (max-width: 900px) {
-  .gallery-layout,
+  .playmakers-layout,
   .timeline,
   .about {
     width: calc(100% - 32px);

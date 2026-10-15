@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncGenerator
 
-from gallery_schema.models import MatchEvent
+from playmakers_schema.models import MatchEvent
 
 
 async def replay_events(

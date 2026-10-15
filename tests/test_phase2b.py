@@ -6,16 +6,16 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from gallery_agents.contracts import OverlayCue, ViewerProfile
-from gallery_agents.model_clients import DeterministicMockChatClient
-from gallery_agents.resilience import KillSpec
-from gallery_agents.what_if import WhatIfAgent
-from gallery_agents.workflow import Director
-from gallery_schema.models import CardEvent, GoalEvent
 from pitchsim.config import MatchConfig
 from pitchsim.sim import simulate_match
 from pitchsim.story import load_story
 from pitchsim.whatif import rollout_from_snapshot, snapshot_from_events
+from playmakers_agents.contracts import OverlayCue, ViewerProfile
+from playmakers_agents.model_clients import DeterministicMockChatClient
+from playmakers_agents.resilience import KillSpec
+from playmakers_agents.what_if import WhatIfAgent
+from playmakers_agents.workflow import Director
+from playmakers_schema.models import CardEvent, GoalEvent
 from replay_api import main as api
 from test_stats import passing, shot
 
@@ -114,7 +114,7 @@ async def test_profiles_differ_and_favorites_are_scoped() -> None:
 
 @pytest.mark.asyncio
 async def test_casual_whatif_preserves_rollout_count() -> None:
-    from gallery_agents.personalize import personalize
+    from playmakers_agents.personalize import personalize
 
     cue = OverlayCue(
         cue_id="whatif",
@@ -214,11 +214,11 @@ def test_story_scripts_are_seeded_and_plant_labels() -> None:
         KillSpec.parse("stats@20")
 
 
-def test_gallery_sse_ws_and_cors(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_playmakers_sse_ws_and_cors(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(api, "simulate_match", lambda config: [passing(), passing(2)])
     with TestClient(api.app) as client:
         response = client.get(
-            "/gallery/sse?speed=0&kill=tactics@0&persona=casual&language=es&whatif_rollouts=20",
+            "/playmakers/sse?speed=0&kill=tactics@0&persona=casual&language=es&whatif_rollouts=20",
             headers={"Origin": "http://localhost:5173"},
         )
         assert response.status_code == 200
@@ -234,12 +234,12 @@ def test_gallery_sse_ws_and_cors(monkeypatch: pytest.MonkeyPatch) -> None:
             "caught_up",
         }
         assert all(m["language"] == "es" for m in messages if m["type"] == "cue")
-        with client.websocket_connect("/gallery/ws?speed=0&whatif_rollouts=20") as ws:
+        with client.websocket_connect("/playmakers/ws?speed=0&whatif_rollouts=20") as ws:
             rows = [ws.receive_json() for _ in range(9)]
             assert {m["type"] for m in rows} == {"event", "cue", "trace"}
-        assert client.get("/gallery/sse?kill=invalid").status_code == 422
-        assert client.get("/gallery/sse?whatif_rollouts=0").status_code == 422
-        assert client.get("/gallery/sse?language=xx").status_code == 422
+        assert client.get("/playmakers/sse?kill=invalid").status_code == 422
+        assert client.get("/playmakers/sse?whatif_rollouts=0").status_code == 422
+        assert client.get("/playmakers/sse?language=xx").status_code == 422
 
 
 @pytest.mark.asyncio
@@ -249,9 +249,9 @@ async def test_live_translation_and_number_preserving_fallback(
     from importlib import import_module
     from types import SimpleNamespace
 
-    from gallery_agents.contracts import OverlayCue
+    from playmakers_agents.contracts import OverlayCue
 
-    module = import_module("gallery_agents.personalize")
+    module = import_module("playmakers_agents.personalize")
     text = '{"headline": "Analyse traduite", "detail": "Mesures vérifiées."}'
 
     class Translator:
@@ -307,7 +307,7 @@ async def test_cancel_rollouts_keeps_shared_pool_usable() -> None:
 
 
 def test_api_lifespan_reaps_workers_and_can_restart() -> None:
-    from gallery_agents.what_if import run_batch
+    from playmakers_agents.what_if import run_batch
 
     snapshot = snapshot_from_events(
         [shot()], home_style=MatchConfig().home_style, away_style=MatchConfig().away_style
@@ -369,7 +369,7 @@ async def test_sse_disconnect_cancels_inflight_director(monkeypatch: pytest.Monk
                     "type": "http",
                     "asgi": {"version": "3.0", "spec_version": "2.0"},
                     "method": "GET",
-                    "path": "/gallery/sse",
+                    "path": "/playmakers/sse",
                     "query_string": b"speed=0",
                     "headers": [],
                     "scheme": "http",

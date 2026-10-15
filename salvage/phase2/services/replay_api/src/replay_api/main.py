@@ -12,14 +12,14 @@ from pitchsim.config import MatchConfig
 from pitchsim.replay import replay_events
 from pitchsim.sim import simulate_match
 
-from gallery_agents.contracts import ViewerProfile
-from gallery_agents.pipeline import GalleryPipeline, GalleryPipelineConfig
+from playmakers_agents.contracts import ViewerProfile
+from playmakers_agents.pipeline import PlaymakersPipeline, PlaymakersPipelineConfig
 from stats_mcp.server import StatsMcpService
 
-app = FastAPI(title="Gallery Replay API", version="0.1.0")
+app = FastAPI(title="Playmakers Replay API", version="0.1.0")
 
 _stats_service = StatsMcpService()
-_stats_mcp = FastMCP(name="gallery-stats", streamable_http_path="/mcp")
+_stats_mcp = FastMCP(name="playmakers-stats", streamable_http_path="/mcp")
 
 
 @_stats_mcp.tool()
@@ -102,7 +102,7 @@ async def replay_ws(ws: WebSocket, seed: int = 0, speed: float = 1.0) -> None:
         await ws.close()
 
 
-class GalleryReplayParams(BaseModel):
+class PlaymakersReplayParams(BaseModel):
     seed: int = 0
     speed: float = 1.0
     persona: str = "analyst"
@@ -112,7 +112,7 @@ class GalleryReplayParams(BaseModel):
     kill_tactics_after_sequence: int | None = None
 
 
-async def _gallery_sse_stream(params: GalleryReplayParams) -> AsyncGenerator[bytes, None]:
+async def _playmakers_sse_stream(params: PlaymakersReplayParams) -> AsyncGenerator[bytes, None]:
     cfg = MatchConfig(seed=params.seed)
     events = simulate_match(cfg)
     match_id = f"match_{params.seed}"
@@ -123,9 +123,9 @@ async def _gallery_sse_stream(params: GalleryReplayParams) -> AsyncGenerator[byt
         favorite_player_id=params.favorite_player_id,
         language="es" if params.language == "es" else "en",
     )
-    pipeline = GalleryPipeline(
+    pipeline = PlaymakersPipeline(
         match_id=match_id,
-        config=GalleryPipelineConfig(
+        config=PlaymakersPipelineConfig(
             profile=profile,
             checkpoint_dir=None,
             kill_tactics_after_sequence=params.kill_tactics_after_sequence,
@@ -141,7 +141,7 @@ async def _gallery_sse_stream(params: GalleryReplayParams) -> AsyncGenerator[byt
         yield b"event: match_event\n"
         yield b"data: " + json.dumps(ev_dict, separators=(",", ":")).encode("utf-8") + b"\n\n"
 
-        # Run Gallery pipeline and emit overlay cues.
+        # Run Playmakers pipeline and emit overlay cues.
         cues = await pipeline.on_event(ev)
         for cue in cues:
             cue_bytes = json.dumps(cue.model_dump(mode="json"), separators=(",", ":")).encode(
@@ -151,8 +151,8 @@ async def _gallery_sse_stream(params: GalleryReplayParams) -> AsyncGenerator[byt
             yield b"data: " + cue_bytes + b"\n\n"
 
 
-@app.get("/gallery/sse")
-async def gallery_sse(
+@app.get("/playmakers/sse")
+async def playmakers_sse(
     seed: int = 0,
     speed: float = 1.0,
     persona: str = "analyst",
@@ -161,7 +161,7 @@ async def gallery_sse(
     favorite_player_id: str | None = None,
     kill_tactics_after_sequence: int | None = None,
 ) -> StreamingResponse:
-    params = GalleryReplayParams(
+    params = PlaymakersReplayParams(
         seed=seed,
         speed=speed,
         persona=persona,
@@ -171,7 +171,7 @@ async def gallery_sse(
         kill_tactics_after_sequence=kill_tactics_after_sequence,
     )
     return StreamingResponse(
-        _gallery_sse_stream(params),
+        _playmakers_sse_stream(params),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -180,8 +180,8 @@ async def gallery_sse(
     )
 
 
-@app.websocket("/gallery/ws")
-async def gallery_ws(
+@app.websocket("/playmakers/ws")
+async def playmakers_ws(
     ws: WebSocket,
     seed: int = 0,
     speed: float = 1.0,
@@ -191,7 +191,7 @@ async def gallery_ws(
     favorite_player_id: str | None = None,
     kill_tactics_after_sequence: int | None = None,
 ) -> None:
-    params = GalleryReplayParams(
+    params = PlaymakersReplayParams(
         seed=seed,
         speed=speed,
         persona=persona,
@@ -211,9 +211,9 @@ async def gallery_ws(
             favorite_player_id=params.favorite_player_id,
             language="es" if params.language == "es" else "en",
         )
-        pipeline = GalleryPipeline(
+        pipeline = PlaymakersPipeline(
             match_id=match_id,
-            config=GalleryPipelineConfig(
+            config=PlaymakersPipelineConfig(
                 profile=profile,
                 checkpoint_dir=None,
                 kill_tactics_after_sequence=params.kill_tactics_after_sequence,

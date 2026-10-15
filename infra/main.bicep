@@ -2,7 +2,7 @@
 param location string = resourceGroup().location
 
 @description('Resource name prefix.')
-param namePrefix string = 'gallery'
+param namePrefix string = 'playmakers'
 
 // Phase 1 stub: intentionally minimal and safe-by-default.
 // These resources are placeholders for Phase 2+ and are not deployed in CI.

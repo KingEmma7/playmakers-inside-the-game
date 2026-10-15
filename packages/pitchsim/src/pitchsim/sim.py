@@ -4,7 +4,7 @@ import math
 import random
 from dataclasses import dataclass
 
-from gallery_schema.models import (
+from playmakers_schema.models import (
     CardEvent,
     CarryEvent,
     FoulEvent,

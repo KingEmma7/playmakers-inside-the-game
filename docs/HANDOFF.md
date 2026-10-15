@@ -1,5 +1,21 @@
 # HANDOFF — current state (as of Wed 14 Oct 2026)
 
+## Playmakers rename (15 Oct 2026)
+
+- Renamed branding, Python packages/imports, CLI, SSE/WS routes, web identifiers/CSS,
+  schema IDs, CI installs, MCP/API titles and infrastructure defaults to Playmakers.
+  Director retains its role. Salvage references use the same package names.
+- Reinstalled all editable packages in `.venv`; regenerated overlay/trace schemas and
+  TypeScript contracts. Preserved the checked-in event contract with renamed metadata.
+- Validation: 47 offline Python tests, 9 web tests, Ruff format/check, pip check, web
+  lint/build, CLI smoke check, 50-match calibration (all OK), and live screenshot flow pass.
+  Captures refreshed; screenshot flow also asserts the Playmakers title and brand.
+- Only old-brand text remains in `docs/design/DIRECTIONS.md` and
+  `docs/design/calm/index.html`, intentionally preserved reference mocks.
+- API :8000 and Vite :5173 were occupied, so live verification used API :8001 and
+  Vite :5176 with a temporary same-origin proxy; temporary config removed afterwards.
+  No commits or deployments.
+
 ## Final Calm polish and worker lifecycle (15 Oct 2026)
 
 - Favourite pitch chip counts actual observed shots, falling back to passes/touches or the
@@ -59,7 +75,7 @@
   simulation, the 380-match season export and a replay SSE smoke check.
 - **Phase 2A is implemented and green**: deterministic stats, streamable MCP, typed contracts,
   a real Agent Framework Director workflow and the offline CLI. No Azure credentials required.
-- **Phase 2B is implemented**: recovery, seeded What-If, audience shaping, planted scripts and gallery streams.
+- **Phase 2B is implemented**: recovery, seeded What-If, audience shaping, planted scripts and playmakers streams.
 - See the Phase 2B notes below for validation and limits.
 - `salvage/phase2/` remains reference only. No installed code imports it.
 - Commits could not be created in this workspace because `.git` is mounted read-only.
@@ -87,7 +103,7 @@
 - Chromium script `npm run screenshot` passed against the actual local API and Vite: personalised content,
   synced clocks, pause/start, Tactics down/caught-up, and `/about`, with no uncaught browser errors.
   Capture is `web/e2e-screenshot.png` (1920×1080). Run API :8000 + Vite :5173 first;
-  restricted hosts can use `PLAYWRIGHT_BROWSERS_PATH=/tmp/gallery-playwright` for install/run.
+  restricted hosts can use `PLAYWRIGHT_BROWSERS_PATH=/tmp/playmakers-playwright` for install/run.
 - README documents setup, controls, screenshots, tests and limits. No commits made (operator commits).
 
 Rough edges / Phase 4 boundaries:
@@ -101,17 +117,17 @@ Rough edges / Phase 4 boundaries:
 
 ## Phase 2A implementation and validation (14 Oct 2026)
 
-- `packages/gallery_stats`: six deterministic stats with Pydantic evidence, bounded event history,
+- `packages/playmakers_stats`: six deterministic stats with Pydantic evidence, bounded event history,
   sequence/match validation, and inclusive time windows. Control vs chaos uses normalized entropy
   of completed directed pass edges and failed-pass share. Floating-point entropy is clamped to
   [0,1]. Nullable shot ground truth is handled safely; goals use required scoring_team_id.
 - `services/stats_mcp`: FastMCP factory, `python -m stats_mcp` on port 8765 (`/mcp`), and
   replay API mount at `/stats-mcp/`, with explicit session-manager lifespan. Event unions are
   validated using TypeAdapter, not MatchEvent.model_validate. Tool outputs are Pydantic models.
-- `gallery_agents/contracts.py`: Pydantic profiles, insights, cues, Compliance decisions and
+- `playmakers_agents/contracts.py`: Pydantic profiles, insights, cues, Compliance decisions and
   versioned trace events. Cues require evidence and include layer/safe_area. Overlay/trace schemas
-  are exported by `python -m gallery_agents.export_schemas` into gallery_schema's v1 directory.
-- `gallery_agents/workflow.py`: WorkflowBuilder Stats → fan-out Tactics/Storyline Agents →
+  are exported by `python -m playmakers_agents.export_schemas` into playmakers_schema's v1 directory.
+- `playmakers_agents/workflow.py`: WorkflowBuilder Stats → fan-out Tactics/Storyline Agents →
   synchronized Compliance join → Graphics → Audience. Each executor emits traces. Compliance
   recomputes from stored event prefixes, verifies numeric metrics and prose against cited evidence,
   retries at most twice per insight and then templates. Audience stamps/fans out profiles only.
@@ -120,7 +136,7 @@ Rough edges / Phase 4 boundaries:
   Live Stats invokes MCPStreamableHTTPTool, validates results against local evidence, and gives
   the explanation Agents read-only MCP functions. Live Azure calls have not yet been exercised.
 - `state_store.py`: MatchStore Protocol and Pydantic MatchState backed by InMemoryMatchStore.
-- Framework superstep checkpoints use FileCheckpointStorage with explicit Gallery type allowlists.
+- Framework superstep checkpoints use FileCheckpointStorage with explicit Playmakers type allowlists.
   Tests reload saved checkpoints. Complete match-store restoration/catch-up belongs to Phase 2B.
 - Dependencies: agent-framework-core 1.21.0, agent-framework-openai 1.16.0,
   agent-framework-foundry 1.14.1, mcp>=1.24,<2 (resolved 1.30.0), openai resolved 3.31.0.
@@ -131,7 +147,7 @@ Rough edges / Phase 4 boundaries:
   current JSON Schemas, client selection, deterministic cues and entropy boundary regressions).
   Ruff format/check and pip check pass. A separate clean Python 3.13 venv installs all packages
   and runs all tests. CI retains Python 3.12 and installs both new packages plus pip check.
-- Full CLI command completed: `python -m gallery_agents demo --seed 7 --speed 50 --persona analyst`:
+- Full CLI command completed: `python -m playmakers_agents demo --seed 7 --speed 50 --persona analyst`:
   1,569 events, **3,138 cues + 9,414 trace records**, with evidence, and file checkpoints.
   The framework emits two harmless mock-client function-invocation capability warnings to stderr.
   Stats tools run directly offline; the mock does not request function calls.
@@ -139,8 +155,8 @@ Rough edges / Phase 4 boundaries:
 Run after root README editable installs:
 
 ```bash
-python -m gallery_agents demo --seed 7 --speed 50 --persona analyst
-python -m gallery_agents demo --seed 7 --speed 0 --limit 10
+python -m playmakers_agents demo --seed 7 --speed 50 --persona analyst
+python -m playmakers_agents demo --seed 7 --speed 0 --limit 10
 python -m stats_mcp
 uvicorn replay_api.main:app --reload --port 8000
 ```
@@ -171,9 +187,9 @@ Phase 2B implementation:
 - `personalize.py`: analyst metrics/tactical labels vs casual plain captions; viewer-scoped ★
   favourites/player_cam; en/es/fr offline phrase table and live LLM translation with fallback.
 - `pitchsim/story.py`, `stories/*.yaml`, CLI `--story` plant deterministic labeled style changes.
-- API `/gallery/sse` + `/gallery/ws`: event/cue/trace JSON, requested viewer/kill/rollout params,
+- API `/playmakers/sse` + `/playmakers/ws`: event/cue/trace JSON, requested viewer/kill/rollout params,
   isolated temporary checkpoint directories, CORS localhost:5173; existing mounted stats MCP retained.
-- API now depends on gallery-agents: CI and README install gallery-agents before replay-api.
+- API now depends on playmakers-agents: CI and README install playmakers-agents before replay-api.
 
 Limits / next work:
 - Azure/Foundry model calls, credentials, Cosmos state/checkpoints, deployment and tracing require
@@ -192,12 +208,12 @@ Suggested conventional commit split once Git is writable:
 ## Phase 1 foundation (historical baseline)
 | Area | Path | Status |
 |---|---|---|
-| Event contract | `packages/gallery_schema` | Pydantic `MatchEvent` + JSON Schema v1 (`schemas/v1/match_event.schema.json`), export script |
+| Event contract | `packages/playmakers_schema` | Pydantic `MatchEvent` + JSON Schema v1 (`schemas/v1/match_event.schema.json`), export script |
 | Simulator | `packages/pitchsim` | Seeded 90-min match: passes, carries, shots+xG, tackles, fouls, cards, subs, goals, possession, positions; tactical styles (high press / counter / possession); scripted story events; ground-truth key-moment labels |
 | Calibration | `pitchsim validate` | 50 matches: passes 1056.6 (900–1100), shots 20.3 (18–32), goals 3.16 (2.2–3.2), pass acc 0.815 (0.77–0.87), fouls 16.5 (15–35). **All OK** |
 | Season dataset | `pitchsim season` | 380-match NDJSON.gz, gitignored |
 | Replay API | `services/replay_api` | FastAPI `/healthz`, `/replay/sse`, `/replay/ws` (real-time or accelerated `speed`) |
-| Agents | `packages/gallery_agents` | **Interfaces only** (`interfaces.py`: Protocols for 7 agents, `ViewerProfile`, `OverlayCue`) |
+| Agents | `packages/playmakers_agents` | **Interfaces only** (`interfaces.py`: Protocols for 7 agents, `ViewerProfile`, `OverlayCue`) |
 | Infra | `infra/` | `azure.yaml` + `main.bicep` stubs (Container Apps, Cosmos DB, Event Hubs). Never deployed |
 | CI | `.github/workflows/ci.yml` | Python 3.12, ruff format/check, pytest |
 | Tests | `tests/` | 3 tests (determinism, schema validity, calibration) — **pass** (re-verified 14 Oct, Python 3.13) |
@@ -207,31 +223,31 @@ byte-for-byte from the build transcript's edit log; tests and calibration number
 exactly. The only edit is `extend-exclude = ["salvage"]` in `pyproject.toml` so ruff ignores the salvage folder.
 
 ## Original Phase 2 attempt (historical salvage reference)
-- `packages/gallery_stats/` — deterministic `StatsEngine`: `possession`, `pressure_index`, `pass_difficulty`,
+- `packages/playmakers_stats/` — deterministic `StatsEngine`: `possession`, `pressure_index`, `pass_difficulty`,
   `xg`, `momentum`, each returning Pydantic results with `Evidence` (event_ids).
 - `services/stats_mcp/` — FastMCP server exposing those 5 tools (`ingest_event` too); also mounted into
   replay_api at `/stats-mcp`.
-- `gallery_agents/contracts.py` — Pydantic `ViewerProfile`, `Insight`, `OverlayCue` (with
+- `playmakers_agents/contracts.py` — Pydantic `ViewerProfile`, `Insight`, `OverlayCue` (with
   `evidence_event_ids`, persona, language), `ComplianceDecision`.
-- `gallery_agents/agents.py` — `StatsAgent`, `TacticsAgent`, `StorylineAgent`, `WhatIfAgent`,
+- `playmakers_agents/agents.py` — `StatsAgent`, `TacticsAgent`, `StorylineAgent`, `WhatIfAgent`,
   `ComplianceAgent`, `GraphicsAgent`, `Director` (deterministic/offline logic, `AgentFailure`).
-- `gallery_agents/checkpointing.py` (`CheckpointManager`, `PipelineCheckpoint`), `state_store.py`
-  (`InMemoryMatchStore`, `MatchState`), `pipeline.py` (`GalleryPipeline`, `GalleryPipelineConfig` with
+- `playmakers_agents/checkpointing.py` (`CheckpointManager`, `PipelineCheckpoint`), `state_store.py`
+  (`InMemoryMatchStore`, `MatchState`), `pipeline.py` (`PlaymakersPipeline`, `PlaymakersPipelineConfig` with
   `kill_tactics_after_sequence`, `whatif_rollouts`), `personalize.py` (persona/favourite/Spanish shaping —
   a tiny phrase table; should become LLM translation with mock fallback).
-- `gallery_agents/model_clients.py` — `DeterministicMockChatClient`, `AzureOpenAIChatClient`,
-  `FoundryOpenAICompatChatClient` (all subclass Agent Framework `BaseChatClient`), `create_gallery_chat_client()`
+- `playmakers_agents/model_clients.py` — `DeterministicMockChatClient`, `AzureOpenAIChatClient`,
+  `FoundryOpenAICompatChatClient` (all subclass Agent Framework `BaseChatClient`), `create_playmakers_chat_client()`
   picks by env vars.
 - `pitchsim/whatif.py` — `MatchSnapshot`, `snapshot_from_events`, `rollout_from_snapshot`,
   `win_probability_delta_for_forced_goal`. `pitchsim/story.py` — load story scripts (YAML).
-- `replay_api/main.py` — adds `/gallery/sse` and `/gallery/ws` streaming personalised overlay cues
+- `replay_api/main.py` — adds `/playmakers/sse` and `/playmakers/ws` streaming personalised overlay cues
   (params: seed, speed, persona, language, favourites, kill flag).
-- `tests/test_gallery_pipeline.py` — kill→fallback→recover and Spanish What-If tests.
+- `tests/test_playmakers_pipeline.py` — kill→fallback→recover and Spanish What-If tests.
 
 ### Known issues in the salvage (fixed or deferred as noted above)
 1. `pipeline.py`: `@dataclass(frozen=True)` with `home_style: TeamStyle = TeamStyle(...)` → **ValueError
    (mutable default)**. Use `field(default_factory=...)`.
-2. `gallery_agents/pyproject.toml` pins `openai>=1.40,<2` → **conflicts** with agent-framework-devui
+2. `playmakers_agents/pyproject.toml` pins `openai>=1.40,<2` → **conflicts** with agent-framework-devui
    (openai>=2.45) and azure-ai-projects 2.7 (openai>=3). Remove the pin (verified: `pip check` clean without it).
 3. 26 ruff lint errors (mostly import order; `ruff check --fix`).
 4. The "agents" are still mostly deterministic Python; they are not yet real Agent Framework
@@ -241,13 +257,13 @@ exactly. The only edit is `extend-exclude = ["salvage"]` in `pyproject.toml` so 
    `WorkflowBuilder.with_checkpointing(...)` — use it (file storage now, Cosmos later).
 
 ## Decisions made
-- Project: **Gallery**, with **What-If Lab folded in** as the `what_if` agent; add MatchDesk-style
+- Project: **Playmakers**, with **What-If Lab folded in** as the `what_if` agent; add MatchDesk-style
   **Foundry eval gate in CI** and the **season dataset**.
 - Category: Best Multi-Agent System.
 - Python monorepo with editable packages; FastAPI; SSE + WS; Pydantic contracts; ruff; pytest.
 - Offline-first: mock model client so CI/demo runs without Azure.
 - Fictional clubs/players only.
-- Code lives in Cursor's repo first → **moving to a public GitHub repo now** (`gallery-inside-the-game`).
+- Code lives in Cursor's repo first → **moving to a public GitHub repo now** (`playmakers-inside-the-game`).
 
 ## Open questions / needs from King Emmanuel
 - Azure subscription with credits (free account gives $200 / 30 days) — needed from Phase 4 (~20 Oct).

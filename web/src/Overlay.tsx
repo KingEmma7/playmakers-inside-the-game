@@ -252,7 +252,7 @@ export function ViewPanel({
         )}
         {!event && (
           <div className="loading">
-            Connecting to the gallery
+            Connecting to the Playmakers crew
             <span>Waiting for the synthetic match feed…</span>
           </div>
         )}

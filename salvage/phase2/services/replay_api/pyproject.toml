@@ -14,7 +14,7 @@ dependencies = [
   "fastapi>=0.115.0,<1",
   "uvicorn[standard]>=0.30.0,<1",
   "pitchsim>=0.1.0",
-  "gallery-agents>=0.1.0",
+  "playmakers-agents>=0.1.0",
   "stats-mcp>=0.1.0",
   "mcp>=1.24.0,<2",
 ]

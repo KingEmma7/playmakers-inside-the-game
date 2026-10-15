@@ -91,7 +91,7 @@ export default function TracePanel({
                     : agent === "graphics" && status === "fallback"
                       ? "template mode"
                       : agent === "director"
-                        ? "Orchestrating the gallery"
+                        ? "Orchestrating the crew"
                         : t
                           ? `${t.action.replaceAll("_", " ")} · ${t.latency_ms.toFixed(1)} ms`
                           : "Waiting for match events"}

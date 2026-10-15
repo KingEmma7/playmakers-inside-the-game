@@ -18,7 +18,7 @@ from pitchsim.sim import (
     _xg_from_position,
 )
 
-from gallery_schema.models import (
+from playmakers_schema.models import (
     CardEvent,
     CarryEvent,
     FoulEvent,

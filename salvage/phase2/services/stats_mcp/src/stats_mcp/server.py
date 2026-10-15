@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from gallery_schema.models import MatchEvent
-from gallery_stats.engine import StatsEngine
+from playmakers_schema.models import MatchEvent
+from playmakers_stats.engine import StatsEngine
 
 
 @dataclass

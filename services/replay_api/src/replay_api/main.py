@@ -10,13 +10,13 @@ from typing import Annotated, Any, Literal
 from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse, StreamingResponse
-from gallery_agents.contracts import ViewerProfile
-from gallery_agents.resilience import KillSpec
-from gallery_agents.what_if import create_rollout_pool
-from gallery_agents.workflow import Director
 from pitchsim.config import MatchConfig
 from pitchsim.replay import replay_events
 from pitchsim.sim import simulate_match
+from playmakers_agents.contracts import ViewerProfile
+from playmakers_agents.resilience import KillSpec
+from playmakers_agents.what_if import create_rollout_pool
+from playmakers_agents.workflow import Director
 from starlette.routing import Mount
 from stats_mcp.server import create_mcp
 
@@ -39,7 +39,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.whatif_pool = None
 
 
-app = FastAPI(title="Gallery Replay API", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="Playmakers Replay API", version="0.2.0", lifespan=lifespan)
 app.mount("/stats-mcp", FastAPI())
 app.add_middleware(
     CORSMiddleware,
@@ -87,7 +87,7 @@ async def replay_ws(ws: WebSocket, seed: int = 0, speed: float = 1.0) -> None:
         await ws.close()
 
 
-async def gallery_messages(
+async def playmakers_messages(
     seed: int,
     speed: float,
     profile: ViewerProfile,
@@ -124,8 +124,8 @@ async def gallery_messages(
                 yield {"type": "cue", **cue.model_dump(mode="json")}
 
 
-@app.get("/gallery/sse")
-async def gallery_sse(
+@app.get("/playmakers/sse")
+async def playmakers_sse(
     request: Request,
     replay_from_ms: Annotated[int, Query(ge=0, le=5_400_000)] = 0,
     seed: int = 7,
@@ -151,7 +151,7 @@ async def gallery_sse(
     async def stream() -> AsyncGenerator[str, None]:
         # Closing the wrapper must also close the Director if suspended at a yield.
         async with aclosing(
-            gallery_messages(
+            playmakers_messages(
                 seed,
                 speed,
                 profile,
@@ -171,8 +171,8 @@ async def gallery_sse(
     )
 
 
-@app.websocket("/gallery/ws")
-async def gallery_ws(
+@app.websocket("/playmakers/ws")
+async def playmakers_ws(
     ws: WebSocket,
     seed: int = 7,
     speed: float = 50,
@@ -197,7 +197,7 @@ async def gallery_ws(
     await ws.accept()
     try:
         async with aclosing(
-            gallery_messages(
+            playmakers_messages(
                 seed,
                 speed,
                 profile,

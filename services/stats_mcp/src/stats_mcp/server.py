@@ -3,9 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from gallery_schema.models import MatchEvent
-from gallery_stats.engine import StatsEngine
-from gallery_stats.types import (
+from mcp.server.fastmcp import FastMCP
+from playmakers_schema.models import MatchEvent
+from playmakers_stats.engine import StatsEngine
+from playmakers_stats.types import (
     ControlChaosResult,
     MomentumResult,
     PassDifficultyResult,
@@ -13,7 +14,6 @@ from gallery_stats.types import (
     PressureIndexResult,
     XGResult,
 )
-from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, TypeAdapter
 
 
@@ -86,7 +86,7 @@ class IngestResult(BaseModel):
 def create_mcp(*, host: str = "127.0.0.1", port: int = 8765, path: str = "/mcp") -> FastMCP:
     service = StatsMcpService()
     server = FastMCP(
-        "gallery-stats",
+        "playmakers-stats",
         host=host,
         port=port,
         streamable_http_path=path,

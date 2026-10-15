@@ -19,11 +19,11 @@ jobs:
         run: |
           python -m pip install -U pip
           python -m pip install -r requirements-dev.txt
-          python -m pip install -e packages/gallery_schema
+          python -m pip install -e packages/playmakers_schema
           python -m pip install -e packages/pitchsim
-          python -m pip install -e packages/gallery_stats
+          python -m pip install -e packages/playmakers_stats
           python -m pip install -e services/stats_mcp
-          python -m pip install -e packages/gallery_agents
+          python -m pip install -e packages/playmakers_agents
           python -m pip install -e services/replay_api
           python -m pip check
 

@@ -1,4 +1,4 @@
-# PLAN — Gallery build, 14 → 26 Oct 2026 (solo, Codex)
+# PLAN — Playmakers build, 14 → 26 Oct 2026 (solo, Codex)
 
 Hard deadline: **27 Oct 11:59pm PT = Wed 28 Oct 06:59 GMT**. Target submit: **Mon 26 Oct evening GMT**.
 Tue 27 Oct is buffer only. Times below are GMT (Accra).
@@ -12,7 +12,7 @@ phase until the current one's acceptance criteria pass.
 |---|---|---|---|
 | 1 | Wed 14 Oct | Push repo to GitHub, connect Codex, start Phase 2A | 2 |
 | 2 | Thu 15 Oct | Phase 2A finish (stats + MCP + contracts + workflow skeleton) | 2 |
-| 3 | Fri 16 Oct | Phase 2B (kill/recover, checkpoint, What-If, personalization, /gallery stream) | 2 |
+| 3 | Fri 16 Oct | Phase 2B (kill/recover, checkpoint, What-If, personalization, /playmakers stream) | 2 |
 | 4 | Sat 17 Oct | Phase 2B finish + bug fixes; **sign up for Azure free account** | 2 |
 | 5 | Sun 18 Oct | Phase 3 (React overlay UI, pitch canvas, analyst vs fan side by side) | 3 |
 | 6 | Mon 19 Oct | Phase 3 finish (agent trace panel, kill button, What-If card) | 3 |
@@ -40,19 +40,19 @@ personalization, overlay cues streamed from the API. Offline mock model client s
 
 ### Acceptance criteria
 - `pip check` clean; `ruff format --check . && ruff check . && pytest` green offline; CI updated.
-- `python -m gallery_agents demo --seed 7 --speed 50 --persona analyst` prints overlay cues to the terminal.
+- `python -m playmakers_agents demo --seed 7 --speed 50 --persona analyst` prints overlay cues to the terminal.
 - `... --kill tactics@20` (kill Tactics at minute 20) shows: fallback template cues within 1 event,
   "restarted from checkpoint", catch-up, then normal cues. Test covers this.
 - What-If cue at the first goal with `win_prob_before/after/delta`, N rollouts (default 200, parallel), evidence ids.
 - Analyst vs casual(es, favourite player) feeds differ in content (not only translation). Test asserts this.
 - `stats_mcp` runs standalone (`python -m stats_mcp`) and LLM agents call its tools through Agent Framework's
   MCP tool (`MCPStreamableHTTPTool`) when an LLM client is configured; offline path calls the same functions directly.
-- `/gallery/sse` and `/gallery/ws` stream personalised `OverlayCue` JSON + agent trace events.
+- `/playmakers/sse` and `/playmakers/ws` stream personalised `OverlayCue` JSON + agent trace events.
 - Every cue has `evidence_event_ids`; Compliance rejects otherwise (with up to 2 retries then template).
 
 ### Codex prompt — Phase 2A (paste first)
 ```text
-You are continuing the "Gallery" project in this repo. First read AGENTS.md, docs/HANDOFF.md and docs/PLAN.md
+You are continuing the "Playmakers" project in this repo. First read AGENTS.md, docs/HANDOFF.md and docs/PLAN.md
 completely, then run the commands in AGENTS.md §5 to confirm Phase 1 is green before changing anything.
 
 Task: Phase 2A — stats engine, MCP server, contracts, and the Agent Framework workflow skeleton.
@@ -60,16 +60,16 @@ Use salvage/phase2/ as a head start (it is recovered, untested code from a crash
 import from salvage/). Respect AGENTS.md §7 dependency pitfalls (no openai<2 pin; agent-framework-core;
 mcp>=1.24,<2; run pip check).
 
-1. Create packages/gallery_stats (port salvage version): deterministic StatsEngine with possession,
+1. Create packages/playmakers_stats (port salvage version): deterministic StatsEngine with possession,
    pressure_index, pass_difficulty, xg, momentum, plus control_vs_chaos (pass-network entropy + turnover rate).
    Every result is a Pydantic model including Evidence(event_ids). Unit tests with hand-built event lists.
 2. Create services/stats_mcp (port salvage): FastMCP server exposing ingest_event + the stats tools, runnable via
    `python -m stats_mcp` (streamable HTTP, port 8765) and mountable into replay_api at /stats-mcp. Add a test that
    starts it in-process and calls a tool via the mcp client (streamable_http_client).
-3. In packages/gallery_agents: port contracts.py (ViewerProfile, Insight, OverlayCue with layer, template,
+3. In packages/playmakers_agents: port contracts.py (ViewerProfile, Insight, OverlayCue with layer, template,
    clock_ms, duration_ms, priority, safe_area, evidence_event_ids, persona, language; ComplianceDecision; plus
    AgentTraceEvent{agent, action, latency_ms, status}). Export JSON Schemas for OverlayCue/AgentTraceEvent into
-   packages/gallery_schema/.../schemas/v1/. Replace the Phase 1 dataclasses in interfaces.py with these.
+   packages/playmakers_schema/.../schemas/v1/. Replace the Phase 1 dataclasses in interfaces.py with these.
 4. Port model_clients.py: DeterministicMockChatClient (default), Azure OpenAI / Foundry clients selected only when
    env vars are set (AZURE_OPENAI_ENDPOINT + AZURE_OPENAI_DEPLOYMENT, or AZURE_AI_PROJECT_ENDPOINT). Inspect the
    installed agent_framework package to use its real APIs (Agent, BaseChatClient, WorkflowBuilder, executors,
@@ -80,7 +80,7 @@ mcp>=1.24,<2; run pip check).
    against StatsEngine by event_id; reject → retry ≤2 → template) → Graphics (schema-validated OverlayCue) →
    Audience fan-out. Each executor emits AgentTraceEvent. Shared InMemoryMatchStore with a MatchStore Protocol
    (Cosmos implementation comes in Phase 4).
-6. CLI: `python -m gallery_agents demo --seed 7 --speed 50 --persona analyst` prints cues + trace lines.
+6. CLI: `python -m playmakers_agents demo --seed 7 --speed 50 --persona analyst` prints cues + trace lines.
 7. Update CI (install new packages), README (Phase 2 section). Fix the known salvage issues listed in HANDOFF.md.
 Definition of done = AGENTS.md §8. Commit in small conventional commits. Finish with a summary: what was built,
 how to run, test count, and anything left for Phase 2B.
@@ -108,7 +108,7 @@ Task: Phase 2B — resilience, What-If, personalization, streaming.
    event differ in fields and wording, and that favourite-player cues appear only for that profile.
 4. Story scripts: port pitchsim/story.py; add `stories/*.yaml` (e.g. "press collapse after 60'", "late comeback")
    with planted ground-truth moments used later by evals.
-5. replay_api: add /gallery/sse and /gallery/ws (params: seed, speed, persona, language, favourite_team_id,
+5. replay_api: add /playmakers/sse and /playmakers/ws (params: seed, speed, persona, language, favourite_team_id,
    favourite_player_id, kill, whatif_rollouts) streaming {type: "event"|"cue"|"trace", ...} messages; mount stats MCP
    at /stats-mcp; CORS for localhost:5173. Tests with httpx/TestClient.
 6. README: "How the agents work" section with a mermaid sequence diagram, kill/recover explanation, how to run demo.
@@ -121,7 +121,7 @@ Definition of done = AGENTS.md §8. Small commits. Summarise results and list an
 
 ### Goals
 A broadcast-style web app (React + Vite + TypeScript) that plays the synthetic match on a 2D pitch canvas
-with overlays popping in sync, an agent trace ("gallery floor") panel, and **Analyst vs Fan side by side**.
+with overlays popping in sync, an agent trace ("Playmakers crew") panel, and **Analyst vs Fan side by side**.
 
 ### Acceptance criteria
 - `cd web && npm ci && npm run dev` works against local API; `npm run build`, `npm run lint`, `npm test` pass; added to CI.
@@ -133,13 +133,13 @@ with overlays popping in sync, an agent trace ("gallery floor") panel, and **Ana
 
 ### Codex prompt — Phase 3
 ```text
-Read AGENTS.md, docs/HANDOFF.md, docs/PLAN.md. Confirm backend tests pass and /gallery/sse streams locally.
+Read AGENTS.md, docs/HANDOFF.md, docs/PLAN.md. Confirm backend tests pass and /playmakers/sse streams locally.
 
 Task: Phase 3 — build web/ (React + Vite + TypeScript) broadcast overlay UI.
 1. Scaffold web/ with Vite React-TS, ESLint, Vitest + Testing Library. TypeScript types for MatchEvent,
-   OverlayCue, AgentTraceEvent mirrored from the JSON Schemas in packages/gallery_schema (generate with
+   OverlayCue, AgentTraceEvent mirrored from the JSON Schemas in packages/playmakers_schema (generate with
    json-schema-to-typescript via an npm script, commit the output).
-2. Data layer: hook useGalleryStream(params) connecting to /gallery/sse (EventSource) with reconnect; one stream per
+2. Data layer: hook usePlaymakersStream(params) connecting to /playmakers/sse (EventSource) with reconnect; one stream per
    view. API base URL from VITE_API_BASE (default http://localhost:8000).
 3. Pitch: Canvas 2D top-down pitch, ball + 22 player dots moving from event positions (interpolate between events),
    fictional team colours/crests (generated SVG shapes; no real badges).
@@ -147,7 +147,7 @@ Task: Phase 3 — build web/ (React + Vite + TypeScript) broadcast overlay UI.
    lower third (storyline), momentum bar, pass-difficulty arc, xG shot card, What-If card (win% before/after,
    delta bar, explanation), ★ favourite-player tag. Cues appear/disappear by clock_ms + duration_ms with
    tasteful CSS animations; priority decides stacking.
-5. Layout "Gallery": header with controls (seed, speed 1/10/50x, start/pause), two synced panels side by side —
+5. Layout "Playmakers": header with controls (seed, speed 1/10/50x, start/pause), two synced panels side by side —
    ANALYST and FAN (persona casual, language es/fr, favourite player picker). Right rail: Agent Trace panel showing
    each agent's handoffs, latency, status colours; status chips per agent (up/down/fallback/recovering).
    A red "Kill Tactics agent" button that restarts the stream with kill at current minute (or calls an API endpoint
@@ -183,7 +183,7 @@ Public demo URL for judges.
 ```text
 Read AGENTS.md, docs/HANDOFF.md, docs/PLAN.md. Confirm everything is green locally.
 
-Task: Phase 4 — make Gallery cloud-native on Azure (I will run the azd commands myself; you write the code/IaC).
+Task: Phase 4 — make Playmakers cloud-native on Azure (I will run the azd commands myself; you write the code/IaC).
 1. Model client: finalize Foundry support using the current Azure AI Projects / Agent Framework Foundry client
    (check installed package source for exact APIs). Config from env: AZURE_AI_PROJECT_ENDPOINT,
    AZURE_AI_MODEL_DEPLOYMENT (and Azure OpenAI fallback). Auth with DefaultAzureCredential. Use a small, cheap model
@@ -195,7 +195,7 @@ Task: Phase 4 — make Gallery cloud-native on Azure (I will run the azd command
 3. Dockerfiles: services/replay_api (includes agents + stats MCP mount), web (multi-stage: build → nginx, runtime
    API URL via env-substituted config.js). .dockerignore files. `docker compose up` runs both locally.
 4. infra/: replace stubs with working Bicep for azd: Log Analytics, App Insights, Container Apps environment,
-   Container Registry, user-assigned managed identity, Cosmos DB serverless (db "gallery", containers state,
+   Container Registry, user-assigned managed identity, Cosmos DB serverless (db "playmakers", containers state,
    checkpoints), container apps api (ingress external, port 8000, min replicas 1 for the demo) and web; role
    assignments (Cosmos data contributor, Cognitive Services OpenAI User / Azure AI User on the Foundry project);
    outputs for URLs. Parameterize the Foundry project endpoint (existing resource) rather than creating it.
@@ -266,7 +266,7 @@ Summarise and list anything I must do by hand (recording, uploading, submitting)
 ### Demo video script draft (target 1:55)
 | Time | Shot | Voice-over (write-out, read calmly) |
 |---|---|---|
-| 0:00–0:10 | Title card "Gallery" over live split screen | "This is Gallery: an AI production crew that turns a live match into broadcast graphics, and a different second screen for every fan." |
+| 0:00–0:10 | Title card "Playmakers" over live split screen | "This is Playmakers: an AI production crew that turns a live match into broadcast graphics, and a different second screen for every fan." |
 | 0:10–0:25 | Architecture diagram (README) | "Seven agents on Microsoft Agent Framework, hosted on Azure Container Apps, using Foundry models, a stats MCP server, and Cosmos DB for shared state and checkpoints." |
 | 0:25–0:40 | PitchSim calibration report + season file | "There's no real data, so I built PitchSim: a calibrated, seeded simulator — a thousand passes, twenty shots, realistic goals — plus a 380-match season and planted moments for evaluation." |
 | 0:40–1:00 | Live split screen, overlays popping; trace panel | "The Director routes each event: Stats computes numbers through MCP, Tactics and Storyline explain why it matters, Compliance checks every number against the data, Graphics puts it on air." |
@@ -277,7 +277,7 @@ Summarise and list anything I must do by hand (recording, uploading, submitting)
 Record with OBS (free) at 1920×1080 using `?demo=1`; record voice separately; no music or royalty-free only.
 
 ### Elevator pitch draft
-> **Gallery** is a multi-agent AI production crew for live football. Built on Microsoft Agent Framework with
+> **Playmakers** is a multi-agent AI production crew for live football. Built on Microsoft Agent Framework with
 > Microsoft Foundry models, a custom stats MCP server, Azure Container Apps and Cosmos DB, seven specialised
 > agents turn a live (synthetic, calibrated) match feed into verified, broadcast-safe overlays and a personalised
 > second screen for every fan — analyst or casual, any language, favourite player. It survives agent failure

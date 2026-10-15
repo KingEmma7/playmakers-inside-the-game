@@ -1,0 +1,111 @@
+{
+  "$id": "https://playmakers.local/schemas/overlay_cue/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "clock_ms": {
+      "minimum": 0,
+      "title": "Clock Ms",
+      "type": "integer"
+    },
+    "cue_id": {
+      "title": "Cue Id",
+      "type": "string"
+    },
+    "duration_ms": {
+      "default": 4000,
+      "maximum": 30000,
+      "minimum": 250,
+      "title": "Duration Ms",
+      "type": "integer"
+    },
+    "evidence_event_ids": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Evidence Event Ids",
+      "type": "array"
+    },
+    "language": {
+      "anyOf": [
+        {
+          "enum": [
+            "en",
+            "es",
+            "fr"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Language"
+    },
+    "layer": {
+      "default": "lower_third",
+      "enum": [
+        "lower_third",
+        "score_bug",
+        "full_screen"
+      ],
+      "title": "Layer",
+      "type": "string"
+    },
+    "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
+    },
+    "persona": {
+      "anyOf": [
+        {
+          "enum": [
+            "analyst",
+            "casual"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Persona"
+    },
+    "priority": {
+      "default": 0,
+      "maximum": 100,
+      "minimum": 0,
+      "title": "Priority",
+      "type": "integer"
+    },
+    "safe_area": {
+      "const": "broadcast_safe",
+      "default": "broadcast_safe",
+      "title": "Safe Area",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "template": {
+      "title": "Template",
+      "type": "string"
+    }
+  },
+  "required": [
+    "cue_id",
+    "clock_ms",
+    "template",
+    "payload",
+    "evidence_event_ids"
+  ],
+  "title": "OverlayCue",
+  "type": "object"
+}

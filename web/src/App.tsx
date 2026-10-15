@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ViewPanel, Crest } from "./Overlay";
 import { playerName } from "./players";
 import TracePanel from "./TracePanel";
-import { useGalleryStream, clockLabel } from "./stream";
+import { usePlaymakersStream, clockLabel } from "./stream";
 function About() {
   return (
     <main className="about">
@@ -13,7 +13,7 @@ function About() {
           An entire AI crew.
         </h1>
         <p>
-          Gallery turns a seeded, synthetic football match into evidence-backed
+          Playmakers turns a seeded, synthetic football match into evidence-backed
           broadcast overlays and a personalised second screen. Every club,
           player and match is fictional.
         </p>
@@ -64,9 +64,9 @@ function About() {
   );
 }
 export default function App() {
-  return <Gallery />;
+  return <Playmakers />;
 }
-function Gallery() {
+function Playmakers() {
   const [seed, setSeed] = useState(7);
   const [speed, setSpeed] = useState(10);
   const [language, setLanguage] = useState<"es" | "fr">("es");
@@ -98,7 +98,7 @@ function Gallery() {
     window.addEventListener("keydown", toggle);
     return () => window.removeEventListener("keydown", toggle);
   }, []);
-  const analyst = useGalleryStream({
+  const analyst = usePlaymakersStream({
     seed,
     speed,
     persona: "analyst",
@@ -106,7 +106,7 @@ function Gallery() {
     kill,
     replay_from_ms: replayFrom,
   });
-  const fan = useGalleryStream({
+  const fan = usePlaymakersStream({
     seed,
     speed,
     persona: "casual",
@@ -135,7 +135,7 @@ function Gallery() {
     <div className="app-shell">
       <header>
         <a className="brand" href="/">
-          Gallery
+          Playmakers
         </a>
         <nav className="segmented" aria-label="Main navigation">
           <a
@@ -280,7 +280,7 @@ function Gallery() {
             <Crest away />
             <span>Southport Athletic</span>
           </div>
-          <main className="gallery-layout">
+          <main className="playmakers-layout">
             <div className="program-area">
               <div className="split-view">
                 <ViewPanel

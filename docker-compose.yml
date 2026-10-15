@@ -1,0 +1,19 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: services/replay_api/Dockerfile
+    environment:
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+    ports:
+      - "8000:8000"
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    environment:
+      API_BASE: ${API_BASE:-/api}
+    ports:
+      - "5173:80"
+    depends_on:
+      - api

@@ -5,6 +5,7 @@ import type { AgentTraceEvent } from "./generated/AgentTraceEvent";
 export type { MatchEvent, OverlayCue, AgentTraceEvent };
 export type Trace = AgentTraceEvent & { sequence: number; view: string };
 export type Params = {
+  viewer_profiles?: string;
   seed: number;
   speed: number;
   persona: "analyst" | "casual";
@@ -45,10 +46,42 @@ export function usePlaymakersStream(params: Params): Stream {
     let completed = false;
     const seen = new Set<number>();
     const cueIds = new Set<string>();
+    let pendingEvents: MatchEvent[] = [];
+    let pendingCues: OverlayCue[] = [];
+    let pendingTraces: Trace[] = [];
+    function flush() {
+      if (!pendingEvents.length && !pendingCues.length && !pendingTraces.length)
+        return;
+      const events = pendingEvents;
+      const cues = pendingCues;
+      const traces = pendingTraces;
+      pendingEvents = [];
+      pendingCues = [];
+      pendingTraces = [];
+      setState((s) => {
+        const retainedEvents = [...s.events, ...events].slice(-2500);
+        const clock = retainedEvents.at(-1)?.clock_ms ?? 0;
+        const allCues = [...s.cues, ...cues];
+        const recent = new Set(allCues.slice(-400).map((c) => c.cue_id));
+        return {
+          ...s,
+          events: retainedEvents,
+          cues: allCues.filter(
+            (c) => recent.has(c.cue_id) || clock < c.clock_ms + (c.duration_ms ?? 4000),
+          ),
+          traces: [...s.traces, ...traces].slice(-2400),
+        };
+      });
+    }
+    const batchTimer = setInterval(flush, 75);
     setState(initial(query));
     function connect() {
+      const runtime = (window as Window & {
+        PLAYMAKERS_CONFIG?: { apiBase: string };
+      }).PLAYMAKERS_CONFIG;
+      const apiBase = runtime?.apiBase || import.meta.env.VITE_API_BASE || "http://localhost:8000";
       source = new EventSource(
-        `${import.meta.env.VITE_API_BASE || "http://localhost:8000"}/playmakers/sse?${query}`,
+        `${apiBase}/playmakers/sse?${query}`,
       );
       source.onopen = () => {
         delay = 1000;
@@ -65,22 +98,18 @@ export function usePlaymakersStream(params: Params): Stream {
             if (duplicate) return;
             seen.add(event.sequence);
             completed = event.event_type === "period_end" && event.period === 2;
-            setState((s) => ({ ...s, events: [...s.events, event] }));
+            pendingEvents.push(event);
           } else if (
             data.type === "cue" &&
             !duplicate &&
             !cueIds.has(data.cue_id)
           ) {
             cueIds.add(data.cue_id);
-            setState((s) => ({ ...s, cues: [...s.cues, data] }));
+            pendingCues.push(data);
           } else if (data.type === "trace" && !duplicate) {
-            setState((s) => ({
-              ...s,
-              traces: [
-                ...s.traces,
-                { ...data, sequence: lastSequence, view: params.persona },
-              ].slice(-2400),
-            }));
+            pendingTraces.push({
+              ...data, sequence: lastSequence, view: params.persona,
+            });
           }
         } catch {
           setState((s) => ({ ...s, status: "invalid message" }));
@@ -88,6 +117,7 @@ export function usePlaymakersStream(params: Params): Stream {
       };
       source.onerror = () => {
         source.close();
+        flush();
         if (disposed) return;
         if (completed) {
           setState((s) => ({ ...s, status: "full time" }));
@@ -104,6 +134,7 @@ export function usePlaymakersStream(params: Params): Stream {
       disposed = true;
       source.close();
       clearTimeout(timer);
+      clearInterval(batchTimer);
     };
   }, [query, params.persona]);
   return state.generation === query ? state : initial(query);

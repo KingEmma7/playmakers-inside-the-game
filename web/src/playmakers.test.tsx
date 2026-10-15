@@ -78,7 +78,7 @@ describe("broadcast cues", () => {
               persona: "casual",
               language: "es",
               payload: {
-                headline: "★ Cámara del jugador",
+                headline: "Favorito: Cámara del jugador",
                 detail: "Sigue la emoción del partido.",
                 player_cam: { player_id: "match_7_H09" },
               },
@@ -247,6 +247,7 @@ it("reconnects with backoff, deduplicates replay, and closes on unmount", () => 
     });
     source.send({ type: "cue", ...cue() });
     source.send({ type: "trace", ...trace() });
+    vi.advanceTimersByTime(75);
   });
   expect(screen.getByText("live events:1 cues:1 traces:1")).toBeInTheDocument();
   act(() => {
@@ -260,8 +261,29 @@ it("reconnects with backoff, deduplicates replay, and closes on unmount", () => 
     reconnect.send({ type: "cue", ...cue() });
     reconnect.send({ type: "trace", ...trace() });
     reconnect.send({ type: "event", sequence: 1 });
+    vi.advanceTimersByTime(75);
   });
   expect(screen.getByText("live events:2 cues:1 traces:1")).toBeInTheDocument();
   unmount();
   expect(reconnect.close).toHaveBeenCalledOnce();
+});
+
+it("batches bursts, bounds history, and cancels pending flushes on unmount", () => {
+  vi.useFakeTimers();
+  vi.stubGlobal("EventSource", MockSource);
+  const { unmount } = render(<Probe />);
+  const source = MockSource.instances[0];
+  act(() => {
+    source.onopen?.();
+    for (let i = 0; i < 3000; i++) {
+      source.send({ type: "event", sequence: i, clock_ms: i * 10000 });
+      source.send({ type: "cue", ...cue({ cue_id: `cue${i}`, clock_ms: i * 10000 }) });
+      source.send({ type: "trace", ...trace() });
+    }
+  });
+  expect(screen.getByText("live events:0 cues:0 traces:0")).toBeInTheDocument();
+  act(() => vi.advanceTimersByTime(75));
+  expect(screen.getByText("live events:2500 cues:400 traces:2400")).toBeInTheDocument();
+  unmount();
+  expect(vi.getTimerCount()).toBe(0);
 });

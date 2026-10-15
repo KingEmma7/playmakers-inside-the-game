@@ -18,7 +18,7 @@ try {
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto(process.env.PLAYMAKERS_WEB_URL || "http://localhost:5173");
   assert.equal(await page.title(), "Playmakers — Inside the synthetic game");
-  await page.getByText("Playmakers", { exact: true }).waitFor();
+  await page.getByRole("img", { name: "Playmakers", exact: true }).waitFor();
   await page.getByLabel("REPLAY SPEED").selectOption("50");
   await page
     .getByRole("region", { name: "ANALYST view" })

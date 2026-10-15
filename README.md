@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/brand/playmakers-header.png" alt="Playmakers" width="600" /></p>
+
 # Playmakers — “Inside the Game” Hackathon (Microsoft x Premier League)
 
 **Playmakers** is an AI production crew that turns a live football match event stream into explainable, timed overlay cues and personalized audience output.

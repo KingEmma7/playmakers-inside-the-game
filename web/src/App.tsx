@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import lockupUrl from "./assets/playmakers-lockup.svg";
+import symbolUrl from "./assets/playmakers-symbol.svg";
 import { ViewPanel, Crest } from "./Overlay";
 import { playerName } from "./players";
 import TracePanel from "./TracePanel";
@@ -7,6 +9,7 @@ function About() {
   return (
     <main className="about">
       <div className="about-copy">
+        <img className="about-mark" src={symbolUrl} alt="" width={48} height={48} />
         <h1>
           One match.
           <br />
@@ -134,8 +137,8 @@ function Playmakers() {
   return (
     <div className="app-shell">
       <header>
-        <a className="brand" href="/">
-          Playmakers
+        <a className="brand" href="/" aria-label="Playmakers home">
+          <img src={lockupUrl} alt="Playmakers" height={26} />
         </a>
         <nav className="segmented" aria-label="Main navigation">
           <a

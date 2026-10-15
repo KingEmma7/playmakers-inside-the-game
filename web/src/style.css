@@ -48,8 +48,22 @@ header {
   min-height: 60px;
 }
 .brand {
-  font-size: var(--text-md);
-  font-weight: 600;
+  display: flex;
+  align-items: center;
+}
+.brand img {
+  display: block;
+  height: 26px;
+  width: auto;
+}
+.about {
+  position: relative;
+}
+.about-mark {
+  position: absolute;
+  top: var(--space-8);
+  right: var(--space-8);
+  display: block;
 }
 .segmented {
   display: flex;

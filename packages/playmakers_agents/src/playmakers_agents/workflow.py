@@ -308,9 +308,9 @@ class ComplianceExecutor(Executor):
             else:
                 verified.append(float(value))
         # Numeric prose is allowed only as a metric value (or percent), rounded to two decimals.
-        for number, percent in re.findall(
-            r"(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)(%?)", insight.headline + " " + insight.detail
-        ):
+        prose = re.sub(r"\b\d{1,3}:[0-5]\d\b", "", insight.headline + " " + insight.detail)
+        prose = re.sub(r"(?i)(?:jersey|shirt|number|no\.)\s*#?\s*(?:[1-9]\d?)(?![\d.])", "", prose)
+        for number, percent in re.findall(r"(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)(%?)", prose):
             value = float(number)
             allowed = [round(v * (100 if percent else 1), 2) for v in verified]
             if value not in allowed:
@@ -640,16 +640,25 @@ class Director:
                     )
                 )
             state = self.store.get_or_create(event.match_id)
-            await self.recovery_storage.save(
-                RecoveryState(
-                    match=MatchState(
-                        match_id=event.match_id,
-                        events=state.events,
-                        last_sequence=state.last_sequence,
-                    ),
-                    agent_sequences={
-                        w.kind: w.agent_sequences.get(event.match_id, -1) for w in self.writers
-                    },
+            if (
+                len(state.events) == 1
+                or event.sequence % 25 == 0
+                or injected
+                or any(
+                    t.action in ("restarted_from_checkpoint", "caught_up") for t in self.last_traces
                 )
-            )
+                or (event.event_type == "period_end" and event.period == 2)
+            ):
+                await self.recovery_storage.save(
+                    RecoveryState(
+                        match=MatchState(
+                            match_id=event.match_id,
+                            events=state.events,
+                            last_sequence=state.last_sequence,
+                        ),
+                        agent_sequences={
+                            w.kind: w.agent_sequences.get(event.match_id, -1) for w in self.writers
+                        },
+                    )
+                )
             return cues

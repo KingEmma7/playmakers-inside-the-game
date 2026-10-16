@@ -42,12 +42,15 @@ def _clamp(x: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, x))
 
 
+# Tuned so default styles produce roughly 900-1100 passes per match.
+BASE_EVENT_RATE_PER_S = 0.235
+
+
 def _dist(a: Vec2, b: Vec2) -> float:
     return math.hypot(a.x - b.x, a.y - b.y)
 
 
 def _expovariate_ms(rng: random.Random, rate_per_s: float) -> int:
-    # rate_per_s > 0. Larger => shorter deltas.
     u = max(1e-12, rng.random())
     dt_s = -math.log(u) / rate_per_s
     return int(dt_s * 1000)
@@ -63,8 +66,7 @@ def _xg_from_position(pos: Vec2, attacking_left_to_right: bool) -> float:
     return _clamp(xg, 0.02, 0.708)
 
 
-def _sample_ball_start(rng: random.Random, possession: str) -> Vec2:
-    # Start centrally, small jitter.
+def _sample_ball_start(rng: random.Random) -> Vec2:
     return Vec2(
         x=52.5 + rng.uniform(-1.0, 1.0),
         y=34.0 + rng.uniform(-1.0, 1.0),
@@ -72,7 +74,6 @@ def _sample_ball_start(rng: random.Random, possession: str) -> Vec2:
 
 
 def _advance_ball_after_turnover(rng: random.Random, ball: Vec2, counter_attack: float) -> Vec2:
-    # Quick transition: slightly more vertical progress.
     dx = rng.uniform(-12.0, 12.0) + (counter_attack * rng.uniform(-6.0, 6.0))
     dy = rng.uniform(-10.0, 10.0)
     return Vec2(
@@ -86,7 +87,6 @@ def _apply_story(style: TeamStyle, story_event: StoryEvent) -> tuple[TeamStyle, 
     labels.append(label)
 
     if story_event.type == "press_collapse":
-        # Reduce press and increase pass risk.
         new_style = style.model_copy(
             update={
                 "press_intensity": _clamp(style.press_intensity * 0.55, 0.0, 1.0),
@@ -100,7 +100,6 @@ def _apply_story(style: TeamStyle, story_event: StoryEvent) -> tuple[TeamStyle, 
         return new_style, labels
 
     if story_event.type == "red_card":
-        # Lower tempo, lower press.
         new_style = style.model_copy(
             update={
                 "tempo": _clamp(style.tempo * 0.92, 0.5, 1.6),
@@ -109,7 +108,6 @@ def _apply_story(style: TeamStyle, story_event: StoryEvent) -> tuple[TeamStyle, 
         )
         return new_style, labels
 
-    # Exhaustive for v1
     raise AssertionError(f"Unhandled story event type: {story_event.type}")
 
 
@@ -133,7 +131,7 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
     )
 
     possession = "home" if rng.random() < 0.5 else "away"
-    ball = _sample_ball_start(rng, possession)
+    ball = _sample_ball_start(rng)
 
     home_score = 0
     away_score = 0
@@ -142,9 +140,6 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
     next_story_idx = 0
     active_story_labels: list[str] = []
     pending_style_changes: list[StoryEvent] = []
-
-    # Event rate calibration: tuned to land near ~900-1100 passes with default styles.
-    base_event_rate_per_s = 0.235
 
     seq = 0
     events: list[MatchEvent] = []
@@ -207,7 +202,6 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
     subs_away = 0
 
     while clock_ms < MATCH_MS:
-        # Half-time markers.
         if clock_ms < HALF_MS and (clock_ms + 1) >= HALF_MS:
             add(
                 PeriodEndEvent(
@@ -231,9 +225,8 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
                     ground_truth=None,
                 )
             )
-            # Kickoff for second half.
             possession = "home" if rng.random() < 0.5 else "away"
-            ball = _sample_ball_start(rng, possession)
+            ball = _sample_ball_start(rng)
             add(
                 KickoffEvent(
                     event_id=ev_id(),
@@ -249,7 +242,6 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
                 )
             )
 
-        # Apply story events at minute boundaries.
         minute = clock_ms // 60000
         while next_story_idx < len(story_queue) and story_queue[next_story_idx].minute <= minute:
             se = story_queue[next_story_idx]
@@ -267,13 +259,11 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
         this_team = team_for(possession)
         opp_team = opp_for(possession)
 
-        # Global event cadence depends on both teams' tempo.
         tempo = _clamp(0.5 * (this_team.style.tempo + opp_team.style.tempo), 0.5, 1.6)
-        rate = base_event_rate_per_s * tempo
+        rate = BASE_EVENT_RATE_PER_S * tempo
         clock_ms = min(MATCH_MS, clock_ms + max(50, _expovariate_ms(rng, rate)))
         period = current_period(clock_ms)
 
-        # Substitution windows (simple heuristic).
         if 60 <= minute <= 85 and rng.random() < 0.03:
             if possession == "home" and subs_home < 3 and this_team.bench_ids:
                 out_id = rng.choice(this_team.player_ids)
@@ -316,21 +306,16 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
                 )
                 continue
 
-        # Decide event type.
-        # Pass dominates; carry is occasional; shot depends on position; foul rare.
         in_attacking_third = (ball.x > 70.0) if possession == "home" else (ball.x < 35.0)
         pass_p = 0.78
         carry_p = 0.13
         foul_p = 0.04 * (1.0 - this_team.style.discipline)
-        # Shots are rare relative to passes; increase only when in attacking third.
         shot_p = 0.006 + (0.012 if in_attacking_third else 0.0)
 
-        # Style adjustments.
         pass_p += 0.06 * (1.0 - this_team.style.directness)
         carry_p += 0.04 * (1.0 - this_team.style.directness)
         shot_p += 0.006 * this_team.style.directness
 
-        # Normalize.
         total = pass_p + carry_p + foul_p + shot_p
         pass_p, carry_p, foul_p, shot_p = [p / total for p in (pass_p, carry_p, foul_p, shot_p)]
 
@@ -340,11 +325,9 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
             receiver = rng.choice([p for p in this_team.player_ids if p != passer])
             start = ball
 
-            # Pass length depends on directness.
             base_len = rng.uniform(4.0, 18.0) + (
                 this_team.style.directness * rng.uniform(4.0, 18.0)
             )
-            # Forwardness bias.
             forward = rng.uniform(0.2, 1.0) * (0.6 + 0.7 * this_team.style.directness)
             dx = base_len * forward * (1.0 if possession == "home" else -1.0)
             dy = rng.uniform(-10.0, 10.0)
@@ -358,7 +341,6 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
             lane_open = _clamp(1.0 - pressure * rng.uniform(0.4, 1.0), 0.0, 1.0)
             difficulty = _clamp((distance_m / 40.0) * (1.0 - lane_open) + pressure * 0.3, 0.0, 1.0)
 
-            # Completion probability.
             risk = this_team.style.pass_risk
             p_complete = 0.90 - 0.25 * difficulty - 0.10 * risk
             completed = rng.random() < _clamp(p_complete, 0.45, 0.98)
@@ -416,7 +398,6 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
         if r < pass_p + carry_p:
             carrier = rng.choice(this_team.player_ids)
             start = ball
-            # Carry length and direction.
             base = rng.uniform(1.0, 10.0)
             dx = base * (1.0 if possession == "home" else -1.0) * rng.uniform(0.2, 1.0)
             dy = rng.uniform(-6.0, 6.0)
@@ -444,7 +425,6 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
                 )
             )
 
-            # Chance of tackle/turnover under pressure.
             if rng.random() < (0.10 + 0.20 * pressure):
                 tackler = rng.choice(opp_team.player_ids)
                 won = rng.random() < _clamp(0.35 + 0.45 * pressure, 0.1, 0.95)
@@ -499,7 +479,6 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
             fouled = rng.choice(this_team.player_ids)
             position = ball
 
-            # Card probability.
             yellow_p = 0.10 * (1.0 - this_team.style.discipline)
             red_p = 0.015 * (1.0 - this_team.style.discipline)
             card_awarded: str = "none"
@@ -544,7 +523,6 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
                     )
                 )
 
-                # If red, flip story-style impact for the offending team.
                 if card_awarded == "red":
                     se = StoryEvent(
                         minute=minute,
@@ -560,15 +538,12 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
                         away = Team(**{**away.__dict__, "style": updated})
                         active_story_labels.extend(labels)
 
-            # After foul, possession typically remains with fouled team.
             continue
 
-        # Shot
         shooter = rng.choice(this_team.player_ids)
         pos = ball
         xg = _xg_from_position(pos, attacking_left_to_right=(possession == "home"))
 
-        # Reduce xG slightly under pressure.
         pressure = _clamp(opp_team.style.press_intensity * rng.uniform(0.1, 1.0), 0.0, 1.0)
         xg = _clamp(xg * (1.0 - 0.25 * pressure), 0.02, 0.708)
 
@@ -617,10 +592,9 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
                     ground_truth={"score": {"home": home_score, "away": away_score}},
                 )
             )
-            # Possession resets for kickoff.
             old_team = this_team.team_id
             possession = "away" if possession == "home" else "home"
-            ball = _sample_ball_start(rng, possession)
+            ball = _sample_ball_start(rng)
             add(
                 PossessionChangeEvent(
                     event_id=ev_id(),
@@ -639,7 +613,6 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
                 )
             )
 
-    # Full-time marker.
     add(
         PeriodEndEvent(
             event_id=ev_id(),

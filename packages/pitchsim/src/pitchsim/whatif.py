@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from pitchsim.config import StoryEvent, TeamStyle
 from pitchsim.sim import (
+    BASE_EVENT_RATE_PER_S,
     MATCH_MS,
     PITCH_LENGTH_M,
     PITCH_WIDTH_M,
@@ -136,9 +137,6 @@ def rollout_from_snapshot(snapshot: MatchSnapshot, *, rollout_seed: int) -> tupl
     home_score = snapshot.home_score
     away_score = snapshot.away_score
 
-    # Event rate calibration: should match sim.py
-    base_event_rate_per_s = 0.235
-
     clock_ms = snapshot.clock_ms
     subs_home = 0
     subs_away = 0
@@ -165,10 +163,9 @@ def rollout_from_snapshot(snapshot: MatchSnapshot, *, rollout_seed: int) -> tupl
         opp_team = opp_for(possession)
 
         tempo = _clamp(0.5 * (this_team.style.tempo + opp_team.style.tempo), 0.5, 1.6)
-        rate = base_event_rate_per_s * tempo
+        rate = BASE_EVENT_RATE_PER_S * tempo
         clock_ms = min(MATCH_MS, clock_ms + max(50, _expovariate_ms(rng, rate)))
 
-        # Substitution windows (same heuristic)
         if 60 <= minute <= 85 and rng.random() < 0.03:
             if possession == "home" and subs_home < 3 and this_team.bench_ids:
                 subs_home += 1
@@ -245,7 +242,6 @@ def rollout_from_snapshot(snapshot: MatchSnapshot, *, rollout_seed: int) -> tupl
         if r < pass_p + carry_p + foul_p:
             continue
 
-        # Shot
         pos = ball
         xg = _xg_from_position(pos, attacking_left_to_right=(possession == "home"))
         pressure = _clamp(opp_team.style.press_intensity * rng.uniform(0.1, 1.0), 0.0, 1.0)
@@ -257,6 +253,6 @@ def rollout_from_snapshot(snapshot: MatchSnapshot, *, rollout_seed: int) -> tupl
             else:
                 away_score += 1
             possession = "away" if possession == "home" else "home"
-            ball = _sample_ball_start(rng, possession)
+            ball = _sample_ball_start(rng)
 
     return home_score, away_score

@@ -287,8 +287,7 @@ class ComplianceExecutor(Executor):
             reasons.append("Insight kind or clock differs from handoff")
         if not insight.evidence_event_ids:
             reasons.append("Missing evidence")
-        # Trust StatsPacket from StatsExecutor (same deterministic engine) — O(1), and
-        # consistent with kill-recover which recomputes stats on a prefix engine.
+        # StatsExecutor and kill-recover both build this packet from the stored event prefix.
         expected = packet.stats
         cited = set(insight.evidence_event_ids)
         if not cited.issubset(set(expected.evidence_event_ids)) or event.event_id not in cited:

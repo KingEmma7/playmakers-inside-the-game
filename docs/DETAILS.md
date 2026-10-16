@@ -25,8 +25,8 @@ Every executor emits versioned `AgentTraceEvent` records. Typed shared state use
 
 Stats are code only: possession, pressure index, pass difficulty, xG, momentum and
 control vs chaos (normalized pass-network entropy and failed-pass turnover rate).
-All results cite event IDs. Compliance recomputes statistics from stored events up to
-that event's sequence, verifies metric evidence and numeric prose, and requests at most
+All results cite event IDs. Compliance checks each insight against the Stats packet that the
+deterministic engine computed from stored events up to that event, verifies metric evidence and numeric prose, and requests at most
 two corrections per insight before emitting an evidence-backed template. Graphics
 validates the cue schema, including timing, layer and broadcast safe area.
 

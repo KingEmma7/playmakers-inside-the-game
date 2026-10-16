@@ -1,5 +1,7 @@
 # PLAN — Playmakers build, 14 → 26 Oct 2026 (solo, Codex)
 
+> Historical build plan. Phase prompts below are kept as written; `salvage/` no longer exists.
+
 Hard deadline: **27 Oct 11:59pm PT = Wed 28 Oct 06:59 GMT**. Target submit: **Mon 26 Oct evening GMT**.
 Tue 27 Oct is buffer only. Times below are GMT (Accra).
 

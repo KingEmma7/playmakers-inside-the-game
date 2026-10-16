@@ -98,7 +98,7 @@
   a real Agent Framework Director workflow and the offline CLI. No Azure credentials required.
 - **Phase 2B is implemented**: recovery, seeded What-If, audience shaping, planted scripts and playmakers streams.
 - See the Phase 2B notes below for validation and limits.
-- `salvage/phase2/` remains reference only. No installed code imports it.
+- `salvage/phase2/` was ported and then deleted.
 - Commits could not be created in this workspace because `.git` is mounted read-only.
 
 ## Phase 3 implementation and validation (14 Oct 2026)
@@ -150,7 +150,7 @@ Rough edges / Phase 4 boundaries:
   are exported by `python -m playmakers_agents.export_schemas` into playmakers_schema's v1 directory.
 - `playmakers_agents/workflow.py`: WorkflowBuilder Stats → fan-out Tactics/Storyline Agents →
   synchronized Compliance join → Graphics → Audience. Each executor emits traces. Compliance
-  recomputes from stored event prefixes, verifies numeric metrics and prose against cited evidence,
+  checks insights against the deterministic Stats packet for that event prefix, verifies numeric metrics and prose against cited evidence,
   retries at most twice per insight and then templates. Audience stamps/fans out profiles only.
 - `model_clients.py`: deterministic mock with streaming/non-streaming support; actual installed
   OpenAIChatCompletionClient for Azure and FoundryChatClient for Foundry, using DefaultAzureCredential.

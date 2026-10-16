@@ -6,7 +6,7 @@ Playmakers is a multi-agent TV production crew for football. It reads a live mat
 
 ## What to look at
 
-- **Multi-agent Director.** A Microsoft Agent Framework workflow runs Stats, Tactics and Storyline agents in parallel, joined by a Compliance agent that recomputes every number from stored events before Graphics publishes a cue.
+- **Multi-agent Director.** A Microsoft Agent Framework workflow runs a Stats agent, then Tactics and Storyline agents in parallel. A Compliance agent checks every metric, cited event ID and number in the prose against the deterministic Stats results before Graphics publishes a cue.
 - **Kill and recover.** Press "Stop Tactics agent" mid-match. A template cue covers the gap, the agent restarts from a checkpoint, replays missed events and catches up. Every step shows in the agent trace.
 - **What-If Lab.** Goals, big chances and red cards trigger 200 seeded match simulations comparing before, after and the counterfactual ("if the shot had been saved").
 - **Personalization.** Analyst and fan feeds side by side from one shared match run, in English, Spanish or French, with favourite-player emphasis.
@@ -39,7 +39,7 @@ flowchart LR
 | Ingest | PitchSim replay over SSE or WebSocket, typed `MatchEvent` schema |
 | Interpret | Stats engine and MCP tools, What-If simulations |
 | Explain | Tactics and Storyline agents, verified by Compliance |
-| Render | Graphics validates `OverlayCue` timing and safe areas; React canvas overlays |
+| Render | Graphics validates each cue against the `OverlayCue` schema (duration, priority, layer, broadcast-safe area); React canvas overlays |
 | Personalize | Audience fan-out by persona, language and favourites |
 
 ## Quickstart

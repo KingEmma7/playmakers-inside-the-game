@@ -6,9 +6,10 @@ import math
 import os
 import re
 import tempfile
+from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor
 from time import perf_counter
-from typing import Any, Literal
+from typing import Any, Literal, NamedTuple
 
 from agent_framework import (
     Agent,
@@ -78,23 +79,47 @@ class CuePacket(BaseModel):
     cues: list[OverlayCue]
 
 
+class StatQuery(NamedTuple):
+    name: str
+    result_type: type[BaseModel]
+    applies: Callable[[MatchEvent], bool]
+    arguments: Callable[[MatchEvent], dict[str, Any]]
+
+
+def _at_clock(event: MatchEvent) -> dict[str, Any]:
+    return {"match_clock_ms": event.clock_ms}
+
+
+def _team_at_clock(event: MatchEvent) -> dict[str, Any]:
+    return {"team_id": event.team_id, "match_clock_ms": event.clock_ms}
+
+
+def _this_event(event: MatchEvent) -> dict[str, Any]:
+    return {"event_id": event.event_id}
+
+
+# Local engine methods and Stats MCP tools share these names.
+STAT_QUERIES: tuple[StatQuery, ...] = (
+    StatQuery("possession", PossessionResult, lambda _: True, _at_clock),
+    StatQuery("momentum", MomentumResult, lambda _: True, _at_clock),
+    StatQuery("pressure_index", PressureIndexResult, lambda e: bool(e.team_id), _team_at_clock),
+    StatQuery("control_vs_chaos", ControlChaosResult, lambda e: bool(e.team_id), _team_at_clock),
+    StatQuery(
+        "pass_difficulty", PassDifficultyResult, lambda e: e.event_type == "pass", _this_event
+    ),
+    StatQuery("xg", XGResult, lambda e: e.event_type == "shot", _this_event),
+)
+
+
+def queries_for(event: MatchEvent) -> list[StatQuery]:
+    return [query for query in STAT_QUERIES if query.applies(event)]
+
+
 def compute_stats(engine: StatsEngine, event: MatchEvent) -> StatsPacket:
     """Same pure engine functions are used offline, by MCP, and by the verifier."""
     results = [
-        engine.possession(match_clock_ms=event.clock_ms),
-        engine.momentum(match_clock_ms=event.clock_ms),
+        getattr(engine, query.name)(**query.arguments(event)) for query in queries_for(event)
     ]
-    if event.team_id:
-        results.extend(
-            [
-                engine.pressure_index(team_id=event.team_id, match_clock_ms=event.clock_ms),
-                engine.control_vs_chaos(team_id=event.team_id, match_clock_ms=event.clock_ms),
-            ]
-        )
-    if event.event_type == "pass":
-        results.append(engine.pass_difficulty(event_id=event.event_id))
-    if event.event_type == "shot":
-        results.append(engine.xg(event_id=event.event_id))
     metrics: dict[str, float] = {}
     metric_evidence: dict[str, list[str]] = {}
     evidence = {event.event_id}
@@ -152,33 +177,13 @@ class StatsExecutor(Executor):
         await tool.call_tool(
             "ingest_event", match_id=event.match_id, event=event.model_dump(mode="json")
         )
-        queries: list[tuple[str, dict[str, Any]]] = [
-            ("possession", {"match_clock_ms": event.clock_ms}),
-            ("momentum", {"match_clock_ms": event.clock_ms}),
-        ]
-        if event.team_id:
-            for name in ("pressure_index", "control_vs_chaos"):
-                queries.append((name, {"team_id": event.team_id, "match_clock_ms": event.clock_ms}))
-        if event.event_type in ("pass", "shot"):
-            queries.append(
-                (
-                    "pass_difficulty" if event.event_type == "pass" else "xg",
-                    {"event_id": event.event_id},
-                )
+        for query in queries_for(event):
+            result = await tool.call_tool(
+                query.name, match_id=event.match_id, **query.arguments(event)
             )
-        for name, arguments in queries:
-            result = await tool.call_tool(name, match_id=event.match_id, **arguments)
             if not isinstance(result, str):
                 raise ValueError("Expected structured MCP JSON")
-            result_types = {
-                "possession": PossessionResult,
-                "momentum": MomentumResult,
-                "pressure_index": PressureIndexResult,
-                "control_vs_chaos": ControlChaosResult,
-                "pass_difficulty": PassDifficultyResult,
-                "xg": XGResult,
-            }
-            validated = result_types[name].model_validate_json(result)
+            validated = query.result_type.model_validate_json(result)
             data = validated.model_dump()
             for key, value in data.items():
                 if isinstance(value, float) and key in packet.metrics:

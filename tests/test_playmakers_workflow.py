@@ -222,3 +222,22 @@ async def test_cues_deterministic_across_runs() -> None:
         return cues
 
     assert await run() == await run()
+
+
+@pytest.mark.asyncio
+async def test_mcp_stats_agree_with_local_engine_for_every_event_type() -> None:
+    from pitchsim.config import MatchConfig
+    from pitchsim.sim import simulate_match
+
+    events = simulate_match(MatchConfig(seed=7))[:60]
+    assert {"pass", "shot", "carry", "tackle"} <= {event.event_type for event in events}
+    async with serve(create_mcp().streamable_http_app()) as base_url:
+        async with Director(
+            client=DeterministicMockChatClient(),
+            stats_mcp_url=base_url + "/mcp",
+            whatif_rollouts=4,
+        ) as director:
+            for event in events:
+                await director.on_event(event)
+                stats_traces = [t for t in director.last_traces if t.agent == "stats"]
+                assert [t.status for t in stats_traces] == ["ok"], event.event_type

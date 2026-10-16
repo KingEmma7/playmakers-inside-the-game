@@ -95,7 +95,9 @@ python -m pitchsim validate --matches 50                  # calibration report (
 python -m pitchsim simulate --seed 7                      # one match as JSON lines
 python -m pitchsim season --matches 380 --seed 0          # season dataset → data/ (gitignored)
 uvicorn replay_api.main:app --reload --port 8000          # then: curl -N "localhost:8000/replay/sse?seed=7&speed=10"
+scripts/verify.sh                                         # live app proof: API + web + Playwright journey
 ```
+The verification recipe and feature map live in `.cursor/skills/verify-playmakers/`.
 When you add a package, add its `pip install -e` line to **both** this section and `.github/workflows/ci.yml`.
 
 ## 6. Conventions & coding standards
@@ -131,6 +133,7 @@ When you add a package, add its `pip install -e` line to **both** this section a
 - [ ] `ruff format --check .` and `ruff check .` pass.
 - [ ] `pytest` passes **offline with no env vars/credentials**; new behaviour has tests.
 - [ ] `python -m pitchsim validate --matches 50` still all OK (if simulator touched).
+- [ ] `scripts/verify.sh` passes (if API, agents, or web touched).
 - [ ] CI workflow updated for any new package; `pip check` clean.
 - [ ] README / docs updated (run instructions, architecture, what needs Azure).
 - [ ] No secrets, keys, connection strings, or `.env` committed (use `.env.example` with placeholders).

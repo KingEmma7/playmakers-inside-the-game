@@ -23,6 +23,17 @@ const cue = (overrides: Partial<OverlayCue> = {}): OverlayCue => ({
   },
   ...overrides,
 });
+const wireEvent = (fields: Record<string, unknown>) => ({
+  type: "event",
+  schema_version: "1.0.0",
+  event_id: `e${String(fields.sequence)}`,
+  match_id: "match_7",
+  clock_ms: 0,
+  period: 1,
+  event_type: "pass",
+  labels: [],
+  ...fields,
+});
 const trace = (overrides: Partial<Trace> = {}): Trace => ({
   agent: "tactics",
   action: "insight",
@@ -239,12 +250,7 @@ it("reconnects with backoff, deduplicates replay, and closes on unmount", () => 
   );
   act(() => {
     source.onopen?.();
-    source.send({
-      type: "event",
-      event_type: "pass",
-      sequence: 0,
-      clock_ms: 0,
-    });
+    source.send(wireEvent({ event_type: "pass", sequence: 0, clock_ms: 0 }));
     source.send({ type: "cue", ...cue() });
     source.send({ type: "trace", ...trace() });
     vi.advanceTimersByTime(75);
@@ -257,10 +263,10 @@ it("reconnects with backoff, deduplicates replay, and closes on unmount", () => 
   const reconnect = MockSource.instances[1];
   act(() => {
     reconnect.onopen?.();
-    reconnect.send({ type: "event", sequence: 0 });
+    reconnect.send(wireEvent({ sequence: 0 }));
     reconnect.send({ type: "cue", ...cue() });
     reconnect.send({ type: "trace", ...trace() });
-    reconnect.send({ type: "event", sequence: 1 });
+    reconnect.send(wireEvent({ sequence: 1 }));
     vi.advanceTimersByTime(75);
   });
   expect(screen.getByText("live events:2 cues:1 traces:1")).toBeInTheDocument();
@@ -276,7 +282,7 @@ it("batches bursts, bounds history, and cancels pending flushes on unmount", () 
   act(() => {
     source.onopen?.();
     for (let i = 0; i < 3000; i++) {
-      source.send({ type: "event", sequence: i, clock_ms: i * 10000 });
+      source.send(wireEvent({ sequence: i, clock_ms: i * 10000 }));
       source.send({ type: "cue", ...cue({ cue_id: `cue${i}`, clock_ms: i * 10000 }) });
       source.send({ type: "trace", ...trace() });
     }

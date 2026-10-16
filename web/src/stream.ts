@@ -2,6 +2,12 @@ import { useEffect, useState } from "react";
 import type { MatchEvent } from "./generated/MatchEvent";
 import type { OverlayCue } from "./generated/OverlayCue";
 import type { AgentTraceEvent } from "./generated/AgentTraceEvent";
+import { parseStreamMessage } from "./parse";
+declare global {
+  interface Window {
+    PLAYMAKERS_CONFIG?: { apiBase: string };
+  }
+}
 export type { MatchEvent, OverlayCue, AgentTraceEvent };
 export type Trace = AgentTraceEvent & { sequence: number; view: string };
 export type Params = {
@@ -76,9 +82,7 @@ export function usePlaymakersStream(params: Params): Stream {
     const batchTimer = setInterval(flush, 75);
     setState(initial(query));
     function connect() {
-      const runtime = (window as Window & {
-        PLAYMAKERS_CONFIG?: { apiBase: string };
-      }).PLAYMAKERS_CONFIG;
+      const runtime = window.PLAYMAKERS_CONFIG;
       const apiBase = runtime?.apiBase || import.meta.env.VITE_API_BASE || "http://localhost:8000";
       source = new EventSource(
         `${apiBase}/playmakers/sse?${query}`,
@@ -89,29 +93,25 @@ export function usePlaymakersStream(params: Params): Stream {
       };
       source.onmessage = (message) => {
         if (disposed) return;
-        try {
-          const data = JSON.parse(message.data);
-          if (data.type === "event") {
-            const event = data as MatchEvent;
-            duplicate = seen.has(event.sequence);
-            lastSequence = event.sequence;
-            if (duplicate) return;
-            seen.add(event.sequence);
-            completed = event.event_type === "period_end" && event.period === 2;
-            pendingEvents.push(event);
-          } else if (
-            data.type === "cue" &&
-            !duplicate &&
-            !cueIds.has(data.cue_id)
-          ) {
-            cueIds.add(data.cue_id);
-            pendingCues.push(data);
-          } else if (data.type === "trace" && !duplicate) {
-            pendingTraces.push({
-              ...data, sequence: lastSequence, view: params.persona,
-            });
-          }
-        } catch {
+        const parsed = parseStreamMessage(message.data);
+        if (parsed.kind === "event") {
+          const event = parsed.event;
+          duplicate = seen.has(event.sequence);
+          lastSequence = event.sequence;
+          if (duplicate) return;
+          seen.add(event.sequence);
+          completed = event.event_type === "period_end" && event.period === 2;
+          pendingEvents.push(event);
+        } else if (parsed.kind === "cue") {
+          if (duplicate || cueIds.has(parsed.cue.cue_id)) return;
+          cueIds.add(parsed.cue.cue_id);
+          pendingCues.push(parsed.cue);
+        } else if (parsed.kind === "trace") {
+          if (duplicate) return;
+          pendingTraces.push({
+            ...parsed.trace, sequence: lastSequence, view: params.persona,
+          });
+        } else if (parsed.kind === "invalid") {
           setState((s) => ({ ...s, status: "invalid message" }));
         }
       };

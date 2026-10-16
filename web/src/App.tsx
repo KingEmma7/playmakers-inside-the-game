@@ -5,6 +5,8 @@ import { ViewPanel, Crest } from "./Overlay";
 import { playerName } from "./players";
 import TracePanel from "./TracePanel";
 import { usePlaymakersStream, clockLabel } from "./stream";
+const FAN_LANGUAGES = ["es", "fr"] as const;
+type FanLanguage = (typeof FAN_LANGUAGES)[number];
 function About() {
   return (
     <main className="about">
@@ -72,7 +74,7 @@ export default function App() {
 function Playmakers() {
   const [seed, setSeed] = useState(7);
   const [speed, setSpeed] = useState(10);
-  const [language, setLanguage] = useState<"es" | "fr">("es");
+  const [language, setLanguage] = useState<FanLanguage>("es");
   const [favourite, setFavourite] = useState("H09");
   const [safe, setSafe] = useState(false);
   const [running, setRunning] = useState(true);
@@ -224,7 +226,8 @@ function Playmakers() {
                 aria-label="FAN LANGUAGE"
                 value={language}
                 onChange={(e) => {
-                  setLanguage(e.target.value as "es" | "fr");
+                  const choice = FAN_LANGUAGES.find((l) => l === e.target.value);
+                  if (choice) setLanguage(choice);
                 }}
               >
                 <option value="es">Español</option>

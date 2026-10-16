@@ -70,6 +70,7 @@ python -m playmakers_agents demo --seed 7 --speed 50 --persona analyst --kill ta
 pytest
 cd web && npm test
 scripts/verify.sh   # boots API + web, runs the Playwright journey, saves screenshots
+                    # (first run: cd web && npx playwright install chromium)
 ```
 
 ## Live models

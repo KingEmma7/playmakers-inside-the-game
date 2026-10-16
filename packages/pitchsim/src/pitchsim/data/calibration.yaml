@@ -1,0 +1,19 @@
+schema_version: "1.0.0"
+
+targets:
+  passes_per_match:
+    min: 900
+    max: 1100
+  shots_per_match:
+    min: 18
+    max: 32
+  goals_per_match_mean:
+    min: 2.2
+    max: 3.2
+  pass_accuracy_mean:
+    min: 0.77
+    max: 0.87
+  fouls_per_match:
+    min: 15
+    max: 35
+

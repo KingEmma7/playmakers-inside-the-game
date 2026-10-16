@@ -1,5 +1,5 @@
-pytest==8.4.2
-pytest-asyncio==1.2.0
+pytest==9.0.3
+pytest-asyncio==1.4.0
 ruff==0.17.0
 jsonschema==4.25.1
 httpx==0.28.1

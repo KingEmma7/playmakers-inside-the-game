@@ -30,7 +30,7 @@ Thumbs.db
 .vscode/
 
 uploads/
-data/
+/data/
 
 
 .env

@@ -94,6 +94,42 @@ async def test_correction_can_pass_before_retry_limit() -> None:
 
 
 @pytest.mark.asyncio
+async def test_cues_explain_their_agent_stats_and_compliance_verdict() -> None:
+    director = Director(
+        client=DeterministicMockChatClient(),
+        profiles=[ViewerProfile(), ViewerProfile(persona="casual")],
+    )
+    cues = await director.on_event(passing())
+    assert {cue.provenance.agent for cue in cues} == {"tactics", "storyline"}
+    for cue in cues:
+        assert cue.provenance.compliance == "verified"
+        assert cue.provenance.source == "agent"
+        assert cue.provenance.attempts == 1
+        assert cue.provenance.personalized_for == cue.persona
+        assert cue.provenance.metrics["difficulty"] == 0.6
+        cited = set(cue.evidence_event_ids)
+        assert all(set(ids) <= cited for ids in cue.provenance.metric_evidence.values())
+    casual = next(cue for cue in cues if cue.persona == "casual")
+    assert casual.payload["metrics"] == {}
+    assert casual.provenance.insight_headline != casual.payload["headline"]
+
+
+@pytest.mark.asyncio
+async def test_provenance_records_rejections_retries_and_template_fallback() -> None:
+    corrected = await Director(client=InventingClient(failures=2)).on_event(passing())
+    assert all(cue.provenance.compliance == "verified" for cue in corrected)
+    assert all(cue.provenance.attempts == 2 for cue in corrected)
+    assert all("Ungrounded metric: difficulty" in cue.provenance.reasons for cue in corrected)
+    failed = await Director(client=InventingClient()).on_event(passing())
+    for cue in failed:
+        assert cue.provenance.compliance == "template_fallback"
+        assert cue.provenance.source == "template"
+        assert cue.provenance.attempts == 3
+        assert cue.provenance.metrics == {}
+        assert cue.provenance.reasons
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "change",
     ["no_evidence", "future_evidence", "number", "metric", "missing_metric_evidence", "clock"],

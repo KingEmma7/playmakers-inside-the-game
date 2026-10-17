@@ -166,6 +166,9 @@ async def test_whatif_determinism_triggers_and_probability_evidence() -> None:
         assert metrics["delta"] == metrics["win_prob_after"] - metrics["win_prob_before"]
         assert metrics["counterfactual"]["win"] == metrics["before"]["win"]
         assert metrics["win_prob_counterfactual"] == metrics["counterfactual"]["win"]
+        assert cue.provenance.agent == "what_if"
+        assert cue.provenance.compliance == "not_reviewed"
+        assert cue.provenance.metrics["rollouts"] == 20
         assert "saved" in cue.payload["detail"]
         assert not agent.triggers(passing())
         big = shot().model_copy(update={"xg": 0.5, "outcome": "saved"})

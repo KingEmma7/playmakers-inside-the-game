@@ -14,7 +14,7 @@ from pitchsim.whatif import MatchSnapshot, rollout_from_snapshot, snapshot_from_
 from playmakers_schema.models import MatchEvent
 from pydantic import BaseModel, Field
 
-from playmakers_agents.contracts import OverlayCue
+from playmakers_agents.contracts import CueProvenance, OverlayCue
 
 
 class Probabilities(BaseModel):
@@ -192,6 +192,17 @@ class WhatIfAgent:
                 "metrics": metrics.model_dump(),
                 "perspective": "home",
             },
+            provenance=CueProvenance(
+                agent="what_if",
+                source="simulation",
+                compliance="not_reviewed",
+                metrics={
+                    "win_prob_before": metrics.win_prob_before,
+                    "win_prob_after": metrics.win_prob_after,
+                    "win_prob_counterfactual": metrics.win_prob_counterfactual,
+                    "rollouts": metrics.rollouts,
+                },
+            ),
             evidence_event_ids=[
                 *(row.event_id for row in events[max(0, len(events) - 8) : -1]),
                 event.event_id,

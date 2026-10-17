@@ -1,4 +1,102 @@
 {
+  "$defs": {
+    "CueProvenance": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "enum": [
+            "tactics",
+            "storyline",
+            "what_if",
+            "graphics"
+          ],
+          "title": "Agent",
+          "type": "string"
+        },
+        "attempts": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Attempts",
+          "type": "integer"
+        },
+        "compliance": {
+          "enum": [
+            "verified",
+            "template_fallback",
+            "not_reviewed"
+          ],
+          "title": "Compliance",
+          "type": "string"
+        },
+        "insight_headline": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Insight Headline"
+        },
+        "metric_evidence": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Metric Evidence",
+          "type": "object"
+        },
+        "metrics": {
+          "additionalProperties": true,
+          "title": "Metrics",
+          "type": "object"
+        },
+        "personalized_for": {
+          "anyOf": [
+            {
+              "enum": [
+                "analyst",
+                "casual"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Personalized For"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "source": {
+          "enum": [
+            "agent",
+            "template",
+            "simulation"
+          ],
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent",
+        "source",
+        "compliance"
+      ],
+      "title": "CueProvenance",
+      "type": "object"
+    }
+  },
   "$id": "https://playmakers.local/schemas/overlay_cue/1.0.0.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
@@ -81,6 +179,17 @@
       "minimum": 0,
       "title": "Priority",
       "type": "integer"
+    },
+    "provenance": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CueProvenance"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "safe_area": {
       "const": "broadcast_safe",

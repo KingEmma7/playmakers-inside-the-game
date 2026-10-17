@@ -40,6 +40,7 @@ from playmakers_agents.checkpointing import FrameworkRecoveryStorage, RecoverySt
 from playmakers_agents.contracts import (
     AgentTraceEvent,
     ComplianceDecision,
+    CueProvenance,
     Insight,
     OverlayCue,
     ViewerProfile,
@@ -72,6 +73,7 @@ class ApprovedPacket(BaseModel):
     stats: StatsPacket
     insights: list[Insight]
     fallback: bool = False
+    reviews: list[CueProvenance] = Field(default_factory=list)
 
 
 class CuePacket(BaseModel):
@@ -327,9 +329,12 @@ class ComplianceExecutor(Executor):
     ) -> None:
         started = perf_counter()
         approved: list[Insight] = []
+        reviews: list[CueProvenance] = []
         fallback = False
         for packet in packets:
             decision = self.validate(packet)
+            attempts = 1
+            reasons = list(decision.reasons)
             if not decision.ok:
                 await trace(ctx, self.id, "rejected", started, "rejected")
             for attempt in range(2):
@@ -346,9 +351,27 @@ class ComplianceExecutor(Executor):
                     "ok" if packet.insight else "rejected",
                 )
                 decision = self.validate(packet)
+                attempts += 1
+                reasons += decision.reasons
             if decision.ok and packet.insight:
                 approved.append(packet.insight)
                 self.store.add_insight(packet.stats.event.match_id, packet.insight)
+                reviews.append(
+                    CueProvenance(
+                        agent=packet.kind,
+                        source="agent",
+                        compliance="verified",
+                        attempts=attempts,
+                        reasons=reasons,
+                        metrics=packet.insight.metrics,
+                        metric_evidence={
+                            key: packet.stats.metric_evidence[key]
+                            for key in packet.insight.metrics
+                            if key in packet.stats.metric_evidence
+                        },
+                        insight_headline=packet.insight.headline,
+                    )
+                )
             else:
                 fallback = True
                 approved.append(
@@ -361,6 +384,15 @@ class ComplianceExecutor(Executor):
                         evidence_event_ids=[packet.stats.event.event_id],
                     )
                 )
+                reviews.append(
+                    CueProvenance(
+                        agent=packet.kind,
+                        source="template",
+                        compliance="template_fallback",
+                        attempts=attempts,
+                        reasons=reasons or [packet.error or "No approved insight"],
+                    )
+                )
         await trace(
             ctx,
             self.id,
@@ -369,7 +401,9 @@ class ComplianceExecutor(Executor):
             "ok" if not fallback else "fallback",
         )
         await ctx.send_message(
-            ApprovedPacket(stats=packets[0].stats, insights=approved, fallback=fallback)
+            ApprovedPacket(
+                stats=packets[0].stats, insights=approved, fallback=fallback, reviews=reviews
+            )
         )
 
 
@@ -397,6 +431,12 @@ class GraphicsExecutor(Executor):
                         "metrics": {},
                     },
                     evidence_event_ids=[packet.stats.event.event_id],
+                    provenance=CueProvenance(
+                        agent="graphics",
+                        source="template",
+                        compliance="template_fallback",
+                        reasons=["Graphics render failed or timed out"],
+                    ),
                 )
             ]
             await trace(ctx, self.id, "fallback_on", started, "fallback")
@@ -418,9 +458,10 @@ class GraphicsExecutor(Executor):
                         "metrics": insight.metrics,
                     },
                     "evidence_event_ids": insight.evidence_event_ids,
+                    "provenance": packet.reviews[index] if index < len(packet.reviews) else None,
                 }
             )
-            for insight in packet.insights
+            for index, insight in enumerate(packet.insights)
         ]
 
 

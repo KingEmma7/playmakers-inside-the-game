@@ -1010,3 +1010,97 @@ header {
   font-weight: 600;
   color: var(--home);
 }
+
+/* Provenance: an inline explainer that replaces the captions while open. */
+.why {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--home);
+  cursor: pointer;
+}
+.why:hover,
+.why:focus-visible {
+  text-decoration: underline;
+}
+.view-body {
+  position: relative;
+}
+.view-body.explaining > :not(.provenance) {
+  visibility: hidden;
+}
+.provenance {
+  position: absolute;
+  inset: 0;
+  z-index: 200;
+  overflow-y: auto;
+  border-top: 1px solid var(--rule);
+  padding-top: 8px;
+  background: var(--surface);
+  font-size: var(--text-xs);
+}
+.provenance-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.provenance-head h3 {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+.provenance-head button {
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--secondary);
+  cursor: pointer;
+}
+.provenance p {
+  margin: 4px 0 0;
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+.provenance .verdict.template_fallback {
+  color: var(--red);
+}
+.provenance-row {
+  display: grid;
+  grid-template-columns: 112px 1fr;
+  gap: 8px;
+  margin-top: 8px;
+  color: var(--muted);
+}
+.event-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.event-chips button {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: 1px 6px;
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+}
+.event-chips button[aria-pressed="true"] {
+  border-color: var(--ink);
+}
+.provenance-stats {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink);
+}
+.provenance-stats b {
+  font-weight: 600;
+}
+.provenance-stats li {
+  display: inline;
+}
+.provenance-stats li + li::before {
+  content: " · ";
+  color: var(--muted);
+}

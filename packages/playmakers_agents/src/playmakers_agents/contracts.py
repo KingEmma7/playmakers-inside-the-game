@@ -26,6 +26,18 @@ class Insight(PlaymakersContractsBaseModel):
     metrics: dict[str, Any] = Field(default_factory=dict)
 
 
+class CueProvenance(PlaymakersContractsBaseModel):
+    agent: Literal["tactics", "storyline", "what_if", "graphics"]
+    source: Literal["agent", "template", "simulation"]
+    compliance: Literal["verified", "template_fallback", "not_reviewed"]
+    attempts: int = Field(default=1, ge=1)
+    reasons: list[str] = Field(default_factory=list)
+    metrics: dict[str, Any] = Field(default_factory=dict)
+    metric_evidence: dict[str, list[str]] = Field(default_factory=dict)
+    insight_headline: str | None = None
+    personalized_for: Literal["analyst", "casual"] | None = None
+
+
 class OverlayCue(PlaymakersContractsBaseModel):
     schema_version: Literal["1.0.0"] = "1.0.0"
     layer: Literal["lower_third", "score_bug", "full_screen"] = "lower_third"
@@ -39,6 +51,7 @@ class OverlayCue(PlaymakersContractsBaseModel):
     evidence_event_ids: list[str] = Field(min_length=1)
     persona: Literal["analyst", "casual"] | None = None
     language: Literal["en", "es", "fr"] | None = None
+    provenance: CueProvenance | None = None
 
 
 class ComplianceDecision(PlaymakersContractsBaseModel):

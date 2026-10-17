@@ -11,6 +11,13 @@ export type Language = ("en" | "es" | "fr") | null;
 export type Layer = "lower_third" | "score_bug" | "full_screen";
 export type Persona = ("analyst" | "casual") | null;
 export type Priority = number;
+export type Agent = "tactics" | "storyline" | "what_if" | "graphics";
+export type Attempts = number;
+export type Compliance = "verified" | "template_fallback" | "not_reviewed";
+export type InsightHeadline = string | null;
+export type PersonalizedFor = ("analyst" | "casual") | null;
+export type Reasons = string[];
+export type Source = "agent" | "template" | "simulation";
 export type SafeArea = "broadcast_safe";
 export type SchemaVersion = "1.0.0";
 export type Template = string;
@@ -25,10 +32,28 @@ export interface OverlayCue {
   payload: Payload;
   persona?: Persona;
   priority?: Priority;
+  provenance?: CueProvenance | null;
   safe_area?: SafeArea;
   schema_version?: SchemaVersion;
   template: Template;
 }
 export interface Payload {
+  [k: string]: unknown;
+}
+export interface CueProvenance {
+  agent: Agent;
+  attempts?: Attempts;
+  compliance: Compliance;
+  insight_headline?: InsightHeadline;
+  metric_evidence?: MetricEvidence;
+  metrics?: Metrics;
+  personalized_for?: PersonalizedFor;
+  reasons?: Reasons;
+  source: Source;
+}
+export interface MetricEvidence {
+  [k: string]: string[];
+}
+export interface Metrics {
   [k: string]: unknown;
 }

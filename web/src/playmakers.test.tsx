@@ -198,6 +198,85 @@ describe("broadcast cues", () => {
     rerender(<ViewPanel {...props} clock={120001} />);
     expect(screen.getByTestId("pitch")).toHaveAttribute("data-trail", "[]");
   });
+  it("explains a cue: agent, verdict, clickable evidence and stats used", () => {
+    const events: MatchEvent[] = [
+      wireEvent({ sequence: 1, start_position: { x: 40, y: 30 } }),
+      wireEvent({
+        sequence: 2,
+        clock_ms: 65000,
+        start_position: { x: 60, y: 20 },
+      }),
+    ].flatMap((raw) => {
+      const message = parseStreamMessage(JSON.stringify(raw));
+      return message.kind === "event" ? [message.event] : [];
+    });
+    render(
+      <ViewPanel
+        title="Analyst"
+        persona="analyst"
+        events={events}
+        safe={false}
+        running
+        status="live"
+        clock={70000}
+        cues={[
+          cue({
+            clock_ms: 65000,
+            evidence_event_ids: ["e1", "e2"],
+            provenance: {
+              agent: "tactics",
+              source: "agent",
+              compliance: "verified",
+              attempts: 2,
+              reasons: ["Ungrounded metric: difficulty"],
+              metrics: { difficulty: 0.6 },
+              metric_evidence: { difficulty: ["e2"] },
+            },
+          }),
+        ]}
+      />,
+    );
+    expect(screen.getByTestId("pitch")).toHaveAttribute("data-trail", "[]");
+    fireEvent.click(screen.getByRole("button", { name: "Why?" }));
+    const panel = screen.getByRole("dialog", { name: "Tactics agent: Why?" });
+    expect(panel).toHaveTextContent(
+      "Compliance rejected 1 draft (Ungrounded metric: difficulty), then verified the correction.",
+    );
+    expect(panel).toHaveTextContent("difficulty 0.60 · #2");
+    expect(screen.getByTestId("pitch")).toHaveAttribute(
+      "data-trail",
+      JSON.stringify([
+        { x: 40, y: 30 },
+        { x: 60, y: 20 },
+      ]),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "#2 pass · 01:05" }));
+    expect(screen.getByTestId("pitch")).toHaveAttribute(
+      "data-trail",
+      JSON.stringify([{ x: 60, y: 20 }]),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByText("Pressure rising")).toBeInTheDocument();
+  });
+  it("does not label a template fallback as verified", () => {
+    render(
+      <CueCard
+        cue={cue({
+          template: "template_fallback",
+          provenance: {
+            agent: "storyline",
+            source: "template",
+            compliance: "template_fallback",
+            reasons: ["Ungrounded number in prose"],
+          },
+        })}
+        onExplain={() => {}}
+      />,
+    );
+    expect(screen.getByTestId("cue-card")).not.toHaveTextContent("· Verified");
+    expect(screen.getByRole("button", { name: "Why?" })).toBeInTheDocument();
+  });
   it("retains the latest What-If after its on-air duration without showing future results", () => {
     const props = {
       title: "For you",

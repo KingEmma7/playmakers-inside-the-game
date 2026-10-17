@@ -138,6 +138,8 @@ async def personalize(
         update={
             "cue_id": f"{cue.cue_id}:viewer{index}",
             "persona": profile.persona,
+            "provenance": cue.provenance
+            and cue.provenance.model_copy(update={"personalized_for": profile.persona}),
             "language": profile.language,
             "payload": payload,
         }

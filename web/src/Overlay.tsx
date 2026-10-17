@@ -1,8 +1,11 @@
+import { useState } from "react";
 import { involvementLabel, playerName } from "./players";
 import Pitch from "./Pitch";
 import { eventPoint, type Point } from "./geometry";
-const WHATIF_HIGHLIGHT_MS = 120_000;
+import { ProvenancePanel } from "./Provenance";
 import { activeCues, type MatchEvent, type OverlayCue } from "./stream";
+const WHATIF_HIGHLIGHT_MS = 120_000;
+const WHY = { en: "Why?", es: "¿Por qué?", fr: "Pourquoi ?" };
 export function Crest({ away = false }: { away?: boolean }) {
   return <span className={`crest ${away ? "away" : ""}`} aria-hidden="true" />;
 }
@@ -56,7 +59,19 @@ export function OddsSwing({
     </div>
   );
 }
-export function CueCard({ cue }: { cue: OverlayCue }) {
+export function CueCard({
+  cue,
+  onExplain,
+}: {
+  cue: OverlayCue;
+  onExplain?: () => void;
+}) {
+  const why =
+    onExplain && cue.provenance ? (
+      <button type="button" className="why" onClick={onExplain}>
+        {WHY[cue.language ?? "en"]}
+      </button>
+    ) : null;
   const payload = cue.payload;
   const metrics = record(payload.metrics);
   const whatif = cue.template === "what_if";
@@ -98,7 +113,11 @@ export function CueCard({ cue }: { cue: OverlayCue }) {
             .slice(-3)
             .map((id) => String(Number(id.split(/[:_]/).at(-1))))
             .join(", ")}{" "}
-          {cue.language === "es" ? "" : "· Verified"}
+          {cue.language === "es" ||
+          cue.provenance?.compliance === "template_fallback"
+            ? ""
+            : "· Verified"}{" "}
+          {why}
         </small>
       )}
       {Boolean(payload.player_cam) && (
@@ -115,7 +134,7 @@ export function CueCard({ cue }: { cue: OverlayCue }) {
                 ? "Probabilidad de victoria"
                 : "Win probability"}{" "}
               · {String(metrics.rollouts ?? "—")}{" "}
-              {cue.language === "es" ? "simulaciones" : "simulations"}
+              {cue.language === "es" ? "simulaciones" : "simulations"} {why}
             </small>
             {!swing && (
               <div className="probabilities">
@@ -186,6 +205,12 @@ export function ViewPanel({
   status: string;
   favourite?: string;
 }) {
+  const [explained, setExplained] = useState<OverlayCue>();
+  const [focus, setFocus] = useState<string>();
+  const explain = (cue: OverlayCue) => () => {
+    setExplained(cue);
+    setFocus(undefined);
+  };
   const active = activeCues(cues, clock);
   // One winner per slot; incoming cues replace lower-priority captions instead of covering the pitch.
   const primary =
@@ -196,14 +221,18 @@ export function ViewPanel({
   const whatif = cues
     .filter((c) => c.template === "what_if" && c.clock_ms <= clock)
     .sort((a, b) => b.clock_ms - a.clock_ms)[0];
-  const trail =
-    whatif && clock - whatif.clock_ms <= WHATIF_HIGHLIGHT_MS
+  const highlighted = explained
+    ? focus
+      ? [focus]
+      : explained.evidence_event_ids
+    : whatif && clock - whatif.clock_ms <= WHATIF_HIGHLIGHT_MS
       ? whatif.evidence_event_ids
-          .map((id) => events.find((e) => e.event_id === id))
-          .filter((e) => e && e.event_type !== "tracking_frame")
-          .map(eventPoint)
-          .filter((point): point is Point => point !== undefined)
       : [];
+  const trail = highlighted
+    .map((id) => events.find((e) => e.event_id === id))
+    .filter((e) => e && e.event_type !== "tracking_frame")
+    .map(eventPoint)
+    .filter((point): point is Point => point !== undefined);
   const storyline = active.find(
     (c) =>
       c.template === "storyline" &&
@@ -331,85 +360,112 @@ export function ViewPanel({
           </div>
         )}
       </div>
-      {persona === "analyst" && (
-        <div className="stat-row" aria-label="Match metrics">
-          <div>
-            <b>{homeXg.toFixed(2)}</b>
-            <span>xG · {awayXg.toFixed(2)}</span>
+      <div className={`view-body ${explained ? "explaining" : ""}`}>
+        {explained && (
+          <ProvenancePanel
+            cue={explained}
+            events={events}
+            focus={focus}
+            onFocus={setFocus}
+            onClose={() => setExplained(undefined)}
+          />
+        )}
+        {persona === "analyst" && (
+          <div className="stat-row" aria-label="Match metrics">
+            <div>
+              <b>{homeXg.toFixed(2)}</b>
+              <span>xG · {awayXg.toFixed(2)}</span>
+            </div>
+            <div>
+              <b>{homePossession.toFixed(0)}%</b>
+              <span>Possession</span>
+            </div>
+            <div>
+              <b>
+                {defensiveActions
+                  ? ((passes.length - homePasses) / defensiveActions).toFixed(1)
+                  : "—"}
+              </b>
+              <span title="Opposition passes per home defensive action">
+                PPDA · home
+              </span>
+            </div>
+            <div>
+              <b>{fieldTilt.toFixed(0)}%</b>
+              <span>Field tilt · final third</span>
+            </div>
           </div>
-          <div>
-            <b>{homePossession.toFixed(0)}%</b>
-            <span>Possession</span>
-          </div>
-          <div>
-            <b>
-              {defensiveActions
-                ? ((passes.length - homePasses) / defensiveActions).toFixed(1)
-                : "—"}
-            </b>
-            <span title="Opposition passes per home defensive action">
-              PPDA · home
-            </span>
-          </div>
-          <div>
-            <b>{fieldTilt.toFixed(0)}%</b>
-            <span>Field tilt · final third</span>
-          </div>
+        )}
+        <div className="lower-thirds">
+          {primary && (
+            <CueCard
+              key={primary.template}
+              cue={primary}
+              onExplain={explain(primary)}
+            />
+          )}
+          {persona === "casual" && whatif && (
+            <CueCard
+              key={whatif.cue_id}
+              cue={whatif}
+              onExplain={explain(whatif)}
+            />
+          )}
+          {!whatif && storyline && (
+            <details className="storyline-detail">
+              <summary>
+                {String(storyline.payload.headline || "Storyline")}
+              </summary>
+              <CueCard
+                key={storyline.template}
+                cue={storyline}
+                onExplain={explain(storyline)}
+              />
+            </details>
+          )}
         </div>
-      )}
-      <div className="lower-thirds">
-        {primary && <CueCard key={primary.template} cue={primary} />}
-        {persona === "casual" && whatif && (
-          <CueCard key={whatif.cue_id} cue={whatif} />
-        )}
-        {!whatif && storyline && (
-          <details className="storyline-detail">
-            <summary>
-              {String(storyline.payload.headline || "Storyline")}
-            </summary>
-            <CueCard key={storyline.template} cue={storyline} />
-          </details>
-        )}
+        {
+          <div className="momentum">
+            <div>
+              <span>{persona === "casual" ? "Dominio" : "Dominance"}</span>
+              <b>{momentum > 0 ? "NBR" : momentum < 0 ? "SPA" : "EVEN"}</b>
+            </div>
+            <svg
+              className="dominance-bars"
+              viewBox="0 0 320 32"
+              preserveAspectRatio="none"
+              role="img"
+              aria-label="Recent possession by team"
+            >
+              <line x1="0" y1="16" x2="320" y2="16" stroke="var(--rule)" />
+              {events
+                .filter(
+                  (e) => e.sequence <= (event?.sequence ?? -1) && e.team_id,
+                )
+                .slice(-32)
+                .map((e, i) => {
+                  const home = e.team_id?.endsWith("_HOME");
+                  const height =
+                    e.event_type === "shot" || e.event_type === "goal"
+                      ? 14
+                      : e.event_type === "pass"
+                        ? 8
+                        : 4;
+                  return (
+                    <rect
+                      key={e.event_id}
+                      x={i * 10}
+                      y={home ? 16 - height : 16}
+                      width="8"
+                      height={height}
+                      fill={home ? "var(--home)" : "var(--away)"}
+                    />
+                  );
+                })}
+            </svg>
+          </div>
+        }
       </div>
-      {
-        <div className="momentum">
-          <div>
-            <span>{persona === "casual" ? "Dominio" : "Dominance"}</span>
-            <b>{momentum > 0 ? "NBR" : momentum < 0 ? "SPA" : "EVEN"}</b>
-          </div>
-          <svg
-            className="dominance-bars"
-            viewBox="0 0 320 32"
-            preserveAspectRatio="none"
-            role="img"
-            aria-label="Recent possession by team"
-          >
-            <line x1="0" y1="16" x2="320" y2="16" stroke="var(--rule)" />
-            {events
-              .filter((e) => e.sequence <= (event?.sequence ?? -1) && e.team_id)
-              .slice(-32)
-              .map((e, i) => {
-                const home = e.team_id?.endsWith("_HOME");
-                const height =
-                  e.event_type === "shot" || e.event_type === "goal"
-                    ? 14
-                    : e.event_type === "pass"
-                      ? 8
-                      : 4;
-                return (
-                  <rect
-                    key={e.event_id}
-                    x={i * 10}
-                    y={home ? 16 - height : 16}
-                    width="8"
-                    height={height}
-                    fill={home ? "var(--home)" : "var(--away)"}
-                  />
-                );
-              })}
-          </svg>
-        </div>
-      }
     </section>
   );
 }

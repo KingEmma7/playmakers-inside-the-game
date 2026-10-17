@@ -29,6 +29,7 @@ class WhatIfMetrics(BaseModel):
     counterfactual: Probabilities
     win_prob_before: float
     win_prob_after: float
+    win_prob_counterfactual: float
     delta: float
     rollouts: int
 
@@ -152,6 +153,7 @@ class WhatIfAgent:
             counterfactual=pc,
             win_prob_before=p0.win,
             win_prob_after=p1.win,
+            win_prob_counterfactual=pc.win,
             delta=p1.win - p0.win,
             rollouts=self.rollouts,
         )

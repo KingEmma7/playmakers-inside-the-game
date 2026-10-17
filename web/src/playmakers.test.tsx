@@ -8,7 +8,13 @@ import {
 } from "./stream";
 import { CueCard, ViewPanel } from "./Overlay";
 import TracePanel from "./TracePanel";
-vi.mock("./Pitch", () => ({ default: () => <div data-testid="pitch" /> }));
+import { parseStreamMessage } from "./parse";
+import type { MatchEvent } from "./stream";
+vi.mock("./Pitch", () => ({
+  default: ({ trail = [] }: { trail?: { x: number; y: number }[] }) => (
+    <div data-testid="pitch" data-trail={JSON.stringify(trail)} />
+  ),
+}));
 const cue = (overrides: Partial<OverlayCue> = {}): OverlayCue => ({
   cue_id: "cue1",
   clock_ms: 1000,
@@ -123,6 +129,74 @@ describe("broadcast cues", () => {
     expect(screen.getByText("+30.0 pp")).toBeInTheDocument();
     expect(screen.getByText("30%")).toBeInTheDocument();
     expect(screen.getByText("60%")).toBeInTheDocument();
+  });
+  it("compares the actual win chance with the alternative outcome", () => {
+    render(
+      <CueCard
+        cue={cue({
+          template: "what_if",
+          language: "es",
+          payload: {
+            headline: "What if?",
+            detail: "If saved",
+            metrics: {
+              win_prob_before: 0.06,
+              win_prob_after: 0.16,
+              win_prob_counterfactual: 0.06,
+              delta: 0.1,
+            },
+          },
+        })}
+      />,
+    );
+    expect(
+      screen.getByRole("img", { name: "Lo que pasó 16%, Alternativa 6%" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("+10 pts")).toBeInTheDocument();
+  });
+  it("highlights the What-If evidence on the pitch for two match minutes", () => {
+    const events: MatchEvent[] = [
+      wireEvent({ sequence: 1, start_position: { x: 40, y: 30 } }),
+      wireEvent({
+        sequence: 2,
+        event_type: "tracking_frame",
+        ball_position: { x: 1, y: 1 },
+      }),
+      wireEvent({
+        sequence: 3,
+        event_type: "shot",
+        position: { x: 95, y: 34 },
+      }),
+    ].flatMap((raw) => {
+      const message = parseStreamMessage(JSON.stringify(raw));
+      return message.kind === "event" ? [message.event] : [];
+    });
+    const props = {
+      title: "For you",
+      persona: "casual",
+      events,
+      safe: false,
+      running: true,
+      status: "live",
+      cues: [
+        cue({
+          template: "what_if",
+          clock_ms: 0,
+          evidence_event_ids: ["e1", "e2", "e3"],
+          payload: { headline: "What if?", metrics: {} },
+        }),
+      ],
+    };
+    const { rerender } = render(<ViewPanel {...props} clock={120000} />);
+    expect(screen.getByTestId("pitch")).toHaveAttribute(
+      "data-trail",
+      JSON.stringify([
+        { x: 40, y: 30 },
+        { x: 95, y: 34 },
+      ]),
+    );
+    rerender(<ViewPanel {...props} clock={120001} />);
+    expect(screen.getByTestId("pitch")).toHaveAttribute("data-trail", "[]");
   });
   it("retains the latest What-If after its on-air duration without showing future results", () => {
     const props = {
@@ -283,13 +357,18 @@ it("batches bursts, bounds history, and cancels pending flushes on unmount", () 
     source.onopen?.();
     for (let i = 0; i < 3000; i++) {
       source.send(wireEvent({ sequence: i, clock_ms: i * 10000 }));
-      source.send({ type: "cue", ...cue({ cue_id: `cue${i}`, clock_ms: i * 10000 }) });
+      source.send({
+        type: "cue",
+        ...cue({ cue_id: `cue${i}`, clock_ms: i * 10000 }),
+      });
       source.send({ type: "trace", ...trace() });
     }
   });
   expect(screen.getByText("live events:0 cues:0 traces:0")).toBeInTheDocument();
   act(() => vi.advanceTimersByTime(75));
-  expect(screen.getByText("live events:2500 cues:400 traces:2400")).toBeInTheDocument();
+  expect(
+    screen.getByText("live events:2500 cues:400 traces:2400"),
+  ).toBeInTheDocument();
   unmount();
   expect(vi.getTimerCount()).toBe(0);
 });

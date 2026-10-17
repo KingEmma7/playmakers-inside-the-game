@@ -1,5 +1,7 @@
 import { involvementLabel, playerName } from "./players";
 import Pitch from "./Pitch";
+import { eventPoint, type Point } from "./geometry";
+const WHATIF_HIGHLIGHT_MS = 120_000;
 import { activeCues, type MatchEvent, type OverlayCue } from "./stream";
 export function Crest({ away = false }: { away?: boolean }) {
   return <span className={`crest ${away ? "away" : ""}`} aria-hidden="true" />;
@@ -8,10 +10,63 @@ const record = (value: unknown): Record<string, unknown> =>
   typeof value === "object" && value !== null
     ? (value as Record<string, unknown>)
     : {};
+const SWING_LABELS: Record<string, [string, string]> = {
+  en: ["What happened", "Alternative"],
+  es: ["Lo que pasó", "Alternativa"],
+  fr: ["Ce qui s'est passé", "Alternative"],
+};
+export function OddsSwing({
+  actual,
+  alternative,
+  language,
+}: {
+  actual: number;
+  alternative: number;
+  language: string;
+}) {
+  const [actualLabel, alternativeLabel] =
+    SWING_LABELS[language] ?? SWING_LABELS.en;
+  const percent = (value: number) => Math.round(value * 100);
+  const swing = percent(actual) - percent(alternative);
+  const rows: [string, number, string][] = [
+    [actualLabel, actual, "actual"],
+    [alternativeLabel, alternative, "alternative"],
+  ];
+  return (
+    <div
+      className="odds-swing"
+      role="img"
+      aria-label={`${actualLabel} ${percent(actual)}%, ${alternativeLabel} ${percent(alternative)}%`}
+    >
+      {rows.map(([label, value, kind]) => (
+        <div className={`odds-row ${kind}`} key={kind}>
+          <span>{label}</span>
+          <div className="odds-bar">
+            <i
+              style={{ width: `${Math.max(1, Math.min(100, value * 100))}%` }}
+            />
+          </div>
+          <b>{percent(value)}%</b>
+        </div>
+      ))}
+      <strong className="odds-delta">
+        {swing > 0 ? "+" : swing < 0 ? "−" : "±"}
+        {Math.abs(swing)} pts
+      </strong>
+    </div>
+  );
+}
 export function CueCard({ cue }: { cue: OverlayCue }) {
   const payload = cue.payload;
   const metrics = record(payload.metrics);
   const whatif = cue.template === "what_if";
+  const swing =
+    typeof metrics.win_prob_counterfactual === "number"
+      ? {
+          actual: Number(metrics.win_prob_after),
+          alternative: metrics.win_prob_counterfactual,
+        }
+      : undefined;
   return (
     <article
       className={`cue ${whatif ? "whatif" : ""} ${cue.template === "template_fallback" ? "fallback" : ""}`}
@@ -62,34 +117,44 @@ export function CueCard({ cue }: { cue: OverlayCue }) {
               · {String(metrics.rollouts ?? "—")}{" "}
               {cue.language === "es" ? "simulaciones" : "simulations"}
             </small>
-            <div className="probabilities">
-              <span>
-                {(Number(metrics.win_prob_before) * 100).toFixed(0)}%{" "}
-                <small>Before</small>
-              </span>
-              <b>→</b>
-              <span>
-                {(Number(metrics.win_prob_after) * 100).toFixed(0)}%{" "}
-                <small>After</small>
-              </span>
-              <strong>
-                {Number(metrics.delta) >= 0 ? "+" : ""}
-                {(Number(metrics.delta) * 100).toFixed(1)} pp
-              </strong>
+            {!swing && (
+              <div className="probabilities">
+                <span>
+                  {(Number(metrics.win_prob_before) * 100).toFixed(0)}%{" "}
+                  <small>Before</small>
+                </span>
+                <b>→</b>
+                <span>
+                  {(Number(metrics.win_prob_after) * 100).toFixed(0)}%{" "}
+                  <small>After</small>
+                </span>
+                <strong>
+                  {Number(metrics.delta) >= 0 ? "+" : ""}
+                  {(Number(metrics.delta) * 100).toFixed(1)} pp
+                </strong>
+              </div>
+            )}
+          </div>
+          {!swing ? (
+            <div className="delta-track">
+              <span
+                className="probability-marker"
+                style={{ left: `${Number(metrics.win_prob_before) * 100}%` }}
+              />
+              <i
+                style={{
+                  width: `${Math.min(100, Number(metrics.win_prob_after) * 100)}%`,
+                  background: "var(--home)",
+                }}
+              />
             </div>
-          </div>
-          <div className="delta-track">
-            <span
-              className="probability-marker"
-              style={{ left: `${Number(metrics.win_prob_before) * 100}%` }}
+          ) : (
+            <OddsSwing
+              actual={swing.actual}
+              alternative={swing.alternative}
+              language={cue.language ?? "en"}
             />
-            <i
-              style={{
-                width: `${Math.min(100, Number(metrics.win_prob_after) * 100)}%`,
-                background: "var(--home)",
-              }}
-            />
-          </div>
+          )}
           <small>
             Seeded synthetic simulation · illustrative probabilities
           </small>
@@ -131,6 +196,14 @@ export function ViewPanel({
   const whatif = cues
     .filter((c) => c.template === "what_if" && c.clock_ms <= clock)
     .sort((a, b) => b.clock_ms - a.clock_ms)[0];
+  const trail =
+    whatif && clock - whatif.clock_ms <= WHATIF_HIGHLIGHT_MS
+      ? whatif.evidence_event_ids
+          .map((id) => events.find((e) => e.event_id === id))
+          .filter((e) => e && e.event_type !== "tracking_frame")
+          .map(eventPoint)
+          .filter((point): point is Point => point !== undefined)
+      : [];
   const storyline = active.find(
     (c) =>
       c.template === "storyline" &&
@@ -211,6 +284,7 @@ export function ViewPanel({
           running={running}
           favourite={persona === "casual" ? favourite : undefined}
           involvement={involvementLabel(visibleEvents, favourite)}
+          trail={trail}
         />
         <div className="vignette" />
         {safe && (

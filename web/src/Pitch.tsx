@@ -1,31 +1,25 @@
 import { useEffect, useRef } from "react";
 import type { MatchEvent } from "./stream";
-type Point = { x: number; y: number };
-function ballFor(event?: MatchEvent): Point | undefined {
-  if (!event) return undefined;
-  if ("end_position" in event) return event.end_position;
-  if ("ball_position" in event) return event.ball_position;
-  if ("position" in event) return event.position;
-  if ("start_position" in event) return event.start_position;
-  return undefined;
-}
+import { eventPoint, type Point } from "./geometry";
 export default function Pitch({
   event,
   running,
   favourite,
   involvement = "",
+  trail = [],
 }: {
   event?: MatchEvent;
   running: boolean;
   favourite?: string;
   involvement?: string;
+  trail?: Point[];
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const current = useRef<Point>({ x: 52.5, y: 34 });
-  const target = useRef({ event, running, favourite, involvement });
+  const target = useRef({ event, running, favourite, involvement, trail });
   useEffect(() => {
-    target.current = { event, running, favourite, involvement };
-  }, [event, running, favourite, involvement]);
+    target.current = { event, running, favourite, involvement, trail };
+  }, [event, running, favourite, involvement, trail]);
   useEffect(() => {
     const ctx = canvas.current?.getContext("2d");
     if (!ctx) return;
@@ -35,8 +29,8 @@ export default function Pitch({
       if (!ctx) return;
       const dt = Math.min(50, time - previous || 16);
       previous = time;
-      const { event, running, favourite, involvement } = target.current;
-      const goal = ballFor(event) ?? current.current;
+      const { event, running, favourite, involvement, trail } = target.current;
+      const goal = eventPoint(event) ?? current.current;
       if (running) {
         const blend = 1 - Math.exp(-dt / 180);
         current.current.x += (goal.x - current.current.x) * blend;
@@ -60,6 +54,36 @@ export default function Pitch({
       for (const x of [30, 855]) {
         ctx.strokeRect(x, 138.5, 165, 403);
         ctx.strokeRect(x === 30 ? 30 : 965, 248.5, 55, 183);
+      }
+      if (trail.length) {
+        const inside = (p: Point, r: number) => ({
+          x: Math.max(r + 2, Math.min(1048 - r, p.x * 10)),
+          y: Math.max(r + 2, Math.min(678 - r, p.y * 10)),
+        });
+        ctx.strokeStyle = "#1D1D1F";
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.55;
+        ctx.beginPath();
+        trail.forEach((p, i) => {
+          const { x, y } = inside(p, 9);
+          if (i) ctx.lineTo(x, y);
+          else ctx.moveTo(x, y);
+        });
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        for (const [i, p] of trail.entries()) {
+          const last = i === trail.length - 1;
+          const r = last ? 22 : 9;
+          const { x, y } = inside(p, r);
+          ctx.fillStyle = "#FFFFFF";
+          ctx.strokeStyle = last ? "#C4282D" : "#1D1D1F";
+          ctx.lineWidth = last ? 4 : 2;
+          ctx.beginPath();
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+          if (!last) ctx.fill();
+          ctx.stroke();
+        }
+        ctx.lineWidth = 2;
       }
       const ball = current.current;
       const tracking =

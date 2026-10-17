@@ -127,8 +127,10 @@ async def test_casual_whatif_preserves_rollout_count() -> None:
             "metrics": {
                 "win_prob_before": 0.3,
                 "win_prob_after": 0.6,
+                "win_prob_counterfactual": 0.3,
                 "delta": 0.3,
                 "rollouts": 20,
+                "before": {"win": 0.3, "draw": 0.4, "loss": 0.3},
             },
         },
     )
@@ -139,7 +141,13 @@ async def test_casual_whatif_preserves_rollout_count() -> None:
         DeterministicMockChatClient(),
         0,
     )
-    assert result.payload["metrics"]["rollouts"] == 20
+    assert result.payload["metrics"] == {
+        "win_prob_before": 0.3,
+        "win_prob_after": 0.6,
+        "win_prob_counterfactual": 0.3,
+        "delta": 0.3,
+        "rollouts": 20,
+    }
 
 
 @pytest.mark.asyncio
@@ -157,6 +165,7 @@ async def test_whatif_determinism_triggers_and_probability_evidence() -> None:
             assert sum(metrics[name].values()) == pytest.approx(1)
         assert metrics["delta"] == metrics["win_prob_after"] - metrics["win_prob_before"]
         assert metrics["counterfactual"]["win"] == metrics["before"]["win"]
+        assert metrics["win_prob_counterfactual"] == metrics["counterfactual"]["win"]
         assert "saved" in cue.payload["detail"]
         assert not agent.triggers(passing())
         big = shot().model_copy(update={"xg": 0.5, "outcome": "saved"})

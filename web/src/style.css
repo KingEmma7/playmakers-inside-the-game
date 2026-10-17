@@ -959,3 +959,54 @@ header {
     padding: 24px;
   }
 }
+
+/* What-If odds swing: actual outcome against the alternative, home perspective. */
+.odds-swing {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 16px;
+  margin: 4px 0 0;
+}
+.odds-row {
+  display: grid;
+  grid-template-columns: 124px 1fr 44px;
+  align-items: center;
+  gap: 12px;
+  grid-column: 1;
+  line-height: 20px;
+  font-size: var(--text-xs);
+  color: var(--secondary);
+}
+.odds-row b {
+  text-align: right;
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--ink);
+}
+.odds-row.alternative b {
+  color: var(--muted);
+}
+.odds-bar {
+  height: 10px;
+  background: var(--track);
+  border-radius: var(--radius-sm);
+}
+.odds-bar i {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-sm);
+  background: var(--home);
+}
+.odds-row.alternative .odds-bar i {
+  background: #b9b9c0;
+}
+.odds-delta {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  min-width: 64px;
+  text-align: right;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--home);
+}

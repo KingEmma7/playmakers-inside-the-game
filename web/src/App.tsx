@@ -277,6 +277,15 @@ function Playmakers() {
                 )}
               </select>
             </div>
+            {(analyst.offline || fan.offline) && (
+              <span
+                className="control offline-demo"
+                role="status"
+                title="The live model is at its limit right now, so this match runs on the offline crew. Every insight is still verified."
+              >
+                Offline demo
+              </span>
+            )}
           </section>
         )}
       </header>

@@ -16,6 +16,7 @@ from pitchsim.config import MatchConfig
 from pitchsim.replay import replay_events
 from pitchsim.sim import simulate_match
 from playmakers_agents.contracts import ViewerProfile
+from playmakers_agents.model_clients import DeterministicMockChatClient, live_model_configured
 from playmakers_agents.resilience import KillSpec
 from playmakers_agents.telemetry import configure_tracing
 from playmakers_agents.what_if import create_rollout_pool
@@ -24,7 +25,10 @@ from pydantic import TypeAdapter
 from starlette.routing import Mount
 from stats_mcp.server import create_mcp
 
+from replay_api.limits import LiveMatchBudget
 from replay_api.speech import router as speech_router
+
+live_budget = LiveMatchBudget.from_env()
 
 
 def _whatif_pool(app: FastAPI) -> ProcessPoolExecutor | None:
@@ -132,6 +136,40 @@ async def playmakers_messages(
     replay_from_ms: int = 0,
     whatif_pool: ProcessPoolExecutor | None = None,
     profiles: list[ViewerProfile] | None = None,
+    budget: LiveMatchBudget | None = None,
+) -> AsyncGenerator[dict[str, Any], None]:
+    budget = budget or live_budget
+    live = live_model_configured()
+    offline_reason = budget.acquire() if live else None
+    holds_slot = live and offline_reason is None
+    try:
+        async for message in _director_messages(
+            seed,
+            speed,
+            profile,
+            kill,
+            whatif_rollouts,
+            replay_from_ms,
+            whatif_pool,
+            profiles,
+            offline_reason,
+        ):
+            yield message
+    finally:
+        if holds_slot:
+            budget.release()
+
+
+async def _director_messages(
+    seed: int,
+    speed: float,
+    profile: ViewerProfile,
+    kill: str | None,
+    whatif_rollouts: int,
+    replay_from_ms: int,
+    whatif_pool: ProcessPoolExecutor | None,
+    profiles: list[ViewerProfile] | None,
+    offline_reason: str | None,
 ) -> AsyncGenerator[dict[str, Any], None]:
     events = await asyncio.to_thread(simulate_match, MatchConfig(seed=seed))
     async with Director(
@@ -140,7 +178,10 @@ async def playmakers_messages(
         kill=kill,
         whatif_rollouts=whatif_rollouts,
         whatif_pool=whatif_pool,
+        client=DeterministicMockChatClient() if offline_reason else None,
     ) as director:
+        if offline_reason:
+            yield {"type": "status", "model": "offline", "reason": offline_reason}
 
         async def paced_events() -> AsyncGenerator[Any, None]:
             # Rebuild the exact deterministic prefix quickly on a failure-injection replay.

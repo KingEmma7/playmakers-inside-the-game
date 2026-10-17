@@ -1168,6 +1168,9 @@ header {
   padding: 2px 0;
   color: var(--home);
 }
+.offline-demo {
+  color: var(--secondary);
+}
 .voice-toggle {
   border: 0;
   background: none;

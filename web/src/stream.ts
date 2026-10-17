@@ -27,6 +27,7 @@ export type Stream = {
   traces: Trace[];
   status: string;
   generation: string;
+  offline?: string;
 };
 const initial = (generation: string): Stream => ({
   events: [],
@@ -112,6 +113,9 @@ export function usePlaymakersStream(params: Params): Stream {
           pendingTraces.push({
             ...parsed.trace, sequence: lastSequence, view: params.persona,
           });
+        } else if (parsed.kind === "status") {
+          const reason = parsed.model === "offline" ? parsed.reason : undefined;
+          setState((s) => ({ ...s, offline: reason }));
         } else if (parsed.kind === "invalid") {
           setState((s) => ({ ...s, status: "invalid message" }));
         }

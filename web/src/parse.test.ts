@@ -36,6 +36,12 @@ describe("parseStreamMessage", () => {
         JSON.stringify({ type: "trace", agent: "stats", action: "computed", latency_ms: 1, status: "ok" }),
       ),
     ).toMatchObject({ kind: "trace", trace: { agent: "stats" } });
+    expect(
+      parseStreamMessage(JSON.stringify({ type: "status", model: "offline", reason: "daily_cap" })),
+    ).toEqual({ kind: "status", model: "offline", reason: "daily_cap" });
+    expect(parseStreamMessage(JSON.stringify({ type: "status", model: "offline" }))).toEqual({
+      kind: "invalid",
+    });
   });
 
   it("rejects malformed frames instead of passing them through", () => {

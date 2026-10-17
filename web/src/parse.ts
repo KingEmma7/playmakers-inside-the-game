@@ -6,6 +6,7 @@ export type StreamMessage =
   | { kind: "event"; event: MatchEvent }
   | { kind: "cue"; cue: OverlayCue }
   | { kind: "trace"; trace: AgentTraceEvent }
+  | { kind: "status"; model: string; reason: string }
   | { kind: "ignored" }
   | { kind: "invalid" };
 
@@ -48,6 +49,10 @@ export function parseStreamMessage(raw: string): StreamMessage {
     case "trace":
       return isTrace(data)
         ? { kind: "trace", trace: data as unknown as AgentTraceEvent }
+        : { kind: "invalid" };
+    case "status":
+      return strings(data, "model", "reason")
+        ? { kind: "status", model: String(data.model), reason: String(data.reason) }
         : { kind: "invalid" };
     default:
       return { kind: "ignored" };

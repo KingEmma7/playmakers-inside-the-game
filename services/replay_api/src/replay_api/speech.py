@@ -7,8 +7,10 @@ from typing import Literal
 from xml.sax.saxutils import escape
 
 import httpx
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import Response
+
+from replay_api.limits import RateLimiter, client_key
 
 VOICES = {
     "en": ("en-GB", "en-GB-SoniaNeural"),
@@ -19,6 +21,7 @@ SCOPE = "https://cognitiveservices.azure.com/.default"
 MAX_CHARS = 280
 
 router = APIRouter(prefix="/speech")
+limiter = RateLimiter.for_speech()
 
 
 @dataclass(frozen=True)
@@ -90,12 +93,15 @@ def speech_config() -> dict[str, object]:
 
 @router.get("/synthesize")
 async def speech_synthesize(
+    request: Request,
     text: str = Query(min_length=1, max_length=MAX_CHARS),
     language: Literal["en", "es", "fr"] = "en",
     x_playmakers_speech: str | None = Header(default=None),
 ) -> Response:
     if x_playmakers_speech != "1":
         raise HTTPException(status_code=400, detail="Missing X-Playmakers-Speech header")
+    if not limiter.allow(client_key(request)):
+        raise HTTPException(status_code=429, detail="Too many speech requests; try again shortly")
     settings = AzureSpeechSettings.from_env()
     if settings is None:
         raise HTTPException(status_code=503, detail="Azure AI Speech is not configured")

@@ -555,3 +555,25 @@ it("batches bursts, bounds history, and cancels pending flushes on unmount", () 
   unmount();
   expect(vi.getTimerCount()).toBe(0);
 });
+
+function OfflineProbe() {
+  const s = usePlaymakersStream({
+    seed: 7,
+    speed: 10,
+    persona: "casual",
+    language: "es",
+  });
+  return <div>offline:{s.offline ?? "no"}</div>;
+}
+it("records when the API fell back to the offline crew", () => {
+  vi.useFakeTimers();
+  vi.stubGlobal("EventSource", MockSource);
+  render(<OfflineProbe />);
+  const source = MockSource.instances[0];
+  expect(screen.getByText("offline:no")).toBeInTheDocument();
+  act(() => {
+    source.onopen?.();
+    source.send({ type: "status", model: "offline", reason: "busy" });
+  });
+  expect(screen.getByText("offline:busy")).toBeInTheDocument();
+});

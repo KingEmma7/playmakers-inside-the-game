@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import re
-from typing import Any
+from typing import Any, Literal
 
 from agent_framework import Agent, BaseChatClient
-from playmakers_schema.models import MatchEvent
+from playmakers_schema.models import GoalEvent, MatchEvent
 from pydantic import BaseModel
 
 from playmakers_agents.contracts import OverlayCue, ViewerProfile
 from playmakers_agents.model_clients import DeterministicMockChatClient
+from playmakers_agents.players import player_name
+from playmakers_agents.recap import team_name
 
 
 class Caption(BaseModel):
@@ -40,12 +43,43 @@ PHRASES = {
 }
 
 
+GOAL_PHRASES = {
+    "en": (
+        ("{player} scores for {team}!", "What a finish. The crowd is on its feet."),
+        ("Goal! {player} puts it away for {team}.", "Cool as you like in front of goal."),
+        ("{team} celebrate: {player} finds the net!", "That one changes the mood of the match."),
+    ),
+    "es": (
+        ("¡Gol de {player} para {team}!", "Qué definición. La grada se pone en pie."),
+        ("¡{player} marca para {team}!", "Frialdad total delante de la portería."),
+        ("¡{team} lo celebra: gol de {player}!", "Este gol cambia el ánimo del partido."),
+    ),
+    "fr": (
+        ("But de {player} pour {team} !", "Quelle finition. Le public est debout."),
+        ("{player} marque pour {team} !", "Un sang-froid parfait devant le but."),
+        ("{team} exulte : but de {player} !", "Ce but change l'ambiance du match."),
+    ),
+}
+TEAM_ONLY = {"en": "a {team} player", "es": "un jugador de {team}", "fr": "un joueur de {team}"}
+
+
+def goal_phrase(event: GoalEvent, language: Literal["en", "es", "fr"]) -> tuple[str, str]:
+    variants = GOAL_PHRASES[language]
+    digest = hashlib.sha256(event.event_id.encode()).digest()
+    headline, detail = variants[digest[0] % len(variants)]
+    team = team_name(event.scoring_team_id)
+    player = player_name(event.scorer_player_id) or TEAM_ONLY[language].format(team=team)
+    return headline.format(player=player, team=team), detail
+
+
 async def personalize(
     cue: OverlayCue, profile: ViewerProfile, event: MatchEvent, client: BaseChatClient, index: int
 ) -> OverlayCue:
     payload: dict[str, Any] = dict(cue.payload)
     headline, detail, team_label, player_label = PHRASES[profile.language]
     if profile.persona == "casual":
+        if isinstance(event, GoalEvent) and cue.template != "what_if":
+            headline, detail = goal_phrase(event, profile.language)
         payload.update(headline=headline, detail=detail, metrics={})
         if cue.template == "what_if":
             payload["detail"] = {

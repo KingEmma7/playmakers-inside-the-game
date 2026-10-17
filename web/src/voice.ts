@@ -77,13 +77,6 @@ export async function chooseSpeaker(apiBase: string): Promise<Speaker> {
 
 export const MIN_GAP_MS = 8000;
 const STALE_MS = 5000;
-const GOAL: Record<Language, string> = {
-  en: "Goal for",
-  es: "¡Gol de",
-  fr: "But pour",
-};
-const TEAM = (teamId: string) =>
-  teamId.endsWith("_HOME") ? "Northbridge Rovers" : "Southport Athletic";
 
 const eventIdOf = (cue: OverlayCue) =>
   /^(.*?):(?:tactics|storyline|what_if|graphics|recap)(?::|$)/.exec(
@@ -104,19 +97,11 @@ export function priorityMoment(
 }
 
 export function spokenLine(cue: OverlayCue, events: MatchEvent[]): string {
-  const language = cue.language ?? "en";
   const moment = priorityMoment(cue, events);
   if (moment === "recap")
     return recapText(cue).split("\n").slice(0, 2).join(" ");
   if (moment === "what_if") return whatIfQuestion(cue);
-  const caption =
-    `${String(cue.payload.headline ?? "")} ${String(cue.payload.detail ?? "")}`.trim();
-  if (moment === "goal") {
-    const goal = events.find((e) => e.event_id === eventIdOf(cue));
-    const team = goal?.event_type === "goal" ? TEAM(goal.scoring_team_id) : "";
-    return `${GOAL[language]} ${team}${language === "fr" ? " !" : "!"} ${caption}`;
-  }
-  return caption;
+  return `${String(cue.payload.headline ?? "")} ${String(cue.payload.detail ?? "")}`.trim();
 }
 
 const RANK = { recap: 0, goal: 1, red_card: 1, what_if: 2 };

@@ -96,8 +96,18 @@ describe("voice commentary", () => {
     ).toBe(true);
   });
   it("builds the fan line in the selected language", () => {
-    expect(spokenLine(cue({}), events)).toBe(
-      "¡Gol de Northbridge Rovers! ¡Llega el próximo ataque! Sigue la emoción del partido.",
+    expect(
+      spokenLine(
+        cue({
+          payload: {
+            headline: "¡Gol de Okafor para Northbridge Rovers!",
+            detail: "Qué definición. La grada se pone en pie.",
+          },
+        }),
+        events,
+      ),
+    ).toBe(
+      "¡Gol de Okafor para Northbridge Rovers! Qué definición. La grada se pone en pie.",
     );
     expect(
       spokenLine(

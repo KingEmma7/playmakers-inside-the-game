@@ -1,25 +1,27 @@
-# AGENTS.md — instructions for coding agents (Codex, Copilot, etc.)
+# AGENTS.md — instructions for coding agents (Codex, Cursor and similar)
 
-Read this file fully before changing anything. Then read `docs/HANDOFF.md` (current state) and
-`docs/PLAN.md` (what to build next, phase by phase).
+Read this file fully before changing anything. The README says what runs today; `docs/DETAILS.md`
+has the technical detail. `docs/HANDOFF.md` and `docs/PLAN.md` are historical build notes and plans.
 
 ## 1. Project goal
 
-**Playmakers** is an AI production crew for football. Specialised AI agents
-(Director, Stats, Tactics, Storyline, Graphics, Compliance, What-If, Audience/Personalizer) watch a
-live **synthetic** match event stream and produce:
+**Playmakers** is an AI production crew for football. A Microsoft Agent Framework workflow runs two
+model-backed writers (Tactics and Storyline; Storyline also writes the full-time recap) and
+deterministic executors (Director, Stats, Compliance, Graphics, Audience; What-If runs simulations and
+only its one-line explanation uses a model). They watch a live **synthetic** match event stream and produce:
 
 1. timed, broadcast-safe **overlay cues** (Overlay Timeline JSON) rendered next to the match, and
-2. a **personalised second-screen feed** per viewer (Analyst vs Casual fan, favourite club/player, language).
+2. a **personalised second-screen feed** per viewer (Analyst vs Casual fan, favourite player, language).
 
 Signature demo moments (these must work on camera):
 - **Kill & recover:** kill the Tactics agent mid-match → graphics fall back to deterministic templates
   within one event → the agent restarts from its checkpoint and catches up.
 - **What-If:** at a key moment (goal, big chance) the what_if agent re-simulates N alternatives with
   PitchSim (parallel) and shows the win-probability delta with a short explanation.
-- **Same moment, two audiences:** analyst view and casual/favourite-player/Spanish view side by side.
+- **Same moment, two audiences:** analyst view and casual/favourite-player view side by side (the fan
+  panel defaults to English; Spanish and French are one click away).
 
-Built for the **Microsoft x Premier League "Inside the Game" hackathon** (solo entrant).
+Built for the **Inside the Game: Developer Hackathon from Microsoft and the Premier League** (solo entrant).
 Target category: **Best Multi-Agent System** (also eligible for Grand Prize).
 
 ## 2. Hackathon rules that constrain the code (non-negotiable)
@@ -42,26 +44,30 @@ Target category: **Best Multi-Agent System** (also eligible for Grand Prize).
 3. **Real-World Impact:** mirrors real broadcast graphics workflow (cue sheet, safe areas, approvals);
    production-readiness (observability, fallbacks, cost/latency budget).
 4. **UX & Presentation:** broadcast-quality overlay UI, visible agent trace, clear 2-minute video.
-5. **Category Adherence:** visibly uses hero tech — **Microsoft Foundry, Microsoft Agent Framework,
-   MCP (custom stats MCP + Azure MCP Server), GitHub Copilot, Azure Container Apps, Azure Cosmos DB**.
+5. **Category Adherence:** Microsoft tech actually in the code — **Microsoft Agent Framework** (workflow,
+   executors, checkpoints; runs in every mode), a **custom Stats MCP server**, **Microsoft Foundry / Azure
+   OpenAI** model clients, **Application Insights** tracing and an **azd + Bicep template for Azure
+   Container Apps**. The last three are written and tested offline but have not run against Azure yet.
+   Not used: Azure MCP Server, GitHub Copilot, Cosmos DB, Event Hubs. Never claim them.
 
-## 3. Architecture (target)
+## 3. Architecture
 
 ```
-PitchSim (synthetic events) ──► replay_api (FastAPI: SSE/WS) ──► ingest ──► Match State store (in-memory → Cosmos DB)
+PitchSim (synthetic events) ──► replay_api (FastAPI: SSE/WS) ──► ingest ──► Match State store (in-memory)
                                                                           │
                      Director (Agent Framework workflow, latency budget, checkpointing)
                        ├─ Stats agent ──(MCP)──► stats_mcp (deterministic tools: possession, pressure_index,
                        │                                       pass_difficulty, xg, momentum)
                        ├─ Tactics agent (LLM)       ├─ Storyline agent (LLM, long-horizon arcs)
                        ├─ What-If agent (PitchSim rollouts, parallel)
-                       ├─ Compliance agent (code + small LLM: every number checked by event_id)
+                       ├─ Compliance (code only: every number checked by event_id)
                        ├─ Graphics agent (schema-validated OverlayCue JSON; template fallback)
                        └─ Audience/Personalizer (fan-out per ViewerProfile)
                                    │
                          /playmakers/sse, /playmakers/ws  ──► web/ (React + Vite overlay UI, agent trace panel)
-Azure: Container Apps (api, stats-mcp, web), Cosmos DB (state + checkpoints), Foundry (models, evals,
-tracing → App Insights), azd + Bicep in infra/, GitHub Actions CI with a Foundry eval gate.
+Checkpoints: Agent Framework FileCheckpointStorage (local files). No database.
+Azure (template only, not deployed): Container Apps (api with /stats-mcp mounted, web), Foundry model
+deployment, App Insights tracing, azd + Bicep in infra/. CI: GitHub Actions, offline (no eval gate).
 ```
 
 Model access is **pluggable**: Azure OpenAI / Foundry when env vars are set; a **deterministic offline mock
@@ -72,15 +78,16 @@ client** otherwise. Everything (tests, CI, local demo) MUST run with **no creden
 ```
 packages/playmakers_schema/   Versioned MatchEvent contract (Pydantic + JSON Schema v1). Shared by all.
 packages/pitchsim/         Seeded simulator, calibration validator, replay generator, season dataset.
-packages/playmakers_agents/   Agents (Phase 1 = interfaces only; Phase 2 builds the real thing).
-services/replay_api/       FastAPI: /healthz, /replay/sse, /replay/ws (Phase 2 adds /playmakers/*).
-infra/                     azd (azure.yaml) + Bicep stubs: Container Apps, Cosmos DB, Event Hubs. Not deployed yet.
-tests/                     pytest: determinism, schema validity, calibration.
-salvage/phase2/            REFERENCE ONLY: uncommitted Phase 2 code recovered from a crashed run.
-                           Not installed, not linted, not tested. Port pieces into the real tree; don't import from here.
-docs/                      HANDOFF.md (state), PLAN.md (phased plan + prompts).
+packages/playmakers_stats/ Deterministic stats engine (possession, pressure, pass difficulty, xG, momentum).
+packages/playmakers_agents/   Agent Framework workflow, model clients, Compliance, What-If, recap, checkpoints.
+services/stats_mcp/        FastMCP server exposing the stats engine as MCP tools.
+services/replay_api/       FastAPI: /healthz, /replay/*, /playmakers/sse|ws, /model/config, /speech/*, /stats-mcp.
+web/                       React + Vite + TypeScript broadcast UI; nginx image.
+infra/                     azd (azure.yaml) + Bicep: Foundry, App Insights, Container Apps. Validated locally, not deployed.
+tests/                     pytest suite (offline, mock model).
+docs/                      DETAILS.md (technical), HANDOFF.md and PLAN.md (historical), CODE-REVIEW.md.
 ```
-Planned additions: `packages/playmakers_stats/`, `services/stats_mcp/`, `web/` (React/Vite), `evals/`.
+Not built: `evals/` and a Foundry eval gate.
 
 ## 5. Commands
 
@@ -143,5 +150,5 @@ When you add a package, add its `pip install -e` line to **both** this section a
 ## 9. Secrets & config
 
 Read config from env vars only, e.g. `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`,
-`AZURE_AI_PROJECT_ENDPOINT`, `COSMOS_ENDPOINT`. Prefer `DefaultAzureCredential` (managed identity in
+`AZURE_AI_PROJECT_ENDPOINT`, `AZURE_AI_MODEL_DEPLOYMENT`. Prefer `DefaultAzureCredential` (managed identity in
 Container Apps) over keys. Never print secrets in logs. Keep `.env` gitignored.

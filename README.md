@@ -2,38 +2,69 @@
 
 # Playmakers
 
-Playmakers is a multi-agent TV production crew for football. It reads a live match event stream, works out what matters, explains it with cited evidence, renders timed broadcast overlays, and tailors the output for each viewer. Built for the Microsoft x Premier League "Inside the Game" hackathon.
+Playmakers is a multi-agent TV production crew for football. It reads a live match event stream, works out what matters, explains it with cited evidence, renders timed broadcast overlays, and tailors the output for each viewer. Built for the Inside the Game: Developer Hackathon from Microsoft and the Premier League, in the Best Multi-Agent System category.
+
+The crew is two AI agents and a set of rule-based steps around them, all in one Microsoft Agent Framework workflow. Tactics and Storyline write with a language model (Storyline also writes the full-time recap). Director, Stats, Compliance, Graphics and Audience are deterministic executors. What-If runs seeded simulations and uses a model only for its one-line explanation.
+
+Built with AI coding assistants under my direction.
 
 ## What to look at
 
-- **Multi-agent Director.** A Microsoft Agent Framework workflow runs a Stats agent, then Tactics and Storyline agents in parallel. A Compliance agent checks every metric, cited event ID and number in the prose against the deterministic Stats results before Graphics publishes a cue. Models are called only on key moments (shots, goals, fouls, cards, substitutions, kickoff and period changes, plus every 30th event as a tactical beat). Routine events get a rule-written caption built from the verified stats, which Compliance checks the same way, and the Why? panel says no model was called. A mock match makes 214 model calls (seed 7), down from 3,148 when every event called both agents.
-- **Kill and recover.** Press "Stop Tactics agent" mid-match. A template cue covers the gap, the agent restarts from a checkpoint, replays missed events and catches up. Every step shows in the agent trace.
+- **Multi-agent Director.** A Microsoft Agent Framework workflow runs Stats, then the Tactics and Storyline agents in parallel. Compliance, which is plain code, checks every metric, cited event ID and number in the prose against the deterministic Stats results before Graphics publishes a cue. Models are called only on key moments (shots, goals, fouls, cards, substitutions, kickoff and period changes, plus every 30th event as a tactical beat). Routine events get a rule-written caption built from the verified stats ("Routine pass under light pressure"), which Compliance checks the same way, and the Why? panel says no model was called. A mock match makes 214 model calls (seed 7), down from 3,148 when every event called both agents.
+- **Kill and recover.** Press "Stop Tactics agent" mid-match. This injects a failure into the Tactics executor. A template cue covers the gap, the agent restarts from a checkpoint, replays missed events and catches up. Every step shows in the agent trace.
 - **What-If Lab.** Goals, big chances and red cards trigger 200 seeded match simulations comparing before, after and the counterfactual ("if the shot had been saved"). The card sets the actual win chance against the alternative as two bars with the swing in points, and the events behind it are ringed on the pitch for two match minutes.
 - **"Why did it say that?"** Every caption has a Why? link. It opens the agent that wrote it, the Compliance verdict (verified, corrected after a rejection, or replaced by a template, with the reason), the supporting events (click one to ring it on the pitch) and the stats it used. What-If cards say plainly that they come from simulations, not Compliance review.
 - **Full-time recap.** At the final whistle the Storyline agent writes a recap from the verified score. Compliance checks it and every language variant like any other cue. The recap lists 4–6 key moments (goals and red cards first, then the biggest chances) with timestamps and event IDs, and has Copy and Share-as-text buttons. Works offline with the mock models.
 - **Voice commentary.** A Voice toggle reads the fan line aloud in English, Spanish or French using the browser's speech engine. To avoid talking over the match it speaks only priority moments (goals, red cards, What-If, the recap), at least 8 seconds apart. An optional Azure AI Speech voice is available behind environment variables (see [Live models](#live-models)). It has not yet been tested against a live Azure resource.
-- **Personalization.** Analyst and fan feeds side by side from one shared match run, in English, Spanish or French, with favourite-player emphasis.
+- **Personalization.** Analyst and fan feeds side by side from one shared match run. The fan feed defaults to English, with Spanish and French one click away, and can follow a favourite player.
 - **Stats MCP server.** Deterministic metrics (xG, pressure, pass difficulty, momentum) exposed as MCP tools, each result citing event IDs.
+- **Honest mock mode.** Without Azure settings the crew runs on an offline mock model. The Agents panel then shows "offline mock model" for the model-backed agents instead of millisecond timings that would look like model latency.
+
+## Why multi-agent
+
+The category asks whether specialised agents have distinct roles, coordinate through shared state and handoffs, recover from failures, and deliver something a single agent could not do as well. Concretely:
+
+- **Distinct roles.** Stats computes numbers and never writes prose. Tactics and Storyline write and never compute. Compliance only judges. Graphics only builds schema-valid cues. Audience only shapes cues per viewer. Each step can be tested, timed and replaced on its own.
+- **Isolation, kill and recover.** When Tactics fails, only Tactics is down. Graphics publishes a template cue within one event, a circuit breaker probes for recovery, and Tactics restores its Agent Framework checkpoint, replays the key events it missed and catches up. Storyline, Compliance and both feeds keep running throughout. With one agent, any failure blanks the whole broadcast.
+- **Parallel writers.** Stats fans out to Tactics and Storyline at the same time (`add_fan_out_edges`), and Compliance fans in (`add_fan_in_edges`). A key moment costs the slower of the two writers, not their sum, and each writer has its own timeout.
+- **A gate independent of the writers.** Writers never grade their own work. Compliance is code: every number in the prose must equal a verified metric, every cited event must be in the Stats evidence and include the current event. A rejected draft is retried, up to three attempts, then replaced with a template, and the Why? panel shows which happened. A single model checking itself would share its own blind spots.
+- **Per-persona fan-out.** Audience turns one verified insight into an analyst cue and a fan cue (language, favourite player) from the same match run. A live translation that changes any number is rejected in favour of the phrase table.
+- **Why one agent would be worse.** A single prompt would have to compute stats, write two voices, check itself, lay out cues and translate, on every event. That is slower (serial), costlier (no cheap rule-written captions for routine events: 214 calls instead of 3,148 per mock match), less trustworthy (numbers come from the model, not from code) and fragile (one failure takes everything down).
 
 ## Architecture
 
 ```mermaid
 flowchart LR
   Sim["PitchSim event stream"] --> Director["Agent Framework Director"]
-  Director --> Stats["Stats agent"]
+  Director --> Stats["Stats (rule-based)"]
   Stats --> MCP["Stats MCP tools"]
-  Stats --> Tactics["Tactics agent"]
-  Stats --> Story["Storyline agent"]
-  Tactics --> Comp["Compliance agent"]
+  Stats --> Tactics["Tactics agent (AI)"]
+  Stats --> Story["Storyline agent (AI)"]
+  Tactics --> Comp["Compliance (rule-based)"]
   Story --> Comp
-  Comp --> Gfx["Graphics agent"]
-  Gfx --> Aud["Audience fan-out"]
+  Comp --> Gfx["Graphics (rule-based)"]
+  Gfx --> Aud["Audience fan-out (rule-based)"]
   Aud --> Web["React broadcast UI"]
-  Director --> Ckpt["Checkpoints"]
+  Director --> Ckpt["Checkpoints (files)"]
   Director --> WhatIf["What-If rollouts"]
   Tactics -.-> Models["Azure OpenAI or Foundry"]
   Story -.-> Models
 ```
+
+## Microsoft tech used
+
+| Technology | Where in the code | Status |
+| --- | --- | --- |
+| Microsoft Agent Framework: `WorkflowBuilder` with fan-out/fan-in edges, `Executor`s, `Agent`, `FileCheckpointStorage` | `packages/playmakers_agents/src/playmakers_agents/workflow.py`, `checkpointing.py` | Live. Runs in every mode, including offline and CI |
+| Model Context Protocol: custom Stats MCP server and Agent Framework's `MCPStreamableHTTPTool` | `services/stats_mcp/src/stats_mcp/server.py`, mounted at `/stats-mcp` in `services/replay_api/src/replay_api/main.py`; client in `workflow.py` | Server live and tested over streamable HTTP. The workflow calls it only when a live model is configured; offline the same functions run in-process |
+| Microsoft Foundry (`FoundryChatClient`) and Azure OpenAI (`OpenAIChatCompletionClient`) | `packages/playmakers_agents/src/playmakers_agents/model_clients.py` | Behind env (`AZURE_AI_PROJECT_ENDPOINT` or `AZURE_OPENAI_ENDPOINT`). Not yet run against a real deployment |
+| Azure Identity (`DefaultAzureCredential`, optional user-assigned managed identity) | `model_clients.py`, `services/replay_api/src/replay_api/speech.py` | Behind env, keyless. Unit-tested only |
+| Application Insights via `azure-monitor-opentelemetry` | `packages/playmakers_agents/src/playmakers_agents/telemetry.py` | Behind `APPLICATIONINSIGHTS_CONNECTION_STRING`. Unit-tested only |
+| Azure AI Speech | `services/replay_api/src/replay_api/speech.py` | Behind env. Not tested against Azure; the browser voice is the default |
+| Azure Container Apps, Log Analytics, Foundry account and model deployment (azd + Bicep) | `infra/` | Template validated locally (`az bicep build`, `az bicep lint`, `azd show`). Not deployed |
+| GitHub Actions and GitHub Container Registry | `.github/workflows/ci.yml`, `.github/workflows/images.yml` | CI live. Image publishing is off until the `PUBLISH_IMAGES` variable is set |
+
+Not used: GitHub Copilot, Azure MCP Server, Azure Cosmos DB, Azure Event Hubs. State is in memory and checkpoints are local files.
 
 ## Hackathon pipeline
 
@@ -42,8 +73,8 @@ flowchart LR
 | Ingest | PitchSim replay over SSE or WebSocket, typed `MatchEvent` schema |
 | Interpret | Stats engine and MCP tools, What-If simulations |
 | Explain | Tactics and Storyline agents, verified by Compliance |
-| Render | Graphics validates each cue against the `OverlayCue` schema (duration, priority, layer, broadcast-safe area); React canvas overlays |
-| Personalize | Audience fan-out by persona, language and favourites |
+| Render | Graphics validates each cue against the `OverlayCue` schema (timing, duration, priority, layer, evidence); the React UI draws the cues, and pressing D shows 90% safe-area guides |
+| Personalize | Audience fan-out by persona, language and favourite player |
 
 ## Quickstart
 
@@ -108,7 +139,7 @@ The first page load after idle can take about 30 s while the apps scale up from 
 
 ## Tech stack
 
-Microsoft Agent Framework, Azure OpenAI and Microsoft Foundry (configured via environment), Model Context Protocol, FastAPI, React, Vite and TypeScript, Docker, and `azd` + Bicep for Foundry, Application Insights and Azure Container Apps.
+Microsoft Agent Framework, Model Context Protocol, FastAPI, Pydantic, React, Vite and TypeScript, Docker and nginx. Azure pieces and their status are in [Microsoft tech used](#microsoft-tech-used).
 
 ## Data
 

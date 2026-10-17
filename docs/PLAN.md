@@ -1,6 +1,14 @@
 # PLAN — Playmakers build, 14 → 26 Oct 2026 (solo, Codex)
 
 > Historical build plan. Phase prompts below are kept as written; `salvage/` no longer exists.
+>
+> **What was actually built differs from this plan.** Not built: Cosmos DB (state is in memory,
+> checkpoints are files), Event Hubs, Container Registry, the Azure MCP Server (only the custom Stats MCP
+> server exists), the `evals/` package and the Foundry evaluation gate in CI, docs/DEPLOY.md, docs/PITCH.md
+> and the `?demo=1` mode. GitHub Copilot was not used; the code was written with AI coding assistants (Codex
+> and Cursor) under King Emmanuel's direction. Built but not yet run against Azure: the Foundry and Azure
+> OpenAI model clients, Application Insights tracing, the Azure AI Speech voice and the `infra/` azd + Bicep
+> template (validated locally, never deployed). The README is the source of truth for what runs today.
 
 Hard deadline: **27 Oct 11:59pm PT = Wed 28 Oct 06:59 GMT**. Target submit: **Mon 26 Oct evening GMT**.
 Tue 27 Oct is buffer only. Times below are GMT (Accra).
@@ -166,6 +174,7 @@ Definition of done = AGENTS.md §8 (+ web lint/test/build). Small commits. Summa
 ## Phase 4 — Azure (20–22 Oct)
 
 ### Goals
+*(Planned. Cosmos DB, Event Hubs and the eval gate were not built; see the note at the top.)*
 Real models via **Microsoft Foundry**, state + checkpoints in **Cosmos DB**, services on **Azure Container
 Apps** via `azd up`, observability (App Insights/Foundry tracing), and a **Foundry evaluation gate in CI**.
 Public demo URL for judges.
@@ -250,8 +259,8 @@ Read AGENTS.md, docs/PLAN.md. Task: Phase 5 — polish for judges (judges may sc
 1. Rewrite README.md for judges: title + one-line pitch; badges (CI); hero screenshot placeholder
    (docs/media/hero.png) and demo GIF placeholder; "Try it" (live URL placeholder + local offline quickstart in
    ≤3 commands); "Why it matters" (broadcast graphics workflow, personalised second screen); architecture mermaid
-   diagram + agent sequence diagram; table mapping each hero tech (Foundry, Agent Framework, MCP, Azure MCP Server,
-   GitHub Copilot, Container Apps, Cosmos DB) to the files that use it; synthetic data section (PitchSim design,
+   diagram + agent sequence diagram; table mapping each Microsoft technology actually used (Foundry, Agent
+   Framework, MCP, Container Apps, Application Insights) to the files that use it; synthetic data section (PitchSim design,
    calibration table from `pitchsim validate --matches 50`, season dataset, planted moments); quality gate/eval
    table; resilience (kill/recover); judging-criteria map (one row per criterion with evidence links);
    limitations + roadmap; license. Keep it scannable.
@@ -269,22 +278,18 @@ Summarise and list anything I must do by hand (recording, uploading, submitting)
 | Time | Shot | Voice-over (write-out, read calmly) |
 |---|---|---|
 | 0:00–0:10 | Title card "Playmakers" over live split screen | "This is Playmakers: an AI production crew that turns a live match into broadcast graphics, and a different second screen for every fan." |
-| 0:10–0:25 | Architecture diagram (README) | "Seven agents on Microsoft Agent Framework, hosted on Azure Container Apps, using Foundry models, a stats MCP server, and Cosmos DB for shared state and checkpoints." |
+| 0:10–0:25 | Architecture diagram (README) | "A Microsoft Agent Framework workflow: two model-backed writers, Tactics and Storyline, plus deterministic Stats, Compliance, Graphics and Audience steps, a stats MCP server and file checkpoints." |
 | 0:25–0:40 | PitchSim calibration report + season file | "There's no real data, so I built PitchSim: a calibrated, seeded simulator — a thousand passes, twenty shots, realistic goals — plus a 380-match season and planted moments for evaluation." |
 | 0:40–1:00 | Live split screen, overlays popping; trace panel | "The Director routes each event: Stats computes numbers through MCP, Tactics and Storyline explain why it matters, Compliance checks every number against the data, Graphics puts it on air." |
 | 1:00–1:20 | Click "Kill Tactics" — fallback, restart, catch-up | "Now I kill the Tactics agent mid-match. Graphics fall back to safe templates within one event… it restarts from its checkpoint and catches up. The broadcast never breaks." |
 | 1:20–1:35 | Goal → What-If card | "At the goal, the What-If agent replays 200 alternate futures: if that shot had been saved, the home side's win chance drops from 61 to 38 percent." |
 | 1:35–1:48 | Analyst vs Fan panels on the same moment | "Same moment, two audiences: dense tactics for the analyst, a simple Spanish card starring her favourite player for the fan." |
-| 1:48–1:55 | Eval report + URL + GitHub | "Every change passes a Foundry evaluation gate in CI. Try it live — link and code below." |
+| 1:48–1:55 | CI + URL + GitHub | "Every change runs the tests and a browser journey in CI. Try it — link and code below." |
 Record with OBS (free) at 1920×1080 using `?demo=1`; record voice separately; no music or royalty-free only.
 
 ### Elevator pitch draft
-> **Playmakers** is a multi-agent AI production crew for live football. Built on Microsoft Agent Framework with
-> Microsoft Foundry models, a custom stats MCP server, Azure Container Apps and Cosmos DB, seven specialised
-> agents turn a live (synthetic, calibrated) match feed into verified, broadcast-safe overlays and a personalised
-> second screen for every fan — analyst or casual, any language, favourite player. It survives agent failure
-> mid-match via checkpoints and template fallback, explains "what if" moments with simulation, and every release
-> passes a Foundry evaluation gate. It shows how broadcasters can scale personalised, trustworthy match graphics.
+> Superseded. The original draft named Cosmos DB, seven specialised agents and a Foundry evaluation gate,
+> none of which exist. The current pitch is kept outside the repo with the submission text.
 
 ### Submission checklist (Mon 26 Oct)
 - [ ] GitHub repo **public**, README final, CI green on `main`, MIT LICENSE present.

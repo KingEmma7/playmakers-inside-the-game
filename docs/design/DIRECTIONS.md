@@ -46,8 +46,7 @@ None of them use: lime/neon accents, glow, gradients, emoji, uppercase letter-sp
 - Opta Analyst (editorial data storytelling, every chart backed by numbers): https://theanalyst.com/ → A, C
 - StatsBomb (event-data product, analyst UI): https://statsbomb.com/ → C
 - The Athletic football (editorial hierarchy, serif headlines): https://www.nytimes.com/athletic/football/ → A
-- Sky Sports (broadcast typography, tables): https://www.skysports.com/premier-league-table → B
-- Premier League (official brand context): https://www.premierleague.com/ → B
+- Sky Sports (broadcast typography, tables): https://www.skysports.com/football → B
 - F1 live timing (monochrome timing tower, mono numerals): https://www.formula1.com/en/timing/f1-live → C
 - Bloomberg Terminal (amber-on-black instrument density): https://www.bloomberg.com/professional/products/bloomberg-terminal/ → C
 - Vizrt (real broadcast graphics systems: score bugs, lower thirds): https://www.vizrt.com/ → B

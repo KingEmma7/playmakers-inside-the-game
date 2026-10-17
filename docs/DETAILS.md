@@ -21,7 +21,8 @@ Phase 1 ships the foundation:
 The Director is a real Microsoft Agent Framework `WorkflowBuilder` with parallel Tactics
 and Storyline Agents, a synchronized Compliance join, Graphics and audience executors.
 Every executor emits versioned `AgentTraceEvent` records. Typed shared state uses a
-`MatchStore` Protocol and an in-memory implementation; Cosmos is planned for Phase 4.
+`MatchStore` Protocol and an in-memory implementation. There is no database: a Cosmos DB
+store was planned early on and never built.
 
 Stats are code only: possession, pressure index, pass difficulty, xG, momentum and
 control vs chaos (normalized pass-network entropy and failed-pass turnover rate).
@@ -54,8 +55,9 @@ mounted at `/stats-mcp/`, which is the live default (`http://127.0.0.1:8000/stat
 
 **Key-moment gate:** Tactics and Storyline call the model only for shots, goals, fouls,
 cards, substitutions, kickoff and period events, and every 30th event (a tactical beat).
-Other events get a rule-written insight from the verified metrics (for example "Pass
-difficulty 0.08 / Northbridge Rovers pressure index 0.13."), which goes through the same
+Other events get a rule-written insight from the verified metrics (for example "Routine pass
+under light pressure / Northbridge Rovers keep the ball moving; this pass rated 0.08 for
+difficulty."), which goes through the same
 Compliance check and carries provenance `source: template, compliance: verified`; the
 trace shows `templated`. Kill-recover replays only gated events. Measured with the mock
 and two viewer profiles: 214 model calls for seed 7 and 185 for seed 42 (102 and 89
@@ -125,7 +127,7 @@ match-history/agent-progress checkpoint on the first event, every 25 sequences, 
 its backend; a fresh Director can call `await director.restore(match_id)` before
 consuming later events. Checkpoint folders are local development data, not a multi-user
 service database. API sessions use isolated temporary folders cleaned on disconnect;
-CLI checkpoints persist in `data/checkpoints`. Cosmos durability comes in Phase 4.
+CLI checkpoints persist in `data/checkpoints`. There is no durable cloud checkpoint store.
 
 **What-If:** goals, non-goal shots with xG > 0.3, and red cards trigger 200 rollouts per
 scenario by default. Three process workers compare the event prefix before, after, and
@@ -176,7 +178,10 @@ The stats MCP service remains mounted at `/stats-mcp/`.
 Cues may carry an optional `provenance` object (agent, source, Compliance verdict, attempts,
 rejection reasons, metrics used and the events behind each metric). At the final whistle the
 stream adds one `recap` cue per viewer profile (priority 90, 30 s, payload `headline`,
-`detail`, `home_goals`, `away_goals` and `moments`). `GET /speech/config` reports whether
+`detail`, `home_goals`, `away_goals` and `moments`). `GET /model/config` returns
+`{"live": true|false}` so the Agents panel can show "offline mock model" instead of
+millisecond timings for Tactics, Storyline and What-If when no live model is configured.
+`GET /speech/config` reports whether
 Azure AI Speech is configured; `GET /speech/synthesize?text=…&language=en|es|fr` (header
 `X-Playmakers-Speech: 1`, at most 280 characters) returns MP3 audio, or 503 when Speech is
 not configured.
@@ -313,7 +318,7 @@ with bounded backoff and deduplicates the deterministic replay after reconnectio
 The slower stream determines the shared event clock.
 
 - Choose seed and speed (1×, 10×, 50×); changing either restarts both feeds.
-- Fan controls select Spanish/French and a fictional roster number. Changing the fan
+- Fan controls select English (the default), Spanish or French and a fictional roster number. Changing the fan
   profile replays that feed until it synchronises with the analyst.
 - Pause freezes the displayed program; network feeds continue buffering. Start returns to live.
 - Toggle safe-area guides. Cue timing uses the match clock, duration, priority and one winner per slot.
@@ -355,7 +360,8 @@ in its default replay. The 22 dots therefore use formation-based motion around t
 tracking frames are supported when present. Pause/resume is a local program freeze, not server pause.
 Reconnect rebuilds ephemeral server sessions rather than resuming a stored session. Offline fan
 translations use the small phrase table. What-If probabilities remain synthetic approximations.
-Azure deployment, Cosmos persistence and cloud observability are Phase 4 work.
+The Azure template in `infra/` and Application Insights tracing are written and validated
+locally but have not been deployed or run against Azure. There is no database.
 
 What-If snapshots now replay scripted style-change metadata from events (including YAML stories),
 as well as red cards. A supplied story schedule supports older recordings and future rollout changes;

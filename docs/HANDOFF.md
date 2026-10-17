@@ -1,4 +1,9 @@
-# HANDOFF — current state (as of Thu 15 Oct 2026)
+# HANDOFF — build log (15 Oct 2026, with later notes)
+
+> Historical working notes. "Phase 4" items below were plans; Cosmos DB, Event Hubs, the Foundry eval
+> gate and the Azure MCP Server were never built. State is in memory and checkpoints are files. The
+> Foundry/Azure OpenAI clients, App Insights tracing and the `infra/` template exist in code but have
+> not been run against Azure. See the README for what runs today.
 
 ## Review follow-up (15 Oct 2026)
 
@@ -133,8 +138,9 @@ Rough edges / Phase 4 boundaries:
   Seed/speed changes restart the match; Start after pause jumps to the buffered live position.
 - Reconnect restarts ephemeral API sessions; no persistent resume. Failure injection is once per replay,
   reset via seed/speed. Large fast-forward prefixes still run the complete agent workflow and checkpoints.
-- Casual offline wording uses the existing small phrase table; cloud models, Cosmos persistence,
-  deployment, eval gates and observability remain Phase 4 work.
+- Casual offline wording uses the existing small phrase table. Cloud models, deployment and
+  observability were later added in code but not run against Azure; persistence (Cosmos) and eval
+  gates were not built.
 
 ## Phase 2A implementation and validation (14 Oct 2026)
 
@@ -213,8 +219,8 @@ Phase 2B implementation:
 - API now depends on playmakers-agents: CI and README install playmakers-agents before replay-api.
 
 Limits / next work:
-- Azure/Foundry model calls, credentials, Cosmos state/checkpoints, deployment and tracing require
-  Phase 4 and have not been exercised against Azure. All acceptance tests are offline.
+- Azure/Foundry model calls, credentials, deployment and tracing have not been exercised against
+  Azure. Cosmos state/checkpoints were not built. All acceptance tests are offline.
 - What-If is an approximate event-model continuation, not real-world calibrated probabilities.
   Snapshot styles now include recorded scripted style changes and observed red-card effects. `late_comeback.yaml` plants a labeled comeback attempt, not a guaranteed win.
 - Phrase-table translations are intentionally small; live translation quality needs cloud evals.
@@ -275,11 +281,11 @@ exactly. The only edit is `extend-exclude = ["salvage"]` in `pyproject.toml` so 
    `Agent`/`WorkflowBuilder` executors, and LLM agents don't actually call the MCP tools. Phase 2 must
    make the workflow + MCP tool calls real (with mock client offline).
 5. Checkpointing is in-memory; Agent Framework has `CheckpointStorage` / `FileCheckpointStorage` /
-   `WorkflowBuilder.with_checkpointing(...)` — use it (file storage now, Cosmos later).
+   `WorkflowBuilder.with_checkpointing(...)` — use it (file storage; a database store was never built).
 
 ## Decisions made
 - Project: **Playmakers**, with **What-If Lab folded in** as the `what_if` agent; add MatchDesk-style
-  **Foundry eval gate in CI** and the **season dataset**.
+  **Foundry eval gate in CI** (planned, not built) and the **season dataset**.
 - Category: Best Multi-Agent System.
 - Python monorepo with editable packages; FastAPI; SSE + WS; Pydantic contracts; ruff; pytest.
 - Offline-first: mock model client so CI/demo runs without Azure.

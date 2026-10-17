@@ -86,3 +86,36 @@ async def test_structural_numbers_do_not_hide_unverified_metrics(prose: str, all
             ),
         )
         assert director.compliance.validate(packet).ok is allowed
+
+
+@pytest.mark.parametrize(
+    ("prose", "allowed"),
+    [
+        ("A 3-3 draw", True),
+        ("A 3–3 draw", True),
+        ("Three apiece", True),
+        ("A 3-4 defeat", False),
+        ("Momentum -3 at the end", False),
+        ("Level at 3-3 after 90 minutes", False),
+    ],
+)
+def test_scores_read_as_two_numbers_and_each_must_be_verified(prose: str, allowed: bool) -> None:
+    from pitchsim.config import MatchConfig
+    from pitchsim.sim import simulate_match
+    from playmakers_agents.contracts import Insight
+    from playmakers_agents.workflow import recap_stats
+
+    events = simulate_match(MatchConfig(seed=7))
+    stats = recap_stats(events, events[-1])
+    assert stats.metrics == {"home_goals": 3, "away_goals": 3}
+    insight = Insight(
+        insight_id="recap",
+        kind="storyline",
+        clock_ms=events[-1].clock_ms,
+        headline=prose,
+        detail="Full time.",
+        metrics=dict(stats.metrics),
+        evidence_event_ids=list(stats.evidence_event_ids),
+    )
+    packet = InsightPacket(stats=stats, kind="storyline", insight=insight)
+    assert Director().compliance.validate(packet).ok is allowed

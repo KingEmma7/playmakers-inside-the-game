@@ -6,6 +6,7 @@ import math
 import os
 import re
 import tempfile
+import uuid
 from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor
 from time import perf_counter
@@ -266,6 +267,7 @@ def model_insight(text: str, stats: StatsPacket, kind: str) -> dict[str, Any]:
     data.setdefault("clock_ms", stats.event.clock_ms)
     data.setdefault("kind", kind)
     data.setdefault("evidence_event_ids", list(stats.evidence_event_ids))
+    data.setdefault("metrics", list(stats.metrics))
     if isinstance(data.get("metrics"), list):
         data["metrics"] = {
             str(name): stats.metrics.get(str(name), math.nan) for name in data["metrics"]
@@ -358,13 +360,14 @@ class StatsExecutor(Executor):
         event = packet.event
         tool = self.director.mcp_tool
         assert tool is not None
+        match_id = self.director.mcp_match_id(event.match_id)
         await tool.call_tool(
-            "ingest_event", match_id=event.match_id, event=event.model_dump(mode="json")
+            "ingest_event",
+            match_id=match_id,
+            event={**event.model_dump(mode="json"), "match_id": match_id},
         )
         for query in queries_for(event):
-            result = await tool.call_tool(
-                query.name, match_id=event.match_id, **query.arguments(event)
-            )
+            result = await tool.call_tool(query.name, match_id=match_id, **query.arguments(event))
             if not isinstance(result, str):
                 raise ValueError("Expected structured MCP JSON")
             validated = query.result_type.model_validate_json(result)
@@ -443,7 +446,7 @@ class InsightExecutor(Executor):
                 "event": {
                     "event_id": event.event_id,
                     "event_type": event.event_type,
-                    "match_id": event.match_id,
+                    "match_id": self.director.mcp_match_id(event.match_id),
                     "clock_ms": event.clock_ms,
                     "team_id": event.team_id,
                 },
@@ -542,7 +545,10 @@ class ComplianceExecutor(Executor):
         # Numeric prose is allowed only as a metric value (or percent), rounded to two decimals.
         prose = re.sub(r"\b\d{1,3}:[0-5]\d\b", "", insight.headline + " " + insight.detail)
         prose = re.sub(r"(?i)(?:jersey|shirt|number|no\.)\s*#?\s*(?:[1-9]\d?)(?![\d.])", "", prose)
-        for number, percent in re.findall(r"(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)(%?)", prose):
+        # A hyphen right after a digit joins a score ("3-3"); it is not a minus sign.
+        for number, percent in re.findall(
+            r"((?<![\d.])-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)(%?)", prose
+        ):
             value = float(number)
             allowed = [round(v * (100 if percent else 1), 2) for v in verified]
             if value not in allowed:
@@ -759,6 +765,9 @@ class Director:
         self.last_traces: list[AgentTraceEvent] = []
         self._lock = asyncio.Lock()
         self.mcp_tool: MCPStreamableHTTPTool | None = None
+        # The Stats MCP server is shared by every session in the API process, and two sessions
+        # can replay the same seed, so each Director keeps its own match state there.
+        self._mcp_session = uuid.uuid4().hex[:12]
         self.stats_mcp_url = stats_mcp_url
         if is_live_client(self.client):
             # The API mounts Stats MCP in-process; a standalone server needs STATS_MCP_URL.
@@ -838,6 +847,9 @@ class Director:
             if self._temporary_checkpoints:
                 self._temporary_checkpoints.cleanup()
 
+    def mcp_match_id(self, match_id: str) -> str:
+        return f"{match_id}~{self._mcp_session}"
+
     async def restore(self, match_id: str) -> bool:
         """Restore a fresh Director's shared state before consuming the next event."""
         saved = await self.recovery_storage.load(match_id)
@@ -889,7 +901,8 @@ class Director:
         task = {
             "task": "recap",
             "instructions": "Write a full-time recap headline and one-sentence detail. "
-            "Use only the supplied score and team names; cite all evidence_event_ids.",
+            "Use only the supplied score and team names; cite all evidence_event_ids. "
+            "The only numbers you may write are the two goal totals: no minutes or times.",
             "teams": TEAM_NAMES,
             "moments": [m.model_dump() for m in moments],
         }

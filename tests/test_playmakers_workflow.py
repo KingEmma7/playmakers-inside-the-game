@@ -280,3 +280,17 @@ async def test_mcp_stats_agree_with_local_engine_for_every_event_type() -> None:
                 await director.on_event(event)
                 stats_traces = [t for t in director.last_traces if t.agent == "stats"]
                 assert [t.status for t in stats_traces] == ["ok"], event.event_type
+
+
+@pytest.mark.asyncio
+async def test_sessions_replaying_the_same_match_keep_separate_mcp_state() -> None:
+    async with serve(create_mcp().streamable_http_app()) as base_url:
+        for _ in range(2):
+            async with Director(
+                client=DeterministicMockChatClient(), stats_mcp_url=base_url + "/mcp"
+            ) as director:
+                for sequence in (1, 2):
+                    cues = await director.on_event(passing(sequence, clock=1000 * sequence))
+                    stats = [t for t in director.last_traces if t.agent == "stats"]
+                    assert [t.action for t in stats] == ["computed"]
+                    assert cues[0].payload["metrics"]["difficulty"] == 0.6

@@ -127,6 +127,7 @@ async def personalize(
             response = await asyncio.wait_for(
                 Agent(
                     client,
+                    name="audience_translation",
                     instructions="Translate the supplied caption to the requested language. Return JSON with headline and detail. "
                     "Preserve meaning and numbers exactly.",
                 ).run(

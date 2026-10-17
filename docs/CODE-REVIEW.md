@@ -234,7 +234,7 @@ Docs mostly updated for rename; a few timestamps stale.
 | Azure OpenAI / Foundry clients | Implemented behind env; **never live-tested**. |
 | `.env.example` | Present; document `CORS_ORIGINS`, `STATS_MCP_URL`, `VITE_API_BASE`. |
 | Dockerfiles / compose | **Missing** (Phase 4). |
-| `infra/main.bicep` | Stub only (logs, CAE, Cosmos placeholders)—do not `azd up` expecting a working app. |
+| `infra/main.bicep` | Replaced 17 Oct 2026: Foundry + App Insights + Container Apps template (see `infra/README.md`); validated locally, not deployed. |
 | Favicon / logo | Integrated (`web/public/*`, About mark, header lockup). |
 | CI | Python lint+test + web lint/test/build + generated types drift check. No e2e Playwright in CI. |
 | Public GitHub | Not pushed (intentional). |

@@ -235,7 +235,7 @@ Suggested conventional commit split once Git is writable:
 | Season dataset | `pitchsim season` | 380-match NDJSON.gz, gitignored |
 | Replay API | `services/replay_api` | FastAPI `/healthz`, `/replay/sse`, `/replay/ws` (real-time or accelerated `speed`) |
 | Agents | `packages/playmakers_agents` | **Interfaces only** (`interfaces.py`: Protocols for 7 agents, `ViewerProfile`, `OverlayCue`) |
-| Infra | `infra/` | `azure.yaml` + `main.bicep` stubs (Container Apps, Cosmos DB, Event Hubs). Never deployed |
+| Infra | `infra/` | `azure.yaml` + Bicep for Foundry, App Insights and Container Apps (see `infra/README.md`). Not deployed |
 | CI | `.github/workflows/ci.yml` | Python 3.12, ruff format/check, pytest |
 | Tests | `tests/` | 3 tests (determinism, schema validity, calibration) — **pass** (re-verified 14 Oct, Python 3.13) |
 

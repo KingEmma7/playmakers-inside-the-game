@@ -13,7 +13,7 @@ Phase 1 ships the foundation:
 - **PitchSim**: a deterministic, seeded match-event simulator that produces a full 90-minute match as a timestamped event stream.
 - **Shared contracts**: a typed, versioned event schema (JSON Schema + Pydantic).
 - **Streaming replay**: a FastAPI service that replays a simulated match over **SSE** or **WebSocket**, in real-time or accelerated (e.g. 10×).
-- **Azure-ready stubs**: `azd` + Bicep placeholders for Container Apps, Cosmos DB, Event Hubs (not deployed; no credentials required).
+- **Azure template**: `azd` + Bicep for Foundry, Application Insights and Container Apps (see the README "Run on Azure" section; validated locally, not deployed).
 - **CI**: lint + tests run on GitHub Actions.
 
 ## Phase 2A (implemented)
@@ -49,13 +49,27 @@ Default model access uses `DeterministicMockChatClient`, including actual Agent 
 The mock does not request tools; the offline Stats executor invokes the same pure engine
 functions exposed by MCP. When live models are configured, Stats calls MCP through
 `MCPStreamableHTTPTool` and checks the results against local evidence. Tactics and
-Storyline also receive its read-only tools. Start MCP before running a live-model demo.
+Storyline receive its read-only tools on shots and goals only. Inside the API, MCP is
+mounted at `/stats-mcp/`, which is the live default (`http://127.0.0.1:8000/stats-mcp/`).
+
+**Key-moment gate:** Tactics and Storyline call the model only for shots, goals, fouls,
+cards, substitutions, kickoff and period events, and every 30th event (a tactical beat).
+Other events get a rule-written insight from the verified metrics (for example "Pass
+difficulty 0.08 / Northbridge Rovers pressure index 0.13."), which goes through the same
+Compliance check and carries provenance `source: template, compliance: verified`; the
+trace shows `templated`. Kill-recover replays only gated events. Measured with the mock
+and two viewer profiles: 214 model calls for seed 7 and 185 for seed 42 (102 and 89
+events per agent, 9 and 6 What-If explanations, one recap), down from 3,148 and 3,029.
+`tests/test_model_gate.py` pins the seed-7 count.
 
 Configuration (see [.env.example](../.env.example); export variables in your shell):
 
 - Azure OpenAI: `AZURE_OPENAI_ENDPOINT` + `AZURE_OPENAI_DEPLOYMENT`.
 - Foundry: `AZURE_AI_PROJECT_ENDPOINT` + `AZURE_AI_MODEL_DEPLOYMENT`.
-- `STATS_MCP_URL` optionally selects the standalone or mounted endpoint.
+- `STATS_MCP_URL` selects another endpoint, such as the standalone server (`http://127.0.0.1:8765/mcp`).
+- `AZURE_CLIENT_ID` selects a user-assigned managed identity.
+- `PLAYMAKERS_AGENT_TIMEOUT_S`, `PLAYMAKERS_TRANSLATION_TIMEOUT_S`, `PLAYMAKERS_WHATIF_TIMEOUT_S` (live defaults 8, 3, 3 seconds).
+- `APPLICATIONINSIGHTS_CONNECTION_STRING` turns on Azure Monitor tracing with Agent Framework instrumentation (`PLAYMAKERS_TRACE_CONTENT=0` leaves prompts and responses out).
 
 Both live clients use `DefaultAzureCredential` (for example an existing Azure CLI login
 locally, managed identity when deployed). Incomplete Azure OpenAI configuration uses
@@ -98,8 +112,8 @@ sequenceDiagram
     end
 ```
 
-**Kill and recover:** Tactics has a 4-second deadline, shared across generation and
-correction attempts; Graphics has a 1.5-second deadline. Exceptions and timeouts open
+**Kill and recover:** Tactics has a 4-second deadline offline (8 seconds with a live
+model), shared across generation and correction attempts; Graphics has a 1.5-second deadline. Exceptions and timeouts open
 a circuit breaker. A failed Tactics branch immediately supplies an evidence-backed
 `template_fallback` cue; Storyline continues. The next event probes recovery. Repeated
 failures back off for 1, 2, 4, 8, then 16 events. Traces expose `agent_down`, `fallback_on`,
@@ -177,7 +191,7 @@ virtual environment also installs and passes the suite.
 
 The hackathon asks for a single pipeline with five stages:
 
-- **Ingest**: Phase 1 replays events via SSE/WS (Phase 2 will add Event Hubs ingestion).
+- **Ingest**: PitchSim events are replayed over SSE/WS.
 - **Interpret**: Phase 1 emits calibrated match events + ground-truth labels (Phase 2 stats/tactics tools/agents build on this).
 - **Explain**: Tactics and Storyline run as Agent Framework Agents, joined by Compliance.
 - **Render**: Graphics validates OverlayCue JSON; the visual renderer comes in Phase 3.
@@ -380,11 +394,14 @@ another subscriber keeps the session alive; otherwise they rebuild the seeded ma
 Run the container demo from the repository root with `docker compose up --build`,
 then open **http://localhost:5173**. The API listens on :8000; Stats MCP is mounted
 at `/stats-mcp/`, so no separate MCP container is needed. The web image builds with
-Node and serves with nginx, including an unbuffered same-origin `/api` proxy.
+Node and serves with nginx, including an unbuffered same-origin `/api` proxy to
+`API_UPSTREAM` (default `http://api:8000`). Set `API_UPSTREAM=` (empty) to drop the proxy,
+for example in Container Apps where no `api` host exists, and point `API_BASE` at the API's
+public URL instead (with that web origin in the API's `CORS_ORIGINS`).
 `API_BASE` writes `/config.js` at container startup (default `/api`), so the built
 image can use another API URL without rebuilding. Use an API URL/path containing
 only letters, digits, `:`, `/`, `.`, `_`, or `-`. The API image runs as an unprivileged
-user. Local file checkpoints are temporary; this is Phase 4 preparation, not an Azure deployment.
+user. Local file checkpoints are temporary, so the API must run as a single replica.
 
 CI now installs Chromium and runs `npm run screenshot` against the real local API
 and Vite. Failures fail the job; screenshots and API/web logs are uploaded as artifacts.

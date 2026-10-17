@@ -277,6 +277,86 @@ describe("broadcast cues", () => {
     expect(screen.getByTestId("cue-card")).not.toHaveTextContent("· Verified");
     expect(screen.getByRole("button", { name: "Why?" })).toBeInTheDocument();
   });
+  it("shows the full-time recap with moments, pitch highlights and copy", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    const events: MatchEvent[] = [
+      wireEvent({
+        sequence: 1,
+        event_type: "shot",
+        team_id: "match_7_HOME",
+        shooter_player_id: "match_7_H09",
+        position: { x: 95, y: 30 },
+        xg: 0.4,
+        outcome: "goal",
+      }),
+      wireEvent({
+        sequence: 2,
+        event_type: "goal",
+        clock_ms: 360000,
+        scoring_team_id: "match_7_HOME",
+        scorer_player_id: "match_7_H09",
+        shot_event_id: "e1",
+      }),
+    ].flatMap((raw) => {
+      const message = parseStreamMessage(JSON.stringify(raw));
+      return message.kind === "event" ? [message.event] : [];
+    });
+    render(
+      <ViewPanel
+        title="For you"
+        persona="casual"
+        events={events}
+        safe={false}
+        running={false}
+        status="ended"
+        clock={5400000}
+        cues={[
+          cue({
+            cue_id: "ft:recap:viewer1",
+            template: "recap",
+            clock_ms: 5400000,
+            duration_ms: 30000,
+            priority: 90,
+            persona: "casual",
+            language: "es",
+            evidence_event_ids: ["e2", "ft"],
+            payload: {
+              headline: "Final: Northbridge Rovers 1–0 Southport Athletic",
+              detail: "¡Qué partido! Gana Northbridge Rovers.",
+              moments: [
+                {
+                  clock_ms: 360000,
+                  event_id: "e2",
+                  kind: "goal",
+                  team_id: "match_7_HOME",
+                  player_id: "match_7_H09",
+                },
+                { clock_ms: 1, kind: "not-a-moment" },
+              ],
+            },
+          }),
+        ]}
+      />,
+    );
+    const recap = screen.getByRole("region", { name: "Resumen del partido" });
+    expect(recap).toHaveTextContent(
+      "Final: Northbridge Rovers 1–0 Southport Athletic",
+    );
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(screen.getByTestId("pitch")).toHaveAttribute(
+      "data-trail",
+      JSON.stringify([{ x: 95, y: 30 }]),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Copiar" }));
+    await screen.findByText("Copiado");
+    expect(writeText).toHaveBeenCalledWith(
+      "Final: Northbridge Rovers 1–0 Southport Athletic\n¡Qué partido! Gana Northbridge Rovers.\n7' Gol · Northbridge Rovers (Okafor)",
+    );
+  });
   it("retains the latest What-If after its on-air duration without showing future results", () => {
     const props = {
       title: "For you",

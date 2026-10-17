@@ -3,6 +3,8 @@ import { involvementLabel, playerName } from "./players";
 import Pitch from "./Pitch";
 import { eventPoint, type Point } from "./geometry";
 import { ProvenancePanel } from "./Provenance";
+import { RecapCard } from "./Recap";
+import { recapMoments } from "./recapText";
 import { activeCues, type MatchEvent, type OverlayCue } from "./stream";
 const WHATIF_HIGHLIGHT_MS = 120_000;
 const WHY = { en: "Why?", es: "¿Por qué?", fr: "Pourquoi ?" };
@@ -214,22 +216,37 @@ export function ViewPanel({
   const active = activeCues(cues, clock);
   // One winner per slot; incoming cues replace lower-priority captions instead of covering the pitch.
   const primary =
-    active.find((c) => c.template !== "what_if") ??
+    active.find((c) => c.template !== "what_if" && c.template !== "recap") ??
     cues
-      .filter((c) => c.template !== "what_if" && c.clock_ms <= clock)
+      .filter(
+        (c) =>
+          c.template !== "what_if" &&
+          c.template !== "recap" &&
+          c.clock_ms <= clock,
+      )
       .sort((a, b) => b.clock_ms - a.clock_ms)[0];
   const whatif = cues
     .filter((c) => c.template === "what_if" && c.clock_ms <= clock)
     .sort((a, b) => b.clock_ms - a.clock_ms)[0];
-  const highlighted = explained
-    ? focus
-      ? [focus]
-      : explained.evidence_event_ids
-    : whatif && clock - whatif.clock_ms <= WHATIF_HIGHLIGHT_MS
-      ? whatif.evidence_event_ids
-      : [];
+  const recap = cues
+    .filter((c) => c.template === "recap" && c.clock_ms <= clock)
+    .at(-1);
+  const highlighted = focus
+    ? [focus]
+    : explained
+      ? explained.evidence_event_ids
+      : recap
+        ? recapMoments(recap.payload).map((m) => m.event_id)
+        : whatif && clock - whatif.clock_ms <= WHATIF_HIGHLIGHT_MS
+          ? whatif.evidence_event_ids
+          : [];
   const trail = highlighted
     .map((id) => events.find((e) => e.event_id === id))
+    .map((e) =>
+      e?.event_type === "goal"
+        ? events.find((s) => s.event_id === e.shot_event_id)
+        : e,
+    )
     .filter((e) => e && e.event_type !== "tracking_frame")
     .map(eventPoint)
     .filter((point): point is Point => point !== undefined);
@@ -314,6 +331,7 @@ export function ViewPanel({
           favourite={persona === "casual" ? favourite : undefined}
           involvement={involvementLabel(visibleEvents, favourite)}
           trail={trail}
+          connect={!recap || Boolean(explained)}
         />
         <div className="vignette" />
         {safe && (
@@ -360,14 +378,25 @@ export function ViewPanel({
           </div>
         )}
       </div>
-      <div className={`view-body ${explained ? "explaining" : ""}`}>
+      <div className={`view-body ${explained || recap ? "explaining" : ""}`}>
+        {!explained && recap && (
+          <RecapCard
+            cue={recap}
+            focus={focus}
+            onFocus={setFocus}
+            onExplain={explain(recap)}
+          />
+        )}
         {explained && (
           <ProvenancePanel
             cue={explained}
             events={events}
             focus={focus}
             onFocus={setFocus}
-            onClose={() => setExplained(undefined)}
+            onClose={() => {
+              setExplained(undefined);
+              setFocus(undefined);
+            }}
           />
         )}
         {persona === "analyst" && (

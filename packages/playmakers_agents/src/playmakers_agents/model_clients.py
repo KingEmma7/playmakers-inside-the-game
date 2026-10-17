@@ -53,6 +53,27 @@ class DeterministicMockChatClient(BaseChatClient[Mapping[str, Any]]):
                 )
             event = data["event"]
             kind = data["kind"]
+            if data.get("task") == "recap":
+                from playmakers_agents.recap import recap_text
+
+                metrics = data["metrics"]
+                headline, detail = recap_text(
+                    int(metrics["home_goals"]), int(metrics["away_goals"]), "en", "analyst"
+                )
+                text = json.dumps(
+                    {
+                        "insight_id": f"{event['event_id']}:recap",
+                        "clock_ms": event["clock_ms"],
+                        "kind": kind,
+                        "headline": headline,
+                        "detail": detail,
+                        "metrics": metrics,
+                        "evidence_event_ids": data["evidence_event_ids"],
+                    }
+                )
+                return ChatResponse(
+                    messages=[Message("assistant", [text])], model="playmakers-mock"
+                )
             text = json.dumps(
                 {
                     "insight_id": f"{event['event_id']}:{kind}",

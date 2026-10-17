@@ -7,19 +7,28 @@ export default function Pitch({
   favourite,
   involvement = "",
   trail = [],
+  connect = true,
 }: {
   event?: MatchEvent;
   running: boolean;
   favourite?: string;
   involvement?: string;
   trail?: Point[];
+  connect?: boolean;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const current = useRef<Point>({ x: 52.5, y: 34 });
-  const target = useRef({ event, running, favourite, involvement, trail });
+  const target = useRef({
+    event,
+    running,
+    favourite,
+    involvement,
+    trail,
+    connect,
+  });
   useEffect(() => {
-    target.current = { event, running, favourite, involvement, trail };
-  }, [event, running, favourite, involvement, trail]);
+    target.current = { event, running, favourite, involvement, trail, connect };
+  }, [event, running, favourite, involvement, trail, connect]);
   useEffect(() => {
     const ctx = canvas.current?.getContext("2d");
     if (!ctx) return;
@@ -29,7 +38,8 @@ export default function Pitch({
       if (!ctx) return;
       const dt = Math.min(50, time - previous || 16);
       previous = time;
-      const { event, running, favourite, involvement, trail } = target.current;
+      const { event, running, favourite, involvement, trail, connect } =
+        target.current;
       const goal = eventPoint(event) ?? current.current;
       if (running) {
         const blend = 1 - Math.exp(-dt / 180);
@@ -60,20 +70,22 @@ export default function Pitch({
           x: Math.max(r + 2, Math.min(1048 - r, p.x * 10)),
           y: Math.max(r + 2, Math.min(678 - r, p.y * 10)),
         });
-        ctx.strokeStyle = "#1D1D1F";
-        ctx.lineWidth = 2;
-        ctx.globalAlpha = 0.55;
-        ctx.beginPath();
-        trail.forEach((p, i) => {
-          const { x, y } = inside(p, 9);
-          if (i) ctx.lineTo(x, y);
-          else ctx.moveTo(x, y);
-        });
-        ctx.stroke();
-        ctx.globalAlpha = 1;
+        if (connect) {
+          ctx.strokeStyle = "#1D1D1F";
+          ctx.lineWidth = 2;
+          ctx.globalAlpha = 0.55;
+          ctx.beginPath();
+          trail.forEach((p, i) => {
+            const { x, y } = inside(p, 9);
+            if (i) ctx.lineTo(x, y);
+            else ctx.moveTo(x, y);
+          });
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
         for (const [i, p] of trail.entries()) {
-          const last = i === trail.length - 1;
-          const r = last ? 22 : 9;
+          const last = !connect || i === trail.length - 1;
+          const r = !connect ? 16 : last ? 22 : 9;
           const { x, y } = inside(p, r);
           ctx.fillStyle = "#FFFFFF";
           ctx.strokeStyle = last ? "#C4282D" : "#1D1D1F";

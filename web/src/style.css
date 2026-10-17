@@ -1027,10 +1027,11 @@ header {
 .view-body {
   position: relative;
 }
-.view-body.explaining > :not(.provenance) {
+.view-body.explaining > :not(.provenance, .recap) {
   visibility: hidden;
 }
-.provenance {
+.provenance,
+.recap {
   position: absolute;
   inset: 0;
   z-index: 200;
@@ -1103,4 +1104,66 @@ header {
 .provenance-stats li + li::before {
   content: " · ";
   color: var(--muted);
+}
+
+/* Full-time recap: score line, key moments and plain-text sharing. */
+.recap h3 {
+  margin: 0;
+  font-size: var(--text-md);
+}
+.recap p {
+  margin: 2px 0 0;
+  font-size: var(--text-xs);
+}
+.recap-moments {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 12px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.recap-moments button {
+  width: 100%;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  padding: 2px 4px;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.recap-moments button[aria-pressed="true"] {
+  background: var(--track);
+}
+.recap-moments time {
+  display: inline-block;
+  min-width: 28px;
+  font-weight: 600;
+}
+.recap-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.recap-actions button {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: 2px 10px;
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+}
+.recap-actions [role="status"] {
+  color: var(--muted);
+}
+.recap-actions .why {
+  border: 0;
+  padding: 2px 0;
 }

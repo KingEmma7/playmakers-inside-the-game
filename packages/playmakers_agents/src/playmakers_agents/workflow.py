@@ -23,7 +23,7 @@ from agent_framework import (
     handler,
 )
 from playmakers_schema import models as event_models
-from playmakers_schema.models import MatchEvent
+from playmakers_schema.models import GoalEvent, MatchEvent
 from playmakers_stats.engine import StatsEngine
 from playmakers_stats.types import (
     ControlChaosResult,
@@ -50,6 +50,7 @@ from playmakers_agents.model_clients import (
     create_playmakers_chat_client,
 )
 from playmakers_agents.personalize import personalize
+from playmakers_agents.recap import TEAM_NAMES, key_moments, localized_recap, recap_text, score
 from playmakers_agents.resilience import CircuitBreaker, KillSpec
 from playmakers_agents.state_store import InMemoryMatchStore, MatchState, MatchStore
 from playmakers_agents.what_if import WhatIfAgent
@@ -139,6 +140,25 @@ def compute_stats(engine: StatsEngine, event: MatchEvent) -> StatsPacket:
     )
 
 
+def recap_stats(events: list[MatchEvent], full_time: MatchEvent) -> StatsPacket:
+    home, away = score(events)
+    goals = [e for e in events if isinstance(e, GoalEvent)]
+    moments = key_moments(events)
+    return StatsPacket(
+        event=full_time,
+        metrics={"home_goals": home, "away_goals": away},
+        evidence_event_ids=list(
+            dict.fromkeys(
+                [*(m.event_id for m in moments), *(g.event_id for g in goals), full_time.event_id]
+            )
+        ),
+        metric_evidence={
+            "home_goals": [g.event_id for g in goals if g.scoring_team_id.endswith("_HOME")],
+            "away_goals": [g.event_id for g in goals if not g.scoring_team_id.endswith("_HOME")],
+        },
+    )
+
+
 async def trace(
     ctx: WorkflowContext, agent: str, action: str, started: float, status: str = "ok"
 ) -> None:
@@ -219,16 +239,24 @@ class InsightExecutor(Executor):
             client, name=kind, instructions=self.instructions, default_options={"max_tokens": 800}
         )
 
-    async def generate(self, stats: StatsPacket, reasons: list[str] | None = None) -> InsightPacket:
+    async def generate(
+        self,
+        stats: StatsPacket,
+        reasons: list[str] | None = None,
+        task: dict[str, Any] | None = None,
+    ) -> InsightPacket:
         if self.down:
             return InsightPacket(stats=stats, kind=self.kind, error="agent_unavailable")
-        key = (stats.event.match_id, stats.event.sequence)
+        key = (stats.event.match_id, stats.event.sequence, (task or {}).get("task", "insight"))
         deadline = self.deadlines.setdefault(
             key, perf_counter() + self.director.timeouts[self.kind]
         )
         try:
             return await asyncio.wait_for(
-                self._generate_raw(stats, reasons), timeout=max(0, deadline - perf_counter())
+                self._generate_raw(stats, reasons)
+                if task is None
+                else self._ask(stats, reasons, task),
+                timeout=max(0, deadline - perf_counter()),
             )
         except Exception:
             self.down = True
@@ -238,6 +266,11 @@ class InsightExecutor(Executor):
     async def _generate_raw(
         self, stats: StatsPacket, reasons: list[str] | None = None
     ) -> InsightPacket:
+        return await self._ask(stats, reasons, None)
+
+    async def _ask(
+        self, stats: StatsPacket, reasons: list[str] | None, task: dict[str, Any] | None
+    ) -> InsightPacket:
         prompt = json.dumps(
             {
                 "event": stats.event.model_dump(mode="json"),
@@ -245,6 +278,7 @@ class InsightExecutor(Executor):
                 "metrics": stats.metrics,
                 "evidence_event_ids": stats.evidence_event_ids,
                 "correction": reasons or [],
+                **(task or {}),
             }
         )
         try:
@@ -648,6 +682,101 @@ class Director:
         writer.down = False
         writer.breaker.reset()
 
+    async def full_time_recap(self, event: MatchEvent) -> list[OverlayCue]:
+        started = perf_counter()
+        events = self.store.get_or_create(event.match_id).events
+        stats = recap_stats(events, event)
+        home, away = int(stats.metrics["home_goals"]), int(stats.metrics["away_goals"])
+        moments = key_moments(events)
+        task = {
+            "task": "recap",
+            "instructions": "Write a full-time recap headline and one-sentence detail. "
+            "Use only the supplied score and team names; cite all evidence_event_ids.",
+            "teams": TEAM_NAMES,
+            "moments": [m.model_dump() for m in moments],
+        }
+        writer = self.writers[1]
+        packet = await writer.generate(stats, task=task)
+        decision = self.compliance.validate(packet)
+        attempts, reasons = 1, list(decision.reasons)
+        while not decision.ok and attempts < 3 and packet.error != "agent_unavailable":
+            packet = await writer.generate(stats, decision.reasons, task)
+            decision = self.compliance.validate(packet)
+            attempts += 1
+            reasons += decision.reasons
+        verified = decision.ok and packet.insight is not None
+        headline, detail = recap_text(home, away, "en", "analyst")
+        base = (
+            packet.insight
+            if verified and packet.insight
+            else Insight(
+                insight_id=f"{event.event_id}:recap:template",
+                clock_ms=event.clock_ms,
+                kind="storyline",
+                headline=headline,
+                detail=detail,
+                metrics=stats.metrics,
+                evidence_event_ids=stats.evidence_event_ids,
+            )
+        )
+        cues: list[OverlayCue] = []
+        for index, profile in enumerate(self.profiles):
+            insight = localized_recap(base, home, away, profile.language, profile.persona)
+            review = self.compliance.validate(
+                InsightPacket(stats=stats, insight=insight, kind="storyline")
+            )
+            if not review.ok:
+                insight = base
+                review = self.compliance.validate(
+                    InsightPacket(stats=stats, insight=insight, kind="storyline")
+                )
+            if not review.ok:
+                continue
+            cue = OverlayCue(
+                cue_id=f"{event.event_id}:recap:viewer{index}",
+                clock_ms=event.clock_ms,
+                template="recap",
+                priority=90,
+                duration_ms=30_000,
+                layer="full_screen",
+                payload={
+                    "headline": insight.headline,
+                    "detail": insight.detail,
+                    "home_goals": home,
+                    "away_goals": away,
+                    "moments": [m.model_dump() for m in moments],
+                },
+                evidence_event_ids=insight.evidence_event_ids,
+                persona=profile.persona,
+                language=profile.language,
+                provenance=CueProvenance(
+                    agent="storyline",
+                    source="agent" if verified else "template",
+                    compliance="verified" if verified else "template_fallback",
+                    attempts=attempts,
+                    reasons=reasons,
+                    metrics=stats.metrics,
+                    metric_evidence=stats.metric_evidence,
+                ),
+            )
+            self.store.add_overlay_cue(event.match_id, cue)
+            cues.append(cue)
+        self.last_traces += [
+            AgentTraceEvent(
+                agent="storyline",
+                action="recap",
+                latency_ms=(perf_counter() - started) * 1000,
+                status="ok" if verified else "fallback",
+            ),
+            AgentTraceEvent(
+                agent="compliance",
+                action="recap_verified" if verified else "recap_template",
+                latency_ms=(perf_counter() - started) * 1000,
+                status="ok" if verified else "fallback",
+            ),
+        ]
+        return cues
+
     async def on_event(self, event: MatchEvent) -> list[OverlayCue]:
         if self.stats_mcp_url and not self.mcp_tool:
             raise RuntimeError("Use async with Director() to connect MCP")
@@ -684,6 +813,8 @@ class Director:
                         latency_ms=(perf_counter() - started) * 1000,
                     )
                 )
+            if event.event_type == "period_end" and event.period == 2:
+                cues += await self.full_time_recap(event)
             state = self.store.get_or_create(event.match_id)
             if (
                 len(state.events) == 1

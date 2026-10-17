@@ -1,64 +1,74 @@
-@description('Azure region for resources.')
-param location string = resourceGroup().location
+targetScope = 'subscription'
 
-@description('Resource name prefix.')
-param namePrefix string = 'playmakers'
+@minLength(1)
+@maxLength(40)
+@description('azd environment name; used for tags and the resource group name.')
+param environmentName string
 
-// Phase 1 stub: intentionally minimal and safe-by-default.
-// These resources are placeholders for Phase 2+ and are not deployed in CI.
+@description('Region for every resource. gpt-4.1-mini GlobalStandard is offered in eastus2.')
+param location string = 'eastus2'
 
-resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
-  name: '${namePrefix}-logs'
+@description('Resource group to create.')
+param resourceGroupName string = 'rg-playmakers-demo'
+
+@description('Model deployment capacity in thousands of tokens per minute (1-100). Keep it small; it is also a rate ceiling.')
+param modelCapacity string = '50'
+
+@description('Object id of the developer running azd (AZURE_PRINCIPAL_ID); empty skips developer roles.')
+param principalId string = ''
+
+@allowed(['User', 'ServicePrincipal'])
+param principalType string = 'User'
+
+@description('Public GHCR image for the API.')
+param apiImage string = 'ghcr.io/kingemma7/playmakers-api:latest'
+
+@description('Public GHCR image for the web app.')
+param webImage string = 'ghcr.io/kingemma7/playmakers-web:latest'
+
+@description('Most live-model matches that may run at once; further matches use the offline crew.')
+@minValue(0)
+param maxLiveMatches int = 2
+
+@description('Live-model matches allowed per UTC day; further matches use the offline crew.')
+@minValue(0)
+param dailyLiveMatches int = 15
+
+@description('Log Analytics daily ingestion cap in GB.')
+param logDailyQuotaGb string = '0.2'
+
+@description('"true" also grants the identity Speech access on the Foundry account and turns on the Azure voice.')
+param enableSpeech string = 'false'
+
+var tags = { 'azd-env-name': environmentName, app: 'playmakers' }
+
+resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
+  name: resourceGroupName
   location: location
-  properties: {
-    sku: {
-      name: 'PerGB2018'
-    }
-    retentionInDays: 30
+  tags: tags
+}
+
+module resources 'resources.bicep' = {
+  name: 'playmakers-resources'
+  scope: rg
+  params: {
+    location: location
+    tags: tags
+    modelCapacity: min(max(int(modelCapacity), 1), 100)
+    principalId: principalId
+    principalType: principalType
+    apiImage: apiImage
+    webImage: webImage
+    maxLiveMatches: maxLiveMatches
+    dailyLiveMatches: dailyLiveMatches
+    logDailyQuotaGb: logDailyQuotaGb
+    enableSpeech: toLower(enableSpeech) == 'true'
   }
 }
 
-resource caEnv 'Microsoft.App/managedEnvironments@2023-11-02-preview' = {
-  name: '${namePrefix}-cae'
-  location: location
-  properties: {
-    // Log forwarding intentionally omitted in Phase 1 scaffolding.
-  }
-}
-
-resource cosmos 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' = {
-  name: '${namePrefix}-cosmos'
-  location: location
-  kind: 'GlobalDocumentDB'
-  properties: {
-    databaseAccountOfferType: 'Standard'
-    locations: [
-      {
-        locationName: location
-        failoverPriority: 0
-        isZoneRedundant: false
-      }
-    ]
-    consistencyPolicy: {
-      defaultConsistencyLevel: 'Session'
-    }
-  }
-}
-
-resource eventHubsNs 'Microsoft.EventHub/namespaces@2024-01-01' = {
-  name: '${namePrefix}-eh'
-  location: location
-  sku: {
-    name: 'Standard'
-    tier: 'Standard'
-    capacity: 1
-  }
-  properties: {
-    isAutoInflateEnabled: false
-  }
-}
-
-output containerAppsEnvironmentName string = caEnv.name
-output cosmosAccountName string = cosmos.name
-output eventHubsNamespaceName string = eventHubsNs.name
-
+output AZURE_RESOURCE_GROUP string = rg.name
+output AZURE_AI_PROJECT_ENDPOINT string = resources.outputs.projectEndpoint
+output AZURE_AI_MODEL_DEPLOYMENT string = resources.outputs.modelDeployment
+output AZURE_CLIENT_ID string = resources.outputs.identityClientId
+output API_URL string = resources.outputs.apiUrl
+output WEB_URL string = resources.outputs.webUrl

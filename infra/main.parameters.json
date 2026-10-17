@@ -1,0 +1,14 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environmentName": { "value": "${AZURE_ENV_NAME}" },
+    "location": { "value": "${AZURE_LOCATION=eastus2}" },
+    "principalId": { "value": "${AZURE_PRINCIPAL_ID}" },
+    "principalType": { "value": "${AZURE_PRINCIPAL_TYPE=User}" },
+    "modelCapacity": { "value": "${PLAYMAKERS_MODEL_CAPACITY=50}" },
+    "apiImage": { "value": "${PLAYMAKERS_API_IMAGE=ghcr.io/kingemma7/playmakers-api:latest}" },
+    "webImage": { "value": "${PLAYMAKERS_WEB_IMAGE=ghcr.io/kingemma7/playmakers-web:latest}" },
+    "enableSpeech": { "value": "${PLAYMAKERS_ENABLE_SPEECH=false}" }
+  }
+}

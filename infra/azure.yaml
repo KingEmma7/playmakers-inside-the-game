@@ -1,12 +1,10 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+# Run from this directory: `azd up` provisions everything in main.bicep. The container apps pull
+# the public GHCR images built by .github/workflows/images.yml, so there is nothing to build locally.
 name: playmakers
 metadata:
-  template: playmakers-phase1
-services:
-  replay-api:
-    project: ../services/replay_api
-    language: python
-    host: containerapp
+  template: playmakers-aca-foundry
 infra:
   provider: bicep
   path: .
-
+  module: main

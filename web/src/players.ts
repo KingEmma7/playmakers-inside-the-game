@@ -32,9 +32,30 @@ export function playerName(id: string): string {
   );
 }
 
+type Language = "en" | "es" | "fr";
+const COUNT_WORDS: Record<
+  Language,
+  Record<"shot" | "pass" | "touch", [string, string]>
+> = {
+  en: { shot: ["shot", "shots"], pass: ["pass", "passes"], touch: ["touch", "touches"] },
+  es: { shot: ["tiro", "tiros"], pass: ["pase", "pases"], touch: ["toque", "toques"] },
+  fr: { shot: ["tir", "tirs"], pass: ["passe", "passes"], touch: ["touche", "touches"] },
+};
+export const isLanguage = (value: string): value is Language =>
+  value === "en" || value === "es" || value === "fr";
+export function countLabel(
+  count: number,
+  kind: "shot" | "pass" | "touch",
+  language: string = "en",
+): string {
+  const [one, many] = COUNT_WORDS[isLanguage(language) ? language : "en"][kind];
+  return `${count} ${count === 1 ? one : many}`;
+}
+
 export function involvementLabel(
   events: MatchEvent[],
   favourite: string,
+  language: string = "en",
 ): string {
   const matches = (id: string | null | undefined) =>
     id?.split("_").at(-1) === favourite;
@@ -52,11 +73,11 @@ export function involvementLabel(
       (e.event_type === "shot" && matches(e.shooter_player_id)),
   ).length;
   const count = shots
-    ? `${shots} tiros`
+    ? countLabel(shots, "shot", language)
     : passes
-      ? `${passes} pases`
+      ? countLabel(passes, "pass", language)
       : touches
-        ? `${touches} toques`
+        ? countLabel(touches, "touch", language)
         : "";
   return `${playerName(favourite)}${count ? ` · ${count}` : ""}`;
 }

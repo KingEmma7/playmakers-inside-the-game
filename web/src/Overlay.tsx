@@ -1,5 +1,47 @@
 import { useState } from "react";
 import { involvementLabel, playerName } from "./players";
+
+const CARD_LABELS: Record<
+  string,
+  {
+    evidence: string;
+    verified: string;
+    winProbability: string;
+    simulations: string;
+    dominance: string;
+    even: string;
+  }
+> = {
+  en: {
+    evidence: "From events",
+    verified: "· Verified",
+    winProbability: "Win probability",
+    simulations: "simulations",
+    dominance: "Dominance",
+    even: "EVEN",
+  },
+  es: {
+    evidence: "Basado en los eventos",
+    verified: "",
+    winProbability: "Probabilidad de victoria",
+    simulations: "simulaciones",
+    dominance: "Dominio",
+    even: "IGUALADO",
+  },
+  fr: {
+    evidence: "D'après les événements",
+    verified: "· Vérifié",
+    winProbability: "Probabilité de victoire",
+    simulations: "simulations",
+    dominance: "Domination",
+    even: "ÉQUILIBRE",
+  },
+};
+const labelsFor = (language?: string | null) =>
+  CARD_LABELS[language ?? "en"] ?? CARD_LABELS.en;
+// Possession and field tilt need a few minutes of events before a share means anything.
+const MIN_POSSESSION_EVENTS = 30;
+const MIN_TILT_PASSES = 10;
 import Pitch from "./Pitch";
 import { eventPoint, type Point } from "./geometry";
 import { ProvenancePanel } from "./Provenance";
@@ -99,15 +141,14 @@ export function CueCard({
       <p>{whatif ? whatIfQuestion(cue) : String(payload.detail || "")}</p>
       {!whatif && (
         <small className="evidence" title={cue.evidence_event_ids.join(", ")}>
-          {cue.language === "es" ? "Basado en los eventos" : "From events"}{" "}
+          {labelsFor(cue.language).evidence}{" "}
           {cue.evidence_event_ids
             .slice(-3)
             .map((id) => String(Number(id.split(/[:_]/).at(-1))))
             .join(", ")}{" "}
-          {cue.language === "es" ||
-          cue.provenance?.compliance === "template_fallback"
+          {cue.provenance?.compliance === "template_fallback"
             ? ""
-            : "· Verified"}{" "}
+            : labelsFor(cue.language).verified}{" "}
           {why}
         </small>
       )}
@@ -121,11 +162,9 @@ export function CueCard({
         <>
           <div className="probability-summary">
             <small>
-              {cue.language === "es"
-                ? "Probabilidad de victoria"
-                : "Win probability"}{" "}
-              · {String(metrics.rollouts ?? "—")}{" "}
-              {cue.language === "es" ? "simulaciones" : "simulations"} {why}
+              {labelsFor(cue.language).winProbability} ·{" "}
+              {String(metrics.rollouts ?? "—")}{" "}
+              {labelsFor(cue.language).simulations} {why}
             </small>
             {!swing && (
               <div className="probabilities">
@@ -184,6 +223,7 @@ export function ViewPanel({
   running,
   status,
   favourite = "H09",
+  language = "en",
 }: {
   title: string;
   persona: string;
@@ -195,6 +235,7 @@ export function ViewPanel({
   running: boolean;
   status: string;
   favourite?: string;
+  language?: string;
 }) {
   const [explained, setExplained] = useState<OverlayCue>();
   const [focus, setFocus] = useState<string>();
@@ -308,7 +349,7 @@ export function ViewPanel({
           <small>
             {persona === "analyst"
               ? "Tactics and verified metrics"
-              : `${{ en: "English", es: "Español", fr: "Français" }[primary?.language ?? "es"]} · ${playerName(favourite)}`}
+              : `${{ en: "English", es: "Español", fr: "Français" }[primary?.language ?? language]} · ${playerName(favourite)}`}
           </small>
         </div>
         <span className="connection">{status}</span>
@@ -318,7 +359,7 @@ export function ViewPanel({
           event={event}
           running={running}
           favourite={persona === "casual" ? favourite : undefined}
-          involvement={involvementLabel(visibleEvents, favourite)}
+          involvement={involvementLabel(visibleEvents, favourite, language)}
           trail={trail}
           connect={!recap || Boolean(explained)}
         />
@@ -395,7 +436,11 @@ export function ViewPanel({
               <span>xG · {awayXg.toFixed(2)}</span>
             </div>
             <div>
-              <b>{homePossession.toFixed(0)}%</b>
+              <b>
+                {possession.length < MIN_POSSESSION_EVENTS
+                  ? "—"
+                  : `${homePossession.toFixed(0)}%`}
+              </b>
               <span>Possession</span>
             </div>
             <div>
@@ -409,7 +454,11 @@ export function ViewPanel({
               </span>
             </div>
             <div>
-              <b>{fieldTilt.toFixed(0)}%</b>
+              <b>
+                {territory.length < MIN_TILT_PASSES
+                  ? "—"
+                  : `${fieldTilt.toFixed(0)}%`}
+              </b>
               <span>Field tilt · final third</span>
             </div>
           </div>
@@ -445,8 +494,14 @@ export function ViewPanel({
         {
           <div className="momentum">
             <div>
-              <span>{persona === "casual" ? "Dominio" : "Dominance"}</span>
-              <b>{momentum > 0 ? "NBR" : momentum < 0 ? "SPA" : "EVEN"}</b>
+              <span>{labelsFor(persona === "casual" ? language : "en").dominance}</span>
+              <b>
+                {momentum > 0
+                  ? "NBR"
+                  : momentum < 0
+                    ? "SPA"
+                    : labelsFor(persona === "casual" ? language : "en").even}
+              </b>
             </div>
             <svg
               className="dominance-bars"

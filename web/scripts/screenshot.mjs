@@ -33,7 +33,12 @@ try {
     .waitFor({ timeout: 60000 });
   await page
     .getByRole("region", { name: "FAN view" })
-    .getByText("Sigue la emoción del partido.")
+    .getByText("Follow the action as the match unfolds.")
+    .first()
+    .waitFor({ timeout: 60000 });
+  await page
+    .locator(".agent-grid")
+    .getByText(/offline mock model/)
     .first()
     .waitFor({ timeout: 60000 });
   await page.waitForFunction(
@@ -132,7 +137,7 @@ try {
     "About uses a centred full-width card and readable text column",
   );
   await page
-    .getByRole("heading", { name: "One match. An entire AI crew." })
+    .getByRole("heading", { name: "One match. A whole production crew." })
     .waitFor();
   await checkLayout();
   await page.screenshot({

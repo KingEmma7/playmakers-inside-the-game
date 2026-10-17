@@ -11,7 +11,7 @@ Open the web root. Replay starts automatically.
 
 ## Driving it with Playwright
 
-Select `50` in `REPLAY SPEED`. Wait for heading `Passing under pressure` in region `ANALYST view` and text `Sigue la emoción del partido.` in region `FAN view`. Wait until `.shared-clock` reads at least `20:` and two `[data-testid="cue-card"]` elements exist.
+Select `50` in `REPLAY SPEED`. Wait for heading `Passing under pressure` in region `ANALYST view` and text `Follow the action as the match unfolds.` in region `FAN view` (the fan panel defaults to English), and for an Agents row reading `offline mock model`. Wait until `.shared-clock` reads at least `20:` and two `[data-testid="cue-card"]` elements exist.
 
 ## Gotchas
 

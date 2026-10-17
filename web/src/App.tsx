@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 import lockupUrl from "./assets/playmakers-lockup.svg";
 import symbolUrl from "./assets/playmakers-symbol.svg";
 import { ViewPanel, Crest } from "./Overlay";
-import { playerName } from "./players";
+import { countLabel, playerName } from "./players";
 import TracePanel from "./TracePanel";
 import { apiBaseUrl, usePlaymakersStream, clockLabel } from "./stream";
 import { chooseSpeaker, useVoice, type Speaker } from "./voice";
-const FAN_LANGUAGES = ["es", "fr", "en"] as const;
+const FAN_LANGUAGES = ["en", "es", "fr"] as const;
 type FanLanguage = (typeof FAN_LANGUAGES)[number];
 function About() {
   return (
@@ -16,7 +16,7 @@ function About() {
         <h1>
           One match.
           <br />
-          An entire AI crew.
+          A whole production crew.
         </h1>
         <p>
           Playmakers turns a seeded, synthetic football match into evidence-backed
@@ -35,12 +35,13 @@ function About() {
             <b>Delivery</b> Compliance · Graphics · Audience · Your screen
           </p>
         </div>
-        <h2>A specialist crew. One verified story.</h2>
+        <h2>Two AI writers. Rule-based checks around them.</h2>
         <p>
-          Microsoft Agent Framework coordinates specialist agents. Deterministic
-          Stats tools provide numbers through MCP. Compliance checks claims
-          against event IDs. Graphics validates timed cues, and Audience shapes
-          the same moment for analysts and fans in English, Spanish or French.
+          A Microsoft Agent Framework workflow runs the crew. Tactics and
+          Storyline write with a language model. Stats, Compliance, Graphics and
+          Audience are deterministic: they serve numbers over MCP, check every
+          claim against event IDs, validate cues and shape them for analysts and
+          fans in English, Spanish or French.
         </p>
         <h2>Built to keep broadcasting.</h2>
         <p>
@@ -51,11 +52,9 @@ function About() {
         </p>
         <h2>What is running here?</h2>
         <p>
-          The local demo uses an offline mock model, in-memory state and file
-          checkpoints. Foundry/Azure OpenAI model clients are available when
-          configured. Cosmos DB, Container Apps deployment and cloud
-          observability are planned for Phase 4; this page does not claim they
-          are deployed.
+          Without Azure settings an offline mock model stands in, so agent
+          timings are local, not model latency. With Microsoft Foundry or Azure
+          OpenAI set, Tactics and Storyline are called only on key moments.
         </p>
         <p className="muted">
           Press D on Replay to toggle broadcast safe areas.
@@ -75,7 +74,22 @@ export default function App() {
 function Playmakers() {
   const [seed, setSeed] = useState(7);
   const [speed, setSpeed] = useState(10);
-  const [language, setLanguage] = useState<FanLanguage>("es");
+  const [language, setLanguage] = useState<FanLanguage>("en");
+  const [liveModel, setLiveModel] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${apiBaseUrl()}/model/config`)
+      .then((response) => response.json())
+      .then((data: unknown) => {
+        const live =
+          typeof data === "object" && data !== null && "live" in data && data.live === true;
+        if (!cancelled) setLiveModel(live);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [favourite, setFavourite] = useState("H09");
   const [safe, setSafe] = useState(false);
   const [running, setRunning] = useState(true);
@@ -240,9 +254,9 @@ function Playmakers() {
                   if (choice) setLanguage(choice);
                 }}
               >
+                <option value="en">English</option>
                 <option value="es">Español</option>
                 <option value="fr">Français</option>
-                <option value="en">English</option>
               </select>
             </div>
             <button
@@ -350,12 +364,14 @@ function Playmakers() {
                   running={running}
                   status={fan.status}
                   favourite={favourite}
+                  language={language}
                 />
               </div>
             </div>
             <TracePanel
               traces={traces}
               recoveryClock={replayFrom}
+              mockModel={!liveModel || Boolean(analyst.offline || fan.offline)}
               disabled={!event || !running || Boolean(kill)}
               onKill={() => {
                 const minute = Math.floor(clock / 60000);
@@ -368,12 +384,13 @@ function Playmakers() {
             <div>
               <b>Match so far</b>
               <span>
-                {
+                {countLabel(
                   analyst.events.filter(
                     (e) => e.sequence <= sequence && e.event_type === "shot",
-                  ).length
-                }{" "}
-                shots · Synthetic match
+                  ).length,
+                  "shot",
+                )}{" "}
+                · Synthetic match
               </span>
             </div>
             <div className="timeline-track">

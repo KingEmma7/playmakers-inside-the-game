@@ -130,3 +130,15 @@ async def test_live_slot_is_held_while_streaming_and_released_after(
     assert first == [{"type": "event", "active": 1}]
     assert seen_reasons == [None]  # Granted: the live model client is used.
     assert (budget.active, budget.started_today) == (0, 1)
+
+
+def test_model_config_tells_the_ui_whether_timings_are_from_a_live_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name in (*LIVE_ENV, "AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_DEPLOYMENT"):
+        monkeypatch.delenv(name, raising=False)
+    client = TestClient(api.app)
+    assert client.get("/model/config").json() == {"live": False}
+    for name, value in LIVE_ENV.items():
+        monkeypatch.setenv(name, value)
+    assert client.get("/model/config").json() == {"live": True}

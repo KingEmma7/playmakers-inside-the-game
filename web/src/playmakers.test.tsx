@@ -41,6 +41,11 @@ const wireEvent = (fields: Record<string, unknown>) => ({
   labels: [],
   ...fields,
 });
+const parseEvent = (fields: Record<string, unknown>): MatchEvent => {
+  const message = parseStreamMessage(JSON.stringify(wireEvent(fields)));
+  if (message.kind !== "event") throw new Error("not an event");
+  return message.event;
+};
 const trace = (overrides: Partial<Trace> = {}): Trace => ({
   agent: "tactics",
   action: "insight",
@@ -90,6 +95,7 @@ describe("broadcast cues", () => {
           {...common}
           title="FAN"
           persona="casual"
+          language="es"
           cues={[
             cue({
               cue_id: "fan",
@@ -112,6 +118,7 @@ describe("broadcast cues", () => {
       "Sigue la emoción",
     );
     expect(screen.getAllByText("Dominance")).toHaveLength(1);
+    expect(screen.getAllByText("Dominio")).toHaveLength(1);
     expect(screen.getByText(/Okafor · favourite player/)).toBeInTheDocument();
   });
   it("shows before/after win probabilities and delta", () => {
@@ -449,6 +456,56 @@ describe("broadcast cues", () => {
       );
       expect(screen.getByRole("log")).toHaveTextContent("12.3");
     }
+  });
+  it("names the crew honestly and labels mock-model timings as mock", () => {
+    const traces = [trace(), trace({ agent: "compliance", latency_ms: 0.4 })];
+    const { rerender } = render(
+      <TracePanel traces={traces} onKill={() => {}} disabled={false} />,
+    );
+    expect(screen.getByText("2 AI agents + 6 rule-based steps")).toBeInTheDocument();
+    expect(screen.getByText("insight · 12.3 ms")).toBeInTheDocument();
+    rerender(
+      <TracePanel traces={traces} onKill={() => {}} disabled={false} mockModel />,
+    );
+    expect(screen.getByText("insight · offline mock model")).toBeInTheDocument();
+    expect(screen.queryByText("insight · 12.3 ms")).not.toBeInTheDocument();
+    expect(screen.getByText("insight · 0.4 ms")).toBeInTheDocument();
+  });
+  it("waits for enough events before showing possession and field tilt", () => {
+    const passes = (count: number, team: string, x: number) =>
+      Array.from({ length: count }, (_, i) =>
+        parseEvent({
+          sequence: i,
+          event_type: "pass",
+          team_id: team,
+          end_position: { x, y: 34 },
+          difficulty: 0.2,
+        }),
+      );
+    const props = {
+      title: "Analyst",
+      persona: "analyst",
+      cues: [],
+      clock: 0,
+      safe: false,
+      running: true,
+      status: "",
+    };
+    const early = passes(3, "match_7_HOME", 80);
+    const { rerender } = render(
+      <ViewPanel {...props} events={early} event={early.at(-1)} />,
+    );
+    const metrics = screen.getByLabelText("Match metrics");
+    expect(metrics).toHaveTextContent("—Possession");
+    expect(metrics).toHaveTextContent("—Field tilt");
+    expect(metrics).not.toHaveTextContent("100%");
+    const settled = [
+      ...passes(30, "match_7_HOME", 80),
+      ...passes(10, "match_7_AWAY", 20),
+    ].map((e, i) => ({ ...e, sequence: i }));
+    rerender(<ViewPanel {...props} events={settled} event={settled.at(-1)} />);
+    expect(screen.getByLabelText("Match metrics")).toHaveTextContent("75%Possession");
+    expect(screen.getByLabelText("Match metrics")).toHaveTextContent("75%Field tilt");
   });
   it("keeps fallback visible after rejected output and across audience feeds", () => {
     render(

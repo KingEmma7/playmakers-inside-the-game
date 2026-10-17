@@ -85,6 +85,12 @@ def healthz() -> PlainTextResponse:
     return PlainTextResponse("ok")
 
 
+@app.get("/model/config")
+def model_config() -> dict[str, bool]:
+    """Lets the UI label mock-model timings honestly; a capped live match also says so in-stream."""
+    return {"live": live_model_configured()}
+
+
 async def _sse_stream(seed: int, speed: float) -> AsyncGenerator[bytes, None]:
     events = simulate_match(MatchConfig(seed=seed))
     async for ev in replay_events(events, speed=speed):

@@ -217,26 +217,43 @@ def _percent(value: float) -> str:
     return f"{round(value * 100, 2) + 0.0:g}%"
 
 
+def _level(value: float, words: tuple[str, str, str]) -> str:
+    return words[0] if value < 0.35 else words[1] if value < 0.65 else words[2]
+
+
 def templated_insight(stats: StatsPacket, kind: Literal["tactics", "storyline"]) -> Insight:
     """Routine-event insight written from verified metrics only, so Compliance can pass it."""
     event, m = stats.event, stats.metrics
     team = team_name(event.team_id) if event.team_id else None
     if kind == "tactics":
         if "difficulty" in m and "pressure_index" in m:
-            headline = f"Pass difficulty {_number(m['difficulty'])}"
-            detail = f"{team} pressure index {_number(m['pressure_index'])}."
+            pass_kind = _level(m["difficulty"], ("Routine", "Testing", "Ambitious"))
+            pressure = _level(m["pressure_index"], ("light", "moderate", "heavy"))
+            headline = f"{pass_kind} pass under {pressure} pressure"
+            detail = f"{team} keep the ball moving; this pass rated {_number(m['difficulty'])} for difficulty."
         elif "pressure_index" in m and "turnover_rate" in m:
-            headline = f"{team} pressure index {_number(m['pressure_index'])}"
-            detail = f"Turnover rate {_number(m['turnover_rate'])} in the recent window."
+            pressure = _level(m["pressure_index"], ("light", "steady", "heavy"))
+            headline = f"{team} under {pressure} pressure"
+            turnovers = _percent(m["turnover_rate"])
+            detail = (
+                f"They have given the ball away on {turnovers} of recent passes."
+                if m["turnover_rate"]
+                else f"No misplaced passes recently ({turnovers} turnovers)."
+            )
         else:
-            headline = "Shape check"
-            detail = f"Home possession {_percent(m['home_possession'])}."
+            headline = "Both sides hold their shape"
+            detail = f"The home side have {_percent(m['home_possession'])} of possession so far."
     else:
-        headline = f"{team} on the ball" if team else "The match develops"
-        detail = (
-            f"Home possession {_percent(m['home_possession'])}, "
-            f"home momentum {_number(m['home_momentum'])}."
+        momentum = m["home_momentum"]
+        swing = (
+            "with the home side"
+            if momentum > 0.15
+            else "with the visitors"
+            if momentum < -0.15
+            else "even"
         )
+        headline = f"{team} on the ball" if team else "The match develops"
+        detail = f"Momentum is {swing}, at {_number(momentum)}."
     return Insight(
         insight_id=f"{event.event_id}:{kind}",
         clock_ms=event.clock_ms,

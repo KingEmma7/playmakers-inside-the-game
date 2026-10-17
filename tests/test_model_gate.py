@@ -59,6 +59,7 @@ async def test_routine_events_get_templated_insights_that_pass_compliance() -> N
     director = Director(client=DeterministicMockChatClient())
     engine = StatsEngine()
     routine = 0
+    headlines: set[str] = set()
     for event in events:
         engine.ingest(event)
         if key_moment(event):
@@ -70,10 +71,18 @@ async def test_routine_events_get_templated_insights_that_pass_compliance() -> N
             packet = InsightPacket(stats=stats, insight=insight, kind=kind, templated=True)
             assert director.compliance.validate(packet).ok, (insight.headline, insight.detail)
             assert any(ch.isdigit() for ch in insight.detail)
+            assert "index" not in f"{insight.headline} {insight.detail}".lower()
+            headlines.add(insight.headline)
     assert routine > 300
+    assert "Routine pass under light pressure" in headlines
+    assert "Northbridge Rovers on the ball" in headlines
     cues = await director.on_event(passing())
     assert [c.template for c in cues] == ["tactics", "storyline"]
-    assert cues[0].payload["headline"] == "Pass difficulty 0.6"
+    assert cues[0].payload["headline"] == "Testing pass under moderate pressure"
+    assert cues[0].payload["detail"] == (
+        "Northbridge Rovers keep the ball moving; this pass rated 0.6 for difficulty."
+    )
+    assert cues[1].payload["detail"] == "Momentum is even, at 0."
     for cue in cues:
         assert cue.provenance.source == "template"
         assert cue.provenance.compliance == "verified"

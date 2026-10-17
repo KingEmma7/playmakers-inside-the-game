@@ -1,4 +1,6 @@
 import { clockLabel, agentStatus, type Trace } from "./stream";
+// Tactics and Storyline write with a language model (What-If narrates with one); the rest are rules.
+const MODEL_AGENTS = new Set(["tactics", "storyline", "what_if"]);
 const agents = [
   "director",
   "stats",
@@ -14,11 +16,13 @@ export default function TracePanel({
   onKill,
   disabled,
   recoveryClock = 0,
+  mockModel = false,
 }: {
   traces: Trace[];
   onKill: () => void;
   disabled: boolean;
   recoveryClock?: number;
+  mockModel?: boolean;
 }) {
   const latest = new Map<string, Trace>();
   const byView = new Map<string, Trace>();
@@ -58,7 +62,9 @@ export default function TracePanel({
     <aside className="trace-panel">
       <div className="rail-heading">
         <h2>Agents</h2>
-        <span>{agents.length} specialists</span>
+        <span title="Tactics and Storyline write with a language model. Director, Stats, Compliance, Graphics and Audience are deterministic Agent Framework steps; What-If runs simulations and only its explanation uses a model.">
+          2 AI agents + 6 rule-based steps
+        </span>
       </div>
       <div className="agent-grid">
         {agents.map((agent) => {
@@ -93,7 +99,11 @@ export default function TracePanel({
                       : agent === "director"
                         ? "Orchestrating the crew"
                         : t
-                          ? `${t.action.replaceAll("_", " ")} · ${t.latency_ms.toFixed(1)} ms`
+                          ? `${t.action.replaceAll("_", " ")} · ${
+                              mockModel && MODEL_AGENTS.has(agent)
+                                ? "offline mock model"
+                                : `${t.latency_ms.toFixed(1)} ms`
+                            }`
                           : "Waiting for match events"}
                 </small>
               </div>

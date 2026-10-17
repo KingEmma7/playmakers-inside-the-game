@@ -47,6 +47,7 @@ from playmakers_agents.contracts import (
 )
 from playmakers_agents.model_clients import create_playmakers_chat_client, is_live_client
 from playmakers_agents.personalize import personalize
+from playmakers_agents.players import player_name
 from playmakers_agents.recap import (
     TEAM_NAMES,
     key_moments,
@@ -217,6 +218,61 @@ def _percent(value: float) -> str:
     return f"{round(value * 100, 2) + 0.0:g}%"
 
 
+FOCUS = {
+    "tactics": "Explain shape, pressure and passing.",
+    "storyline": "Explain momentum and how the match story is developing.",
+}
+
+
+def describe_moment(event: MatchEvent) -> dict[str, Any]:
+    """The event in words only: names instead of ids, no positions or measurements to misquote."""
+    moment: dict[str, Any] = {}
+    for key, value in event.model_dump(mode="json").items():
+        if (
+            key in {"event_id", "match_id", "schema_version", "labels"}
+            or isinstance(value, (int, float, dict, list))
+            and not isinstance(value, bool)
+        ):
+            continue
+        if key.endswith("player_id"):
+            moment[key.removesuffix("_id")] = player_name(value) or "a player"
+        elif key.endswith("team_id"):
+            moment[key.removesuffix("_id")] = team_name(value) if value else None
+        else:
+            moment[key] = value
+    return moment
+
+
+def quotable(metrics: dict[str, float]) -> dict[str, str]:
+    """The exact strings Compliance accepts for each verified metric."""
+    return {
+        name: _percent(value) if "possession" in name or name.endswith("_rate") else _number(value)
+        for name, value in metrics.items()
+        if isinstance(value, (int, float)) and not isinstance(value, bool)
+    }
+
+
+def model_insight(text: str, stats: StatsPacket, kind: str) -> dict[str, Any]:
+    """Parse a model reply into an Insight payload.
+
+    The model writes prose and names the metrics it used. Ids, clock and evidence it leaves out
+    come from the handoff; anything it does supply is kept, so Compliance still checks it. Named
+    metrics become their verified values, and unknown names stay invalid.
+    """
+    data = json.loads(text.strip().removeprefix("```json").removeprefix("```").removesuffix("```"))
+    if not isinstance(data, dict):
+        raise ValueError("Expected a JSON object")
+    data.setdefault("insight_id", f"{stats.event.event_id}:{kind}")
+    data.setdefault("clock_ms", stats.event.clock_ms)
+    data.setdefault("kind", kind)
+    data.setdefault("evidence_event_ids", list(stats.evidence_event_ids))
+    if isinstance(data.get("metrics"), list):
+        data["metrics"] = {
+            str(name): stats.metrics.get(str(name), math.nan) for name in data["metrics"]
+        }
+    return data
+
+
 def _level(value: float, words: tuple[str, str, str]) -> str:
     return words[0] if value < 0.35 else words[1] if value < 0.65 else words[2]
 
@@ -335,14 +391,17 @@ class InsightExecutor(Executor):
         self.deadlines: dict[tuple[str, int], float] = {}
         self.instructions = (
             f"You are Playmakers's {kind} analyst for a synthetic fictional football match. "
-            "Return only an Insight JSON object with insight_id, clock_ms, kind, headline, detail, "
-            "metrics, evidence_event_ids. Cite supplied event IDs. Copy numeric metrics exactly; "
-            "every number in prose must match a metric. Do not invent facts or names. "
-            "When tools are available, call possession or pressure_index to verify context before answering. "
-            "For MCP requests use event.match_id, event.event_id, event.clock_ms and event.team_id."
+            f"{FOCUS[kind]} Reply with one JSON object and nothing else, with three keys: "
+            "headline (at most 8 words), detail (one sentence, at most 25 words) and metrics "
+            "(a list of the keys of `metrics` that you mention). The system adds ids, clock and "
+            "evidence. Describe `moment` in plain football language using the player and team "
+            "names given. Use at most two numbers, each written exactly as in `quotable`. Never "
+            "write IDs, clock times, distances, speeds, coordinates or any other number. Do not "
+            "invent facts or names. If tools are available you may call one to confirm context; "
+            "for MCP requests use the ids in `event`."
         )
         self.agent = Agent(
-            client, name=kind, instructions=self.instructions, default_options={"max_tokens": 800}
+            client, name=kind, instructions=self.instructions, default_options={"max_tokens": 400}
         )
         self.tool_agent: Agent | None = None
 
@@ -378,11 +437,20 @@ class InsightExecutor(Executor):
     async def _ask(
         self, stats: StatsPacket, reasons: list[str] | None, task: dict[str, Any] | None
     ) -> InsightPacket:
+        event = stats.event
         prompt = json.dumps(
             {
-                "event": stats.event.model_dump(mode="json"),
+                "event": {
+                    "event_id": event.event_id,
+                    "event_type": event.event_type,
+                    "match_id": event.match_id,
+                    "clock_ms": event.clock_ms,
+                    "team_id": event.team_id,
+                },
+                "moment": describe_moment(event),
                 "kind": self.kind,
                 "metrics": stats.metrics,
+                "quotable": quotable(stats.metrics),
                 "evidence_event_ids": stats.evidence_event_ids,
                 "correction": reasons or [],
                 **(task or {}),
@@ -395,7 +463,7 @@ class InsightExecutor(Executor):
         )
         try:
             response = await agent.run(prompt)
-            insight = Insight.model_validate_json(response.text)
+            insight = Insight.model_validate(model_insight(response.text, stats, self.kind))
             return InsightPacket(stats=stats, insight=insight, kind=self.kind)
         except (ValidationError, ValueError) as exc:
             return InsightPacket(stats=stats, kind=self.kind, error=type(exc).__name__)
@@ -758,7 +826,7 @@ class Director:
             name=writer.kind,
             instructions=writer.instructions,
             tools=[f for f in self.mcp_tool.functions if f.name != "ingest_event"],
-            default_options={"max_tokens": 800},
+            default_options={"max_tokens": 400},
         )
 
     async def __aexit__(self, *args: Any) -> None:
@@ -793,7 +861,7 @@ class Director:
             self.client,
             name=writer.kind,
             instructions=writer.instructions,
-            default_options={"max_tokens": 800},
+            default_options={"max_tokens": 400},
         )
         writer.tool_agent = self._tool_agent(writer)
         engine = StatsEngine()

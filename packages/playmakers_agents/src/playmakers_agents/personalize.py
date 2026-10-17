@@ -115,7 +115,14 @@ async def personalize(
                 "es": "Presión y control: métricas verificadas.",
                 "fr": "Pression et contrôle : mesures vérifiées.",
             }[profile.language]
-    if profile.language != "en" and not isinstance(client, DeterministicMockChatClient):
+    # Fan lines and rule-written captions are already localized; only model prose is translated.
+    model_written = cue.provenance is None or cue.provenance.source == "agent"
+    if (
+        profile.language != "en"
+        and profile.persona == "analyst"
+        and model_written
+        and not isinstance(client, DeterministicMockChatClient)
+    ):
         try:
             response = await asyncio.wait_for(
                 Agent(

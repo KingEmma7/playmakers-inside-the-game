@@ -14,7 +14,7 @@ from playmakers_agents.contracts import OverlayCue, ViewerProfile
 from playmakers_agents.model_clients import DeterministicMockChatClient
 from playmakers_agents.resilience import KillSpec
 from playmakers_agents.what_if import WhatIfAgent
-from playmakers_agents.workflow import Director
+from playmakers_agents.workflow import Director, every_event
 from playmakers_schema.models import CardEvent, GoalEvent
 from replay_api import main as api
 from test_stats import passing, shot
@@ -25,7 +25,10 @@ async def test_kill_fallback_restore_replay_and_resume(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     async with Director(
-        client=DeterministicMockChatClient(), checkpoint_path=str(tmp_path), kill="tactics@20"
+        client=DeterministicMockChatClient(),
+        checkpoint_path=str(tmp_path),
+        kill="tactics@20",
+        model_events=every_event,
     ) as director:
         await director.on_event(passing(clock=19 * 60000))
         original_agent = director.writers[0].agent
@@ -65,7 +68,9 @@ async def test_kill_fallback_restore_replay_and_resume(
 @pytest.mark.parametrize("failure", ["timeout", "exception"])
 async def test_timeouts_and_circuit_backoff(monkeypatch: pytest.MonkeyPatch, failure: str) -> None:
     async with Director(
-        client=DeterministicMockChatClient(), timeouts={"tactics": 0.01, "graphics": 0.01}
+        client=DeterministicMockChatClient(),
+        timeouts={"tactics": 0.01, "graphics": 0.01},
+        model_events=every_event,
     ) as director:
         calls = 0
 

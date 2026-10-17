@@ -15,6 +15,8 @@ const COPY = {
     stats: "Stats used",
     verified:
       "Compliance verified it: every number matches the stats engine and every cited event exists.",
+    templated:
+      "A routine moment, so no model was called: a rule wrote this from verified stats, and Compliance checked every number.",
     corrected: (rejected: number, reason: string) =>
       `Compliance rejected ${rejected} draft${rejected > 1 ? "s" : ""} (${reason}), then verified the correction.`,
     fallback: (reason: string) =>
@@ -37,6 +39,8 @@ const COPY = {
     stats: "Datos usados",
     verified:
       "Compliance lo verificó: cada número coincide con el motor de estadísticas y cada evento citado existe.",
+    templated:
+      "Jugada rutinaria, sin llamada al modelo: una regla lo escribió con datos verificados y Compliance revisó cada número.",
     corrected: (rejected: number, reason: string) =>
       `Compliance rechazó ${rejected} borrador${rejected > 1 ? "es" : ""} (${reason}) y luego verificó la corrección.`,
     fallback: (reason: string) =>
@@ -59,6 +63,8 @@ const COPY = {
     stats: "Données utilisées",
     verified:
       "Compliance l'a vérifié : chaque chiffre correspond au moteur de statistiques et chaque événement cité existe.",
+    templated:
+      "Action de routine, sans appel au modèle : une règle l'a rédigé à partir de statistiques vérifiées, et Compliance a contrôlé chaque chiffre.",
     corrected: (rejected: number, reason: string) =>
       `Compliance a rejeté ${rejected} brouillon${rejected > 1 ? "s" : ""} (${reason}), puis a vérifié la correction.`,
     fallback: (reason: string) =>
@@ -80,6 +86,7 @@ function verdict(provenance: CueProvenance, language?: string | null) {
     return copy.simulated(String(provenance.metrics?.rollouts ?? "—"));
   if (provenance.compliance === "template_fallback")
     return copy.fallback(reason);
+  if (provenance.source === "template") return copy.templated;
   const attempts = provenance.attempts ?? 1;
   return attempts > 1 ? copy.corrected(attempts - 1, reason) : copy.verified;
 }

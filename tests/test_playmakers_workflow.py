@@ -12,7 +12,7 @@ from playmakers_agents.model_clients import (
     DeterministicMockChatClient,
     create_playmakers_chat_client,
 )
-from playmakers_agents.workflow import Director, InsightPacket, compute_stats
+from playmakers_agents.workflow import Director, InsightPacket, compute_stats, every_event
 from stats_mcp.server import create_mcp
 from test_stats import passing, shot
 
@@ -74,7 +74,7 @@ class InventingClient(DeterministicMockChatClient):
 @pytest.mark.asyncio
 async def test_two_retries_then_template() -> None:
     client = InventingClient()
-    director = Director(client=client)
+    director = Director(client=client, model_events=every_event)
     cues = await director.on_event(passing())
     assert client.calls == 6  # Two branches, initial attempt plus two retries each.
     assert all(cue.template == "template_fallback" for cue in cues)
@@ -87,7 +87,7 @@ async def test_two_retries_then_template() -> None:
 @pytest.mark.asyncio
 async def test_correction_can_pass_before_retry_limit() -> None:
     client = InventingClient(failures=2)
-    director = Director(client=client)
+    director = Director(client=client, model_events=every_event)
     cues = await director.on_event(passing())
     assert client.calls == 4
     assert all(cue.template != "template_fallback" for cue in cues)
@@ -98,6 +98,7 @@ async def test_cues_explain_their_agent_stats_and_compliance_verdict() -> None:
     director = Director(
         client=DeterministicMockChatClient(),
         profiles=[ViewerProfile(), ViewerProfile(persona="casual")],
+        model_events=every_event,
     )
     cues = await director.on_event(passing())
     assert {cue.provenance.agent for cue in cues} == {"tactics", "storyline"}
@@ -116,11 +117,13 @@ async def test_cues_explain_their_agent_stats_and_compliance_verdict() -> None:
 
 @pytest.mark.asyncio
 async def test_provenance_records_rejections_retries_and_template_fallback() -> None:
-    corrected = await Director(client=InventingClient(failures=2)).on_event(passing())
+    corrected = await Director(
+        client=InventingClient(failures=2), model_events=every_event
+    ).on_event(passing())
     assert all(cue.provenance.compliance == "verified" for cue in corrected)
     assert all(cue.provenance.attempts == 2 for cue in corrected)
     assert all("Ungrounded metric: difficulty" in cue.provenance.reasons for cue in corrected)
-    failed = await Director(client=InventingClient()).on_event(passing())
+    failed = await Director(client=InventingClient(), model_events=every_event).on_event(passing())
     for cue in failed:
         assert cue.provenance.compliance == "template_fallback"
         assert cue.provenance.source == "template"

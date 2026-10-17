@@ -50,10 +50,32 @@ from playmakers_agents.model_clients import (
     create_playmakers_chat_client,
 )
 from playmakers_agents.personalize import personalize
-from playmakers_agents.recap import TEAM_NAMES, key_moments, localized_recap, recap_text, score
+from playmakers_agents.recap import (
+    TEAM_NAMES,
+    key_moments,
+    localized_recap,
+    recap_text,
+    score,
+    team_name,
+)
 from playmakers_agents.resilience import CircuitBreaker, KillSpec
 from playmakers_agents.state_store import InMemoryMatchStore, MatchState, MatchStore
 from playmakers_agents.what_if import WhatIfAgent
+
+# Model calls are spent on moments a viewer would remember, plus a periodic tactical beat.
+KEY_EVENT_TYPES = frozenset(
+    {"shot", "goal", "foul", "card", "substitution", "kickoff", "period_start", "period_end"}
+)
+TACTICAL_BEAT_EVERY = 30
+TOOL_EVENT_TYPES = frozenset({"shot", "goal"})
+
+
+def key_moment(event: MatchEvent) -> bool:
+    return event.event_type in KEY_EVENT_TYPES or event.sequence % TACTICAL_BEAT_EVERY == 0
+
+
+def every_event(event: MatchEvent) -> bool:
+    return True
 
 
 class StatsPacket(BaseModel):
@@ -68,6 +90,7 @@ class InsightPacket(BaseModel):
     insight: Insight | None = None
     kind: Literal["tactics", "storyline"]
     error: str | None = None
+    templated: bool = False
 
 
 class ApprovedPacket(BaseModel):
@@ -159,6 +182,45 @@ def recap_stats(events: list[MatchEvent], full_time: MatchEvent) -> StatsPacket:
     )
 
 
+def _number(value: float) -> str:
+    return f"{round(value, 2) + 0.0:g}"
+
+
+def _percent(value: float) -> str:
+    return f"{round(value * 100, 2) + 0.0:g}%"
+
+
+def templated_insight(stats: StatsPacket, kind: Literal["tactics", "storyline"]) -> Insight:
+    """Routine-event insight written from verified metrics only, so Compliance can pass it."""
+    event, m = stats.event, stats.metrics
+    team = team_name(event.team_id) if event.team_id else None
+    if kind == "tactics":
+        if "difficulty" in m and "pressure_index" in m:
+            headline = f"Pass difficulty {_number(m['difficulty'])}"
+            detail = f"{team} pressure index {_number(m['pressure_index'])}."
+        elif "pressure_index" in m and "turnover_rate" in m:
+            headline = f"{team} pressure index {_number(m['pressure_index'])}"
+            detail = f"Turnover rate {_number(m['turnover_rate'])} in the recent window."
+        else:
+            headline = "Shape check"
+            detail = f"Home possession {_percent(m['home_possession'])}."
+    else:
+        headline = f"{team} on the ball" if team else "The match develops"
+        detail = (
+            f"Home possession {_percent(m['home_possession'])}, "
+            f"home momentum {_number(m['home_momentum'])}."
+        )
+    return Insight(
+        insight_id=f"{event.event_id}:{kind}",
+        clock_ms=event.clock_ms,
+        kind=kind,
+        headline=headline,
+        detail=detail,
+        metrics=dict(m),
+        evidence_event_ids=list(stats.evidence_event_ids),
+    )
+
+
 async def trace(
     ctx: WorkflowContext, agent: str, action: str, started: float, status: str = "ok"
 ) -> None:
@@ -238,6 +300,7 @@ class InsightExecutor(Executor):
         self.agent = Agent(
             client, name=kind, instructions=self.instructions, default_options={"max_tokens": 800}
         )
+        self.tool_agent: Agent | None = None
 
     async def generate(
         self,
@@ -281,8 +344,13 @@ class InsightExecutor(Executor):
                 **(task or {}),
             }
         )
+        agent = (
+            self.tool_agent
+            if self.tool_agent is not None and stats.event.event_type in TOOL_EVENT_TYPES
+            else self.agent
+        )
         try:
-            response = await self.agent.run(prompt)
+            response = await agent.run(prompt)
             insight = Insight.model_validate_json(response.text)
             return InsightPacket(stats=stats, insight=insight, kind=self.kind)
         except (ValidationError, ValueError) as exc:
@@ -302,6 +370,18 @@ class InsightExecutor(Executor):
             except Exception:
                 self.down = True
                 self.breaker.fail(stats.event.sequence)
+        if not self.down and not self.director.model_events(stats.event):
+            self.agent_sequences[stats.event.match_id] = stats.event.sequence
+            await trace(ctx, self.id, "templated", started)
+            await ctx.send_message(
+                InsightPacket(
+                    stats=stats,
+                    insight=templated_insight(stats, self.kind),
+                    kind=self.kind,
+                    templated=True,
+                )
+            )
+            return
         packet = await self.generate(stats)
         if self.down:
             if not was_down:
@@ -372,7 +452,7 @@ class ComplianceExecutor(Executor):
             if not decision.ok:
                 await trace(ctx, self.id, "rejected", started, "rejected")
             for attempt in range(2):
-                if decision.ok or packet.error == "agent_unavailable":
+                if decision.ok or packet.error == "agent_unavailable" or packet.templated:
                     break
                 await trace(ctx, self.id, f"retry_{attempt + 1}", started, "retry")
                 retry_started = perf_counter()
@@ -393,7 +473,7 @@ class ComplianceExecutor(Executor):
                 reviews.append(
                     CueProvenance(
                         agent=packet.kind,
-                        source="agent",
+                        source="template" if packet.templated else "agent",
                         compliance="verified",
                         attempts=attempts,
                         reasons=reasons,
@@ -538,8 +618,10 @@ class Director:
         whatif_pool: ProcessPoolExecutor | None = None,
         seed: int = 0,
         timeouts: dict[str, float] | None = None,
+        model_events: Callable[[MatchEvent], bool] = key_moment,
     ) -> None:
         self.store = store or InMemoryMatchStore()
+        self.model_events = model_events
         self.kill = KillSpec.parse(kill)
         self.killed = False
         self.timeouts = {
@@ -614,19 +696,20 @@ class Director:
             )
             await self.mcp_tool.__aenter__()
             for writer in self.writers:
-                # Live agents can request the very same deterministic tools; Stats also calls them explicitly.
-                writer.agent = Agent(
-                    self.client,
-                    name=writer.kind,
-                    instructions=writer.instructions,
-                    tools=[
-                        function
-                        for function in self.mcp_tool.functions
-                        if function.name != "ingest_event"
-                    ],
-                    default_options={"max_tokens": 800},
-                )
+                writer.tool_agent = self._tool_agent(writer)
         return self
+
+    def _tool_agent(self, writer: InsightExecutor) -> Agent | None:
+        # Live agents may request the same deterministic Stats tools, but only on shots and goals.
+        if self.mcp_tool is None:
+            return None
+        return Agent(
+            self.client,
+            name=writer.kind,
+            instructions=writer.instructions,
+            tools=[f for f in self.mcp_tool.functions if f.name != "ingest_event"],
+            default_options={"max_tokens": 800},
+        )
 
     async def __aexit__(self, *args: Any) -> None:
         try:
@@ -656,22 +739,19 @@ class Director:
     async def recover(self, writer: InsightExecutor, match_id: str, current_sequence: int) -> None:
         saved = await self.recovery_storage.load(match_id)
         last = saved.agent_sequences.get(writer.kind, -1) if saved else -1
-        # Replace the failed model Agent; preserve MCP tools through the configured prototype.
         writer.agent = Agent(
             self.client,
             name=writer.kind,
             instructions=writer.instructions,
-            tools=[f for f in self.mcp_tool.functions if f.name != "ingest_event"]
-            if self.mcp_tool
-            else None,
             default_options={"max_tokens": 800},
         )
+        writer.tool_agent = self._tool_agent(writer)
         engine = StatsEngine()
         for event in self.store.get_or_create(match_id).events:
             if event.sequence >= current_sequence:
                 break
             engine.ingest(event)
-            if event.sequence > last:
+            if event.sequence > last and self.model_events(event):
                 packet = await asyncio.wait_for(
                     writer._generate_raw(compute_stats(engine, event)),
                     timeout=self.timeouts[writer.kind],

@@ -7,6 +7,7 @@ import {
   type Trace,
 } from "./stream";
 import { CueCard, ViewPanel } from "./Overlay";
+import { ProvenancePanel } from "./Provenance";
 import TracePanel from "./TracePanel";
 import { parseStreamMessage } from "./parse";
 import type { MatchEvent } from "./stream";
@@ -276,6 +277,29 @@ describe("broadcast cues", () => {
     );
     expect(screen.getByTestId("cue-card")).not.toHaveTextContent("· Verified");
     expect(screen.getByRole("button", { name: "Why?" })).toBeInTheDocument();
+  });
+  it("says when a routine insight came from a rule instead of a model", () => {
+    render(
+      <ProvenancePanel
+        cue={cue({
+          provenance: {
+            agent: "tactics",
+            source: "template",
+            compliance: "verified",
+            metrics: { difficulty: 0.6 },
+            metric_evidence: { difficulty: ["e1"] },
+          },
+        })}
+        events={[]}
+        onFocus={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(
+      screen.getByRole("dialog", { name: "Tactics agent: Why?" }),
+    ).toHaveTextContent(
+      "A routine moment, so no model was called: a rule wrote this from verified stats, and Compliance checked every number.",
+    );
   });
   it("shows the full-time recap with moments, pitch highlights and copy", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);

@@ -43,10 +43,21 @@ def run_batch(snapshot: MatchSnapshot, seeds: list[int]) -> Probabilities:
     )
 
 
+def rollout_workers() -> int:
+    """WHATIF_WORKERS, else up to three of the CPUs this process may actually use."""
+    if configured := os.getenv("WHATIF_WORKERS", "").strip():
+        workers = int(configured)
+        if workers < 1:
+            raise ValueError("WHATIF_WORKERS must be at least 1")
+        return workers
+    available = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count()
+    return min(3, available or 1)
+
+
 def create_rollout_pool() -> ProcessPoolExecutor:
     # Spawn avoids inheriting the API event loop, sockets and shutdown signal handlers.
     return ProcessPoolExecutor(
-        max_workers=min(3, os.cpu_count() or 1),
+        max_workers=rollout_workers(),
         mp_context=multiprocessing.get_context("spawn"),
     )
 
@@ -60,11 +71,13 @@ class WhatIfAgent:
         rollouts: int = 200,
         seed: int = 0,
         pool: ProcessPoolExecutor | None = None,
+        explain_timeout: float = 1.5,
     ) -> None:
         if not 1 <= rollouts <= 2000:
             raise ValueError("whatif_rollouts must be between 1 and 2000")
         self.client, self.rollouts, self.seed = client, rollouts, seed
         self.pool = pool
+        self.explain_timeout = explain_timeout
         self._owns_pool = pool is None
         self._pending: set[asyncio.Future[Probabilities]] = set()
 
@@ -173,7 +186,7 @@ class WhatIfAgent:
                         }
                     )
                 ),
-                timeout=1.5,
+                timeout=self.explain_timeout,
             )
             if response.text and not any(c.isdigit() for c in response.text):
                 detail = response.text

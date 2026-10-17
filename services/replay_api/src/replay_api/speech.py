@@ -55,8 +55,9 @@ def ssml(text: str, language: Literal["en", "es", "fr"]) -> str:
 
 def entra_token() -> str:
     from azure.identity import DefaultAzureCredential
+    from playmakers_agents.model_clients import credential_options
 
-    return DefaultAzureCredential().get_token(SCOPE).token
+    return DefaultAzureCredential(**credential_options()).get_token(SCOPE).token
 
 
 async def synthesize(

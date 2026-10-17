@@ -103,6 +103,27 @@ class DeterministicMockChatClient(BaseChatClient[Mapping[str, Any]]):
         return self._build_response_stream(updates())
 
 
+def credential_options() -> dict[str, str]:
+    """Select the user-assigned managed identity when AZURE_CLIENT_ID is set.
+
+    Passing managed_identity_client_id=None would force a system-assigned identity, so the
+    keyword is only supplied when there is a value.
+    """
+    client_id = os.getenv("AZURE_CLIENT_ID", "").strip()
+    return {"managed_identity_client_id": client_id} if client_id else {}
+
+
+def is_live_client(client: BaseChatClient) -> bool:
+    return not isinstance(client, DeterministicMockChatClient)
+
+
+def live_model_configured() -> bool:
+    return bool(
+        os.getenv("AZURE_AI_PROJECT_ENDPOINT")
+        or (os.getenv("AZURE_OPENAI_ENDPOINT") and os.getenv("AZURE_OPENAI_DEPLOYMENT"))
+    )
+
+
 def create_playmakers_chat_client() -> BaseChatClient:
     """Live models are selected only by explicit Playmakers environment configuration."""
     if endpoint := os.getenv("AZURE_AI_PROJECT_ENDPOINT"):
@@ -113,7 +134,9 @@ def create_playmakers_chat_client() -> BaseChatClient:
         if not model:
             raise ValueError("AZURE_AI_MODEL_DEPLOYMENT is required with AZURE_AI_PROJECT_ENDPOINT")
         return FoundryChatClient(
-            project_endpoint=endpoint, model=model, credential=DefaultAzureCredential()
+            project_endpoint=endpoint,
+            model=model,
+            credential=DefaultAzureCredential(**credential_options()),
         )
     endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
     deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT")
@@ -122,6 +145,8 @@ def create_playmakers_chat_client() -> BaseChatClient:
         from azure.identity.aio import DefaultAzureCredential
 
         return OpenAIChatCompletionClient(
-            azure_endpoint=endpoint, model=deployment, credential=DefaultAzureCredential()
+            azure_endpoint=endpoint,
+            model=deployment,
+            credential=DefaultAzureCredential(**credential_options()),
         )
     return DeterministicMockChatClient()

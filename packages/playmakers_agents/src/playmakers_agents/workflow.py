@@ -45,10 +45,7 @@ from playmakers_agents.contracts import (
     OverlayCue,
     ViewerProfile,
 )
-from playmakers_agents.model_clients import (
-    DeterministicMockChatClient,
-    create_playmakers_chat_client,
-)
+from playmakers_agents.model_clients import create_playmakers_chat_client, is_live_client
 from playmakers_agents.personalize import personalize
 from playmakers_agents.recap import (
     TEAM_NAMES,
@@ -76,6 +73,36 @@ def key_moment(event: MatchEvent) -> bool:
 
 def every_event(event: MatchEvent) -> bool:
     return True
+
+
+# Seconds. Live models get room for a tool round-trip; the scripted kill stays the only "down".
+LIVE_TIMEOUTS = {"agent": 8.0, "translation": 3.0, "what_if": 3.0}
+MOCK_TIMEOUTS = {"agent": 4.0, "translation": 1.5, "what_if": 1.5}
+TIMEOUT_ENV = {
+    "agent": "PLAYMAKERS_AGENT_TIMEOUT_S",
+    "translation": "PLAYMAKERS_TRANSLATION_TIMEOUT_S",
+    "what_if": "PLAYMAKERS_WHATIF_TIMEOUT_S",
+}
+DEFAULT_STATS_MCP_URL = "http://127.0.0.1:8000/stats-mcp/"
+
+
+def default_timeouts(live: bool) -> dict[str, float]:
+    defaults = LIVE_TIMEOUTS if live else MOCK_TIMEOUTS
+    resolved: dict[str, float] = {}
+    for name, default in defaults.items():
+        raw = os.getenv(TIMEOUT_ENV[name], "").strip()
+        value = float(raw) if raw else default
+        if not math.isfinite(value) or value <= 0:
+            raise ValueError(f"{TIMEOUT_ENV[name]} must be a positive number of seconds")
+        resolved[name] = value
+    return {
+        "stats": 4.0,
+        "tactics": resolved["agent"],
+        "storyline": resolved["agent"],
+        "graphics": 1.5,
+        "translation": resolved["translation"],
+        "what_if": resolved["what_if"],
+    }
 
 
 class StatsPacket(BaseModel):
@@ -581,10 +608,15 @@ class GraphicsExecutor(Executor):
 
 class AudienceExecutor(Executor):
     def __init__(
-        self, profiles: list[ViewerProfile], store: MatchStore, client: BaseChatClient
+        self,
+        profiles: list[ViewerProfile],
+        store: MatchStore,
+        client: BaseChatClient,
+        timeout: float = 1.5,
     ) -> None:
         super().__init__(id="audience")
         self.profiles, self.store, self.client = profiles, store, client
+        self.timeout = timeout
 
     @handler
     async def handle(
@@ -594,7 +626,7 @@ class AudienceExecutor(Executor):
         for index, profile in enumerate(self.profiles):
             for cue in packet.cues:
                 event = self.store.get_or_create(packet.match_id).events[-1]
-                shaped = await personalize(cue, profile, event, self.client, index)
+                shaped = await personalize(cue, profile, event, self.client, index, self.timeout)
                 self.store.add_overlay_cue(packet.match_id, shaped)
                 await ctx.yield_output(shaped)
         await trace(ctx, self.id, "fan_out", started)
@@ -624,29 +656,28 @@ class Director:
         self.model_events = model_events
         self.kill = KillSpec.parse(kill)
         self.killed = False
-        self.timeouts = {
-            "stats": 4.0,
-            "tactics": 4.0,
-            "storyline": 4.0,
-            "graphics": 1.5,
-            **(timeouts or {}),
-        }
+        self.client = client or create_playmakers_chat_client()
+        self.timeouts = {**default_timeouts(is_live_client(self.client)), **(timeouts or {})}
         self._temporary_checkpoints = None
         if checkpoint_storage is None and checkpoint_path is None:
             self._temporary_checkpoints = tempfile.TemporaryDirectory(prefix="playmakers-")
             checkpoint_path = self._temporary_checkpoints.name
-        self.client = client or create_playmakers_chat_client()
         self.engines: dict[str, StatsEngine] = {}
-        self.what_if = WhatIfAgent(self.client, whatif_rollouts, seed, pool=whatif_pool)
+        self.what_if = WhatIfAgent(
+            self.client,
+            whatif_rollouts,
+            seed,
+            pool=whatif_pool,
+            explain_timeout=self.timeouts["what_if"],
+        )
         self.profiles = profiles or [ViewerProfile()]
         self.last_traces: list[AgentTraceEvent] = []
         self._lock = asyncio.Lock()
         self.mcp_tool: MCPStreamableHTTPTool | None = None
         self.stats_mcp_url = stats_mcp_url
-        if not isinstance(self.client, DeterministicMockChatClient):
-            self.stats_mcp_url = stats_mcp_url or os.getenv(
-                "STATS_MCP_URL", "http://127.0.0.1:8765/mcp"
-            )
+        if is_live_client(self.client):
+            # The API mounts Stats MCP in-process; a standalone server needs STATS_MCP_URL.
+            self.stats_mcp_url = stats_mcp_url or os.getenv("STATS_MCP_URL", DEFAULT_STATS_MCP_URL)
         if checkpoint_path:
             allowed = [
                 f"playmakers_agents.workflow:{name}"
@@ -672,7 +703,9 @@ class Director:
         ]
         self.compliance = ComplianceExecutor(self.store, self.writers)
         self.graphics = graphics = GraphicsExecutor(self.timeouts["graphics"])
-        audience = AudienceExecutor(self.profiles, self.store, self.client)
+        audience = AudienceExecutor(
+            self.profiles, self.store, self.client, self.timeouts["translation"]
+        )
         self.workflow = (
             WorkflowBuilder(
                 name="playmakers-director-v1",
@@ -883,7 +916,9 @@ class Director:
             extra = await self.what_if.evaluate(self.store.get_or_create(event.match_id).events)
             if extra:
                 for index, profile in enumerate(self.profiles):
-                    shaped = await personalize(extra, profile, event, self.client, index)
+                    shaped = await personalize(
+                        extra, profile, event, self.client, index, self.timeouts["translation"]
+                    )
                     cues.append(shaped)
                     self.store.add_overlay_cue(event.match_id, shaped)
                 self.last_traces.append(

@@ -20,6 +20,9 @@ dependencies = [
   "azure-identity>=1.17",
 ]
 
+[project.optional-dependencies]
+azure = ["azure-monitor-opentelemetry==1.8.11"]
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 

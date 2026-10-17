@@ -17,6 +17,7 @@ from pitchsim.replay import replay_events
 from pitchsim.sim import simulate_match
 from playmakers_agents.contracts import ViewerProfile
 from playmakers_agents.resilience import KillSpec
+from playmakers_agents.telemetry import configure_tracing
 from playmakers_agents.what_if import create_rollout_pool
 from playmakers_agents.workflow import Director
 from pydantic import TypeAdapter
@@ -56,6 +57,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.whatif_pool = None
 
 
+configure_tracing()
 app = FastAPI(title="Playmakers Replay API", version="0.2.0", lifespan=lifespan)
 app.state.whatif_pool = None
 app.mount("/stats-mcp", FastAPI())

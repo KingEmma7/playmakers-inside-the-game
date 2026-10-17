@@ -11,6 +11,7 @@ from pitchsim.story import load_story
 
 from playmakers_agents.contracts import ViewerProfile
 from playmakers_agents.resilience import KillSpec
+from playmakers_agents.telemetry import configure_tracing
 from playmakers_agents.workflow import Director
 
 
@@ -58,6 +59,7 @@ def main() -> None:
     command.add_argument("--story", help="Path to a planted story YAML script")
     command.add_argument("--limit", type=int, help="Limit events for a quick smoke check")
     command.add_argument("--checkpoint-dir", default="data/checkpoints")
+    configure_tracing("playmakers-cli")
     asyncio.run(demo(parser.parse_args()))
 
 

@@ -73,7 +73,12 @@ def goal_phrase(event: GoalEvent, language: Literal["en", "es", "fr"]) -> tuple[
 
 
 async def personalize(
-    cue: OverlayCue, profile: ViewerProfile, event: MatchEvent, client: BaseChatClient, index: int
+    cue: OverlayCue,
+    profile: ViewerProfile,
+    event: MatchEvent,
+    client: BaseChatClient,
+    index: int,
+    timeout: float = 1.5,
 ) -> OverlayCue:
     payload: dict[str, Any] = dict(cue.payload)
     headline, detail, team_label, player_label = PHRASES[profile.language]
@@ -130,7 +135,7 @@ async def personalize(
                         }
                     )
                 ),
-                timeout=1.5,
+                timeout=timeout,
             )
             caption = Caption.model_validate_json(response.text)
             source = cue.payload if profile.persona == "analyst" else payload

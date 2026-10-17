@@ -4,7 +4,7 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 COPY packages/ packages/
 COPY services/ services/
-RUN pip install --no-cache-dir ./packages/playmakers_schema ./packages/pitchsim ./packages/playmakers_stats ./services/stats_mcp ./packages/playmakers_agents ./services/replay_api && pip check
+RUN pip install --no-cache-dir ./packages/playmakers_schema ./packages/pitchsim ./packages/playmakers_stats ./services/stats_mcp ./packages/playmakers_agents "./services/replay_api[azure]" && pip check
 
 FROM python:3.12-slim
 ENV PATH="/opt/venv/bin:$PATH" PYTHONUNBUFFERED=1

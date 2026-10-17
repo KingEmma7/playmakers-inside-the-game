@@ -159,6 +159,14 @@ Messages are flat JSON objects with `type: "event" | "cue" | "trace"`; SSE uses 
 `data:` frames suitable for `EventSource.onmessage`. CORS defaults to `http://localhost:5173`; set `CORS_ORIGINS` to a comma-separated allowlist before starting the API.
 The stats MCP service remains mounted at `/stats-mcp/`.
 
+Cues may carry an optional `provenance` object (agent, source, Compliance verdict, attempts,
+rejection reasons, metrics used and the events behind each metric). At the final whistle the
+stream adds one `recap` cue per viewer profile (priority 90, 30 s, payload `headline`,
+`detail`, `home_goals`, `away_goals` and `moments`). `GET /speech/config` reports whether
+Azure AI Speech is configured; `GET /speech/synthesize?text=…&language=en|es|fr` (header
+`X-Playmakers-Speech: 1`, at most 280 characters) returns MP3 audio, or 503 when Speech is
+not configured.
+
 Validation: 40 offline tests cover the workflow, recovery/replay, timeout/crash backoff,
 What-If determinism, personalization, translation fallback, scripts and SSE/WS/MCP.
 The full seed-7 kill demo emits 3,147 cues and 9,428 traces, with one fallback cue and

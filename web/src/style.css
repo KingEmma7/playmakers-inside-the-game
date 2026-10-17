@@ -1166,6 +1166,7 @@ header {
 .recap-actions .why {
   border: 0;
   padding: 2px 0;
+  color: var(--home);
 }
 .voice-toggle {
   border: 0;

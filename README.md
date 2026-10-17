@@ -8,7 +8,10 @@ Playmakers is a multi-agent TV production crew for football. It reads a live mat
 
 - **Multi-agent Director.** A Microsoft Agent Framework workflow runs a Stats agent, then Tactics and Storyline agents in parallel. A Compliance agent checks every metric, cited event ID and number in the prose against the deterministic Stats results before Graphics publishes a cue.
 - **Kill and recover.** Press "Stop Tactics agent" mid-match. A template cue covers the gap, the agent restarts from a checkpoint, replays missed events and catches up. Every step shows in the agent trace.
-- **What-If Lab.** Goals, big chances and red cards trigger 200 seeded match simulations comparing before, after and the counterfactual ("if the shot had been saved").
+- **What-If Lab.** Goals, big chances and red cards trigger 200 seeded match simulations comparing before, after and the counterfactual ("if the shot had been saved"). The card sets the actual win chance against the alternative as two bars with the swing in points, and the events behind it are ringed on the pitch for two match minutes.
+- **"Why did it say that?"** Every caption has a Why? link. It opens the agent that wrote it, the Compliance verdict (verified, corrected after a rejection, or replaced by a template, with the reason), the supporting events (click one to ring it on the pitch) and the stats it used. What-If cards say plainly that they come from simulations, not Compliance review.
+- **Full-time recap.** At the final whistle the Storyline agent writes a recap from the verified score. Compliance checks it and every language variant like any other cue. The recap lists 4–6 key moments (goals and red cards first, then the biggest chances) with timestamps and event IDs, and has Copy and Share-as-text buttons. Works offline with the mock models.
+- **Voice commentary.** A Voice toggle reads the fan line aloud in English, Spanish or French using the browser's speech engine. To avoid talking over the match it speaks only priority moments (goals, red cards, What-If, the recap), at least 8 seconds apart. An optional Azure AI Speech voice is available behind environment variables (see [Live models](#live-models)). It has not yet been tested against a live Azure resource.
 - **Personalization.** Analyst and fan feeds side by side from one shared match run, in English, Spanish or French, with favourite-player emphasis.
 - **Stats MCP server.** Deterministic metrics (xG, pressure, pass difficulty, momentum) exposed as MCP tools, each result citing event IDs.
 
@@ -76,6 +79,8 @@ scripts/verify.sh   # boots API + web, runs the Playwright journey, saves screen
 ## Live models
 
 Set `AZURE_OPENAI_ENDPOINT` and `AZURE_OPENAI_DEPLOYMENT`, or `AZURE_AI_PROJECT_ENDPOINT` and `AZURE_AI_MODEL_DEPLOYMENT` for Foundry. Authentication uses `DefaultAzureCredential`. See [.env.example](.env.example).
+
+For the Azure voice, set `AZURE_SPEECH_REGION` and `AZURE_SPEECH_RESOURCE_ID`, and optionally `AZURE_SPEECH_ENDPOINT` (the resource's custom subdomain, which Microsoft Entra authentication requires). The API gets a Microsoft Entra token with `DefaultAzureCredential`; the identity needs the Cognitive Services Speech User role. No Speech key is read or stored. Without these variables the browser voice is used.
 
 ## Tech stack
 

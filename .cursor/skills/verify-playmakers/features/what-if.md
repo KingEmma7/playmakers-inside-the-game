@@ -2,7 +2,7 @@
 
 ## Sub-features
 
-- On goals, big chances, and red cards, 200 seeded rollouts compare before, after, and the counterfactual. The fan view keeps the latest card.
+- On goals, big chances, and red cards, 200 seeded rollouts compare before, after, and the counterfactual. The fan view keeps the latest card. It shows "Lo que pasó" against "Alternativa" as two bars with the swing in points, and both pitches ring the evidence events for two match minutes.
 
 ## How to get to it (user POV)
 

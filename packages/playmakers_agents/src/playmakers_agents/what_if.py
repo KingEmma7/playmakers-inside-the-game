@@ -175,6 +175,7 @@ class WhatIfAgent:
             response = await asyncio.wait_for(
                 Agent(
                     self.client,
+                    name="what_if",
                     instructions="Explain this synthetic football counterfactual in one or two sentences. "
                     "Use no numbers or additional facts; probabilities refer to home.",
                 ).run(

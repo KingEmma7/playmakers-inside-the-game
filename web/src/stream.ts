@@ -35,6 +35,8 @@ const initial = (generation: string): Stream => ({
   status: "connecting",
   generation,
 });
+export const apiBaseUrl = () =>
+  window.PLAYMAKERS_CONFIG?.apiBase || import.meta.env.VITE_API_BASE || "http://localhost:8000";
 export function usePlaymakersStream(params: Params): Stream {
   const query = new URLSearchParams(
     Object.entries(params)
@@ -82,8 +84,7 @@ export function usePlaymakersStream(params: Params): Stream {
     const batchTimer = setInterval(flush, 75);
     setState(initial(query));
     function connect() {
-      const runtime = window.PLAYMAKERS_CONFIG;
-      const apiBase = runtime?.apiBase || import.meta.env.VITE_API_BASE || "http://localhost:8000";
+      const apiBase = apiBaseUrl();
       source = new EventSource(
         `${apiBase}/playmakers/sse?${query}`,
       );

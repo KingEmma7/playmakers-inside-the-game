@@ -4,8 +4,9 @@ import symbolUrl from "./assets/playmakers-symbol.svg";
 import { ViewPanel, Crest } from "./Overlay";
 import { playerName } from "./players";
 import TracePanel from "./TracePanel";
-import { usePlaymakersStream, clockLabel } from "./stream";
-const FAN_LANGUAGES = ["es", "fr"] as const;
+import { apiBaseUrl, usePlaymakersStream, clockLabel } from "./stream";
+import { chooseSpeaker, useVoice, type Speaker } from "./voice";
+const FAN_LANGUAGES = ["es", "fr", "en"] as const;
 type FanLanguage = (typeof FAN_LANGUAGES)[number];
 function About() {
   return (
@@ -81,6 +82,8 @@ function Playmakers() {
   const [pausedSequence, setPausedSequence] = useState(-1);
   const [replayFrom, setReplayFrom] = useState(0);
   const [kill, setKill] = useState<string>();
+  const [voice, setVoice] = useState(false);
+  const [speaker, setSpeaker] = useState<Speaker>();
   const [about, setAbout] = useState(location.pathname === "/about");
   function navigate(path: string) {
     history.pushState(null, "", path);
@@ -135,6 +138,13 @@ function Playmakers() {
   const sequence = running ? shared : Math.min(pausedSequence, shared);
   const event = analyst.events.find((e) => e.sequence === sequence);
   const clock = event?.clock_ms ?? 0;
+  useVoice({
+    enabled: voice && running,
+    cues: fan.cues,
+    events: fan.events,
+    clock,
+    speaker,
+  });
   const traces = [
     ...analyst.traces.filter((t) => t.sequence <= sequence),
     ...fan.traces.filter((t) => t.sequence <= sequence),
@@ -232,8 +242,20 @@ function Playmakers() {
               >
                 <option value="es">Español</option>
                 <option value="fr">Français</option>
+                <option value="en">English</option>
               </select>
             </div>
+            <button
+              type="button"
+              className="control voice-toggle"
+              aria-pressed={voice}
+              onClick={() => {
+                if (!speaker) void chooseSpeaker(apiBaseUrl()).then(setSpeaker);
+                setVoice(!voice);
+              }}
+            >
+              <span>Voice</span> <b>{voice ? "On" : "Off"}</b>
+            </button>
             <div className="control favourite-control">
               <label htmlFor="favourite">Following</label>
               <select

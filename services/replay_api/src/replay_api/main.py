@@ -23,6 +23,8 @@ from pydantic import TypeAdapter
 from starlette.routing import Mount
 from stats_mcp.server import create_mcp
 
+from replay_api.speech import router as speech_router
+
 
 def _whatif_pool(app: FastAPI) -> ProcessPoolExecutor | None:
     pool = getattr(app.state, "whatif_pool", None)
@@ -67,6 +69,9 @@ app.add_middleware(
     allow_methods=["GET"],
     allow_headers=["*"],
 )
+
+
+app.include_router(speech_router)
 
 
 @app.get("/healthz")

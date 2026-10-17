@@ -3,6 +3,7 @@ import { involvementLabel, playerName } from "./players";
 import Pitch from "./Pitch";
 import { eventPoint, type Point } from "./geometry";
 import { ProvenancePanel } from "./Provenance";
+import { whatIfQuestion } from "./whatifCopy";
 import { RecapCard } from "./Recap";
 import { recapMoments } from "./recapText";
 import { activeCues, type MatchEvent, type OverlayCue } from "./stream";
@@ -95,19 +96,7 @@ export function CueCard({
           .replaceAll("★", "")
           .trim()}
       </h3>
-      <p>
-        {whatif && cue.language === "es"
-          ? {
-              "if the shot had been saved":
-                "¿Y si ese disparo se hubiera detenido?",
-              "if the chance had been scored":
-                "¿Y si esa ocasión hubiera sido gol?",
-              "if the red card had not been shown":
-                "¿Y si no hubiera habido tarjeta roja?",
-            }[String(payload.scenario)] ||
-            "¿Y si el desenlace hubiera sido diferente?"
-          : String(payload.detail || "")}
-      </p>
+      <p>{whatif ? whatIfQuestion(cue) : String(payload.detail || "")}</p>
       {!whatif && (
         <small className="evidence" title={cue.evidence_event_ids.join(", ")}>
           {cue.language === "es" ? "Basado en los eventos" : "From events"}{" "}
@@ -319,7 +308,7 @@ export function ViewPanel({
           <small>
             {persona === "analyst"
               ? "Tactics and verified metrics"
-              : `${primary?.language === "fr" ? "Français" : "Español"} · ${playerName(favourite)}`}
+              : `${{ en: "English", es: "Español", fr: "Français" }[primary?.language ?? "es"]} · ${playerName(favourite)}`}
           </small>
         </div>
         <span className="connection">{status}</span>

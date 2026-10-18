@@ -54,7 +54,7 @@ personalization, overlay cues streamed from the API. Offline mock model client s
 - `... --kill tactics@20` (kill Tactics at minute 20) shows: fallback template cues within 1 event,
   "restarted from checkpoint", catch-up, then normal cues. Test covers this.
 - What-If cue at the first goal with `win_prob_before/after/delta`, N rollouts (default 200, parallel), evidence ids.
-- Analyst vs casual(es, favourite player) feeds differ in content (not only translation). Test asserts this.
+- Analyst vs casual (favourite player, English by default; Spanish or French optional) feeds differ in content (not only translation). Test asserts this.
 - `stats_mcp` runs standalone (`python -m stats_mcp`) and LLM agents call its tools through Agent Framework's
   MCP tool (`MCPStreamableHTTPTool`) when an LLM client is configured; offline path calls the same functions directly.
 - `/playmakers/sse` and `/playmakers/ws` stream personalised `OverlayCue` JSON + agent trace events.
@@ -135,7 +135,7 @@ with overlays popping in sync, an agent trace ("Playmakers crew") panel, and **A
 
 ### Acceptance criteria
 - `cd web && npm ci && npm run dev` works against local API; `npm run build`, `npm run lint`, `npm test` pass; added to CI.
-- Split view: left = Analyst feed, right = Casual/Spanish/favourite-player feed, same match clock.
+- Split view: left = Analyst feed, right = Casual fan feed (English by default, Spanish or French one click away, favourite player), same match clock.
 - Overlays: score bug, lower third, momentum bar, pass-difficulty arc, xG shot card, What-If card; respect safe area.
 - Agent trace panel lists handoffs with latency and status; "Kill Tactics" button triggers kill/recover visibly.
 - Controls: seed picker, speed (1×/10×/50×), persona/language/favourite selectors. Fictional team crests generated (SVG shapes).
@@ -158,7 +158,7 @@ Task: Phase 3 — build web/ (React + Vite + TypeScript) broadcast overlay UI.
    delta bar, explanation), ★ favourite-player tag. Cues appear/disappear by clock_ms + duration_ms with
    tasteful CSS animations; priority decides stacking.
 5. Layout "Playmakers": header with controls (seed, speed 1/10/50x, start/pause), two synced panels side by side —
-   ANALYST and FAN (persona casual, language es/fr, favourite player picker). Right rail: Agent Trace panel showing
+   ANALYST and FAN (persona casual, language en/es/fr with English as the default, favourite player picker). Right rail: Agent Trace panel showing
    each agent's handoffs, latency, status colours; status chips per agent (up/down/fallback/recovering).
    A red "Kill Tactics agent" button that restarts the stream with kill at current minute (or calls an API endpoint
    if available) so recovery is visible in both panels and the trace.
@@ -274,18 +274,10 @@ Read AGENTS.md, docs/PLAN.md. Task: Phase 5 — polish for judges (judges may sc
 Summarise and list anything I must do by hand (recording, uploading, submitting).
 ```
 
-### Demo video script draft (target 1:55)
-| Time | Shot | Voice-over (write-out, read calmly) |
-|---|---|---|
-| 0:00–0:10 | Title card "Playmakers" over live split screen | "This is Playmakers: an AI production crew that turns a live match into broadcast graphics, and a different second screen for every fan." |
-| 0:10–0:25 | Architecture diagram (README) | "A Microsoft Agent Framework workflow: two model-backed writers, Tactics and Storyline, plus deterministic Stats, Compliance, Graphics and Audience steps, a stats MCP server and file checkpoints." |
-| 0:25–0:40 | PitchSim calibration report + season file | "There's no real data, so I built PitchSim: a calibrated, seeded simulator — a thousand passes, twenty shots, realistic goals — plus a 380-match season and planted moments for evaluation." |
-| 0:40–1:00 | Live split screen, overlays popping; trace panel | "The Director routes each event: Stats computes numbers through MCP, Tactics and Storyline explain why it matters, Compliance checks every number against the data, Graphics puts it on air." |
-| 1:00–1:20 | Click "Kill Tactics" — fallback, restart, catch-up | "Now I kill the Tactics agent mid-match. Graphics fall back to safe templates within one event… it restarts from its checkpoint and catches up. The broadcast never breaks." |
-| 1:20–1:35 | Goal → What-If card | "At the goal, the What-If agent replays 200 alternate futures: if that shot had been saved, the home side's win chance drops from 61 to 38 percent." |
-| 1:35–1:48 | Analyst vs Fan panels on the same moment | "Same moment, two audiences: dense tactics for the analyst, a simple Spanish card starring her favourite player for the fan." |
-| 1:48–1:55 | CI + URL + GitHub | "Every change runs the tests and a browser journey in CI. Try it — link and code below." |
-Record with OBS (free) at 1920×1080 using `?demo=1`; record voice separately; no music or royalty-free only.
+### Demo video script draft
+> Superseded. The final script targets 1:50 or less and is narrated in English on the live hosted app,
+> with the fan feed in English (one short beat switches to French to show the language option). It is
+> kept outside the repo with the submission text.
 
 ### Elevator pitch draft
 > Superseded. The original draft named Cosmos DB, seven specialised agents and a Foundry evaluation gate,

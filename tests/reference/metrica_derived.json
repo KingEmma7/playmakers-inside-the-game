@@ -1,0 +1,182 @@
+{
+ "source": "Metrica Sports sample-data, Sample_Game_1 and Sample_Game_2 (https://github.com/metrica-sports/sample-data), 105x68 m. Aggregates derived by /workspace/hackathon/realdata/derive_metrica.py; no raw rows are stored. Acknowledged as the source per the repository's README.",
+ "pass_length_m": {
+  "p10": 7.12,
+  "p25": 9.7,
+  "p50": 13.75,
+  "p75": 19.95,
+  "p90": 27.06
+ },
+ "pass_duration_s": {
+  "p10": 0.68,
+  "p25": 0.88,
+  "p50": 1.2,
+  "p75": 1.68,
+  "p90": 2.24
+ },
+ "ball_speed_per_pass_mps": {
+  "p10": 7.01,
+  "p25": 9.08,
+  "p50": 11.71,
+  "p75": 14.67,
+  "p90": 17.88
+ },
+ "shot_flight_s": {
+  "p10": 0.34,
+  "p25": 0.51,
+  "p50": 0.86,
+  "p75": 1.17,
+  "p90": 1.66
+ },
+ "time_between_events_s": {
+  "p10": 0.28,
+  "p25": 1.12,
+  "p50": 2.08,
+  "p75": 3.56,
+  "p90": 6.0
+ },
+ "ball_time_in_thirds_x": [
+  0.22,
+  0.508,
+  0.259
+ ],
+ "ball_time_in_channels_y": [
+  0.325,
+  0.323,
+  0.347
+ ],
+ "ball_spread_sd_m": {
+  "x": 24.4,
+  "y": 19.4
+ },
+ "third_spell_s": {
+  "p50": 4.8,
+  "p90": 15.0,
+  "p99": 33.4,
+  "max": 122.6
+ },
+ "channel_spell_s": {
+  "p50": 3.4,
+  "p90": 11.0,
+  "p99": 25.11,
+  "max": 170.4
+ },
+ "team_width_m": {
+  "in_possession": {
+   "p10": 26.41,
+   "p25": 33.73,
+   "p50": 41.86,
+   "p75": 52.15,
+   "p90": 57.95
+  },
+  "out_of_possession": {
+   "p10": 27.02,
+   "p25": 32.35,
+   "p50": 37.35,
+   "p75": 42.66,
+   "p90": 48.93
+  }
+ },
+ "team_depth_m": {
+  "in_possession": {
+   "p10": 22.1,
+   "p25": 28.53,
+   "p50": 33.02,
+   "p75": 37.73,
+   "p90": 43.41
+  },
+  "out_of_possession": {
+   "p10": 19.9,
+   "p25": 24.51,
+   "p50": 30.22,
+   "p75": 36.71,
+   "p90": 43.57
+  }
+ },
+ "def_line_height_m": {
+  "in_possession": {
+   "p10": 13.47,
+   "p25": 27.64,
+   "p50": 40.98,
+   "p75": 52.27,
+   "p90": 62.9
+  },
+  "out_of_possession": {
+   "p10": 13.3,
+   "p25": 20.4,
+   "p50": 33.6,
+   "p75": 45.4,
+   "p90": 56.62
+  }
+ },
+ "keeper_off_line_m_when_ball_in_own_third_or_mid": {
+  "p10": 1.08,
+  "p25": 2.1,
+  "p50": 3.76,
+  "p75": 6.12,
+  "p90": 9.82
+ },
+ "keeper_lateral_ratio": {
+  "p10": -0.0,
+  "p25": 0.04,
+  "p50": 0.1,
+  "p75": 0.21,
+  "p90": 0.66
+ },
+ "player_speed_mps": {
+  "p10": 0.3,
+  "p25": 0.78,
+  "p50": 1.36,
+  "p75": 2.43,
+  "p90": 3.64
+ },
+ "player_peak_speed_mps": {
+  "p10": 6.78,
+  "p25": 7.28,
+  "p50": 7.69,
+  "p75": 8.09,
+  "p90": 8.26
+ },
+ "player_distance_m_per_min": {
+  "p10": 98.6,
+  "p25": 102.22,
+  "p50": 106.67,
+  "p75": 113.35,
+  "p90": 120.66
+ },
+ "receiver_distance_from_pass_end_m": {
+  "p10": 0.16,
+  "p25": 0.24,
+  "p50": 0.33,
+  "p75": 0.44,
+  "p90": 0.51
+ },
+ "pass_abs_dx_m": {
+  "p10": 2.1,
+  "p50": 7.35,
+  "p90": 17.85
+ },
+ "pass_abs_dy_m": {
+  "p10": 2.72,
+  "p50": 9.52,
+  "p90": 22.44
+ },
+ "switch_share_dy_over_30m": 0.036,
+ "third_spell_passes": {
+  "p50": 2.0,
+  "p90": 6.0,
+  "p99": 12.46
+ },
+ "channel_spell_passes": {
+  "p50": 2.0,
+  "p90": 5.0,
+  "p99": 10.0
+ },
+ "notes": {
+  "time_between_events_s": "all Metrica event types, not only passes",
+  "keeper_off_line": "ball in the keeper's own third",
+  "keeper_lateral_ratio": "(keeper y - 34) / (ball y - 34) with the ball in the keeper's own third",
+  "team_width_depth": "outfield players; possession taken from the event feed",
+  "spells": "seconds use 5 Hz tracking (boundary jitter shortens them); *_passes count consecutive pass end points in one third or channel, comparable with PitchSim's event feed"
+ }
+}

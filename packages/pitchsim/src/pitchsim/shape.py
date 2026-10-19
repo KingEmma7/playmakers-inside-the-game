@@ -54,17 +54,55 @@ def from_team(u: float, v: float, home: bool) -> Vec2:
     return Vec2(x=_clamp(x, 0.0, PITCH_LENGTH_M), y=_clamp(y, 0.0, PITCH_WIDTH_M))
 
 
+# Team shape constants, fitted to open tracking data (Metrica Sports sample games; see
+# pitchsim/reference/metrica_derived.json): outfield width ~42 m in possession and ~37 m out of it,
+# depth ~30-33 m, the keeper ~4 m off the line and on the ball-to-goal line.
+SHAPE_CENTRE_U = 33.0
+LINE_SHIFT = 0.72
+IN_POSSESSION_PUSH = 6.0
+OUT_OF_POSSESSION_PUSH = 7.0
+WIDTH_IN_MIN = 0.55
+WIDTH_IN_GAIN = 0.4
+WIDTH_OUT_MIN = 0.6
+WIDTH_OUT_GAIN = 0.18
+BALL_SHIFT_IN = 0.3
+BALL_SHIFT_OUT = 0.42
+DEPTH_IN_GAIN = 0.25
+DEPTH_OUT_MIN = 0.85
+DEPTH_OUT_GAIN = 0.3
+KEEPER_ANGLE = 0.6
+PASS_LENGTH_SCALE = 0.95
+PASS_LATERAL_M = 19.0
+
+
+def keeper_depth(bu: float) -> float:
+    """Metres off the goal line: close in when the ball is near, sweeping up when it is far."""
+    return _clamp(1.5 + 0.1 * bu if bu < 35.0 else 5.0 + (bu - 35.0) * 0.12, 1.5, 13.0)
+
+
 def slot(index: int, ball: Vec2, *, home: bool, attacking: bool) -> Vec2:
-    """Where shirt `index + 1` stands when the ball is at `ball` (a formation, not tracking data)."""
+    """Where shirt `index + 1` stands when the ball is at `ball` (a formation, not tracking data).
+
+    In possession the team stretches (wide players hold the touchline, the back line steps up);
+    out of possession it is compact and shifts across to the ball side. The keeper stands on the
+    line from the ball to the centre of the goal."""
     bu, bv = to_team(ball, home)
     base_u, base_v = BASE_SHAPE[index]
     lo, hi = LINE_LIMITS[index]
     if index == 0:
-        u = base_u + max(0.0, bu - 30.0) * 0.12
-        v = 34.0 + (bv - 34.0) * 0.2
+        u = keeper_depth(bu)
+        v = 34.0 + _clamp(KEEPER_ANGLE * (bv - 34.0) * u / max(bu, u + 1.0), -5.0, 5.0)
+        return from_team(u, v, home)
+    if attacking:
+        depth = 1.0 + DEPTH_IN_GAIN * _clamp((bu - 35.0) / 50.0, 0.0, 1.0)
+        width = WIDTH_IN_MIN + WIDTH_IN_GAIN * _clamp(bu / 85.0, 0.0, 1.0)
+        shift, push = BALL_SHIFT_IN, IN_POSSESSION_PUSH
     else:
-        u = base_u + (bu - 40.0) * 0.72 + (6.0 if attacking else -2.0)
-        v = 34.0 + (base_v - 34.0) * 0.85 + (bv - 34.0) * 0.3
+        depth = DEPTH_OUT_MIN + DEPTH_OUT_GAIN * _clamp(bu / 70.0, 0.0, 1.0)
+        width = WIDTH_OUT_MIN + WIDTH_OUT_GAIN * _clamp(bu / 80.0, 0.0, 1.0)
+        shift, push = BALL_SHIFT_OUT, OUT_OF_POSSESSION_PUSH
+    u = SHAPE_CENTRE_U + (base_u - SHAPE_CENTRE_U) * depth + (bu - 40.0) * LINE_SHIFT + push
+    v = 34.0 + (base_v - 34.0) * width + (bv - 34.0) * shift
     return from_team(_clamp(u, lo, hi), _clamp(v, 3.0, PITCH_WIDTH_M - 3.0), home)
 
 
@@ -86,9 +124,9 @@ def nearest(
     )
 
 
-THIRD_SHOT_P = 0.006
-BOX_SHOT_P = 0.04
-CENTRAL_SHOT_P = 0.4
+THIRD_SHOT_P = 0.008
+BOX_SHOT_P = 0.07
+CENTRAL_SHOT_P = 0.6
 
 
 def shot_bonus(ball: Vec2, *, home: bool) -> float:
@@ -130,7 +168,9 @@ def keep_in_play(start: Vec2, dx: float, dy: float, *, home: bool) -> Vec2:
 def restart_after_shot(outcome: str, position: Vec2, *, defending_home: bool) -> tuple[str, Vec2]:
     """Possession change after a shot that did not score: keeper save, goal kick or blocked shot."""
     if outcome == "saved":
-        return "keeper_save", from_team(4.0, 34.0, defending_home)
+        # The keeper holds it where the save was made: on the line from the shot to the goal.
+        _, v = to_team(position, defending_home)
+        return "keeper_save", from_team(3.0, 34.0 + _clamp((v - 34.0) * 0.12, -3.0, 3.0), defending_home)
     if outcome == "blocked":
         u, v = to_team(position, defending_home)
         return "shot_blocked", from_team(_clamp(u + 6.0, 6.0, 40.0), v, defending_home)
@@ -138,25 +178,25 @@ def restart_after_shot(outcome: str, position: Vec2, *, defending_home: bool) ->
 
 
 BUILD_UP_PUSH = 0.6
-RESET_P = 0.07
+RESET_P = 0.05
 SWITCH_P = 0.14
 SWITCH_WIDE_M = 9.0
 SWITCH_MAX_U = 75.0
 SQUEEZE_U = 75.0
-SQUEEZE = 0.05
-CENTRE_PULL = 0.03
+SQUEEZE = 0.03
+CENTRE_PULL = 0.0
 
 
 def pass_target(rng: random.Random, start: Vec2, *, home: bool, directness: float) -> Vec2:
     """Where a pass from `start` is aimed: build-up out of the back, recycling near the box,
     resets to the back line when an attack is held up, and switches of play to the far side."""
     u, v = to_team(start, home)
-    base_len = rng.uniform(4.0, 18.0) + directness * rng.uniform(4.0, 18.0)
+    base_len = PASS_LENGTH_SCALE * (rng.uniform(4.0, 18.0) + directness * rng.uniform(4.0, 18.0))
     forward = rng.uniform(0.2, 1.0) * (0.6 + 0.7 * directness)
     forward -= recycle(start, home=home)
     forward += BUILD_UP_PUSH * max(0.0, 40.0 - u) / 34.0
     du = base_len * forward
-    dv = rng.uniform(-10.0, 10.0) + CENTRE_PULL * (PITCH_WIDTH_M / 2.0 - v)
+    dv = rng.uniform(-PASS_LATERAL_M, PASS_LATERAL_M) + CENTRE_PULL * (PITCH_WIDTH_M / 2.0 - v)
     if (
         u < SWITCH_MAX_U
         and abs(v - PITCH_WIDTH_M / 2.0) > SWITCH_WIDE_M
@@ -178,7 +218,7 @@ def carry_target(rng: random.Random, start: Vec2, *, home: bool) -> Vec2:
     base = rng.uniform(1.0, 10.0)
     push = rng.uniform(0.2, 1.0) - 0.8 * recycle(start, home=home)
     du = base * push
-    dv = rng.uniform(-6.0, 6.0) + 0.04 * (PITCH_WIDTH_M / 2.0 - v)
+    dv = rng.uniform(-6.0, 6.0) + 0.0 * (PITCH_WIDTH_M / 2.0 - v)
     return keep_in_play(start, du if home else -du, dv if home else -dv, home=home)
 
 

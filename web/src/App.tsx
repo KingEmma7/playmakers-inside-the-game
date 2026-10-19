@@ -72,7 +72,7 @@ export default function App() {
   return <Playmakers />;
 }
 function Playmakers() {
-  const [seed, setSeed] = useState(8);
+  const [seed, setSeed] = useState(382);
   const [speed, setSpeed] = useState(10);
   const [language, setLanguage] = useState<FanLanguage>("en");
   const [liveModel, setLiveModel] = useState(false);

@@ -367,6 +367,22 @@ touchline players are never clipped, and `prefers-reduced-motion` jumps straight
 PitchSim itself keeps the ball in play (deep balls are cut back, wide ones folded in), makes the
 player on the ball the one who passes, carries or shoots, picks the receiver whose formation slot
 is nearest the target, and hands the ball to the defending team after a save, block or miss. Pause/resume is a local program freeze, not server pause.
+
+Grounding in real data. Team shape, pass geometry and the keeper's position are fitted to open
+tracking data from Metrica Sports (sample games 1 and 2, https://github.com/metrica-sports/sample-data,
+used with acknowledgement as its README asks). Only aggregates are kept, in
+`tests/reference/metrica_derived.json` (no raw rows): ball time per third (22/51/26%) and channel
+(33/32/35%), pass length (median 13.8 m), lateral and forward pass components, runs of consecutive
+passes in one zone, team width (median 42 m in possession, 37 m out of it), depth, back-line height,
+keeper distance off the line (median 3.8 m with the ball in his third) and how far he follows the
+ball across (about a tenth of its offset), plus ball speed per pass (median 11.7 m/s, faster for
+longer passes) and shot flight time (median 0.86 s). `tests/test_pitch_spread.py` checks PitchSim
+and `shape.slot` against those ranges. In possession the team stretches and the wide players hold
+the touchline; out of possession it is compact and shifts to the ball side; build-up pushes the ball
+out of the back, attacks that stall are reset to the back line, and wide players switch play to the
+far side. On the web pitch the ball flies at a speed proportional to the real speed for that pass
+length, the nearest defender presses the player on the ball, the keeper stays on the ball-to-goal
+line and moves (and dives) to the shot, and the analyst cards sit in the heading strip, off the pitch.
 Reconnect rebuilds ephemeral server sessions rather than resuming a stored session. Offline fan
 translations use the small phrase table. What-If probabilities remain synthetic approximations.
 The Azure template in `infra/` and Application Insights tracing are written and validated

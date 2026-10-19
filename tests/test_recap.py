@@ -95,7 +95,8 @@ def test_key_moments_prefer_goals_and_red_cards_then_fill_with_chances() -> None
     goals = [e for e in events if e.event_type == "goal"]
     first_goal = events.index(goals[0])
     moments = key_moments(events[: first_goal + 1])
+    kinds = [m.kind for m in moments]
     assert len(moments) == 4
-    assert [m.kind for m in moments].count("goal") == 1
-    assert all(m.kind in ("goal", "big_chance", "chance") for m in moments)
-    assert len(key_moments(events)) == 6
+    assert kinds.count("goal") == 1 and kinds.count("red_card") == 1
+    assert all(m.kind in ("goal", "red_card", "big_chance", "chance") for m in moments)
+    assert [m.kind for m in key_moments(events)] == ["big_chance", "red_card", "goal", "goal"]

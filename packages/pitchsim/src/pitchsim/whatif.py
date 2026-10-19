@@ -8,17 +8,16 @@ from playmakers_schema.models import MatchEvent, Vec2
 from pydantic import BaseModel, ConfigDict, Field
 
 from pitchsim.config import StoryEvent, TeamStyle
+from pitchsim.shape import keep_in_play, restart_after_shot
 from pitchsim.sim import (
     BASE_EVENT_RATE_PER_S,
     MATCH_MS,
-    PITCH_LENGTH_M,
-    PITCH_WIDTH_M,
     Team,
-    _advance_ball_after_turnover,
     _apply_story,
     _clamp,
     _expovariate_ms,
     _sample_ball_start,
+    _turnover_ball,
     _xg_from_position,
 )
 
@@ -194,10 +193,8 @@ def rollout_from_snapshot(snapshot: MatchSnapshot, *, rollout_seed: int) -> tupl
             forward = rng.uniform(0.2, 1.0) * (0.6 + 0.7 * this_team.style.directness)
             dx = base_len * forward * (1.0 if possession == "home" else -1.0)
             dy = rng.uniform(-10.0, 10.0)
-            end = Vec2(
-                x=_clamp(start.x + dx, 0.0, PITCH_LENGTH_M),
-                y=_clamp(start.y + dy, 0.0, PITCH_WIDTH_M),
-            )
+            end = keep_in_play(start, dx, dy, home=possession == "home")
+            rng.random()  # receiver choice in simulate_match
 
             distance_m = ((start.x - end.x) ** 2 + (start.y - end.y) ** 2) ** 0.5
             pressure = _clamp(opp_team.style.press_intensity * rng.uniform(0.2, 1.0), 0.0, 1.0)
@@ -211,9 +208,7 @@ def rollout_from_snapshot(snapshot: MatchSnapshot, *, rollout_seed: int) -> tupl
                 ball = end
             else:
                 possession = "away" if possession == "home" else "home"
-                ball = _advance_ball_after_turnover(
-                    rng, end, team_for(possession).style.counter_attack
-                )
+                ball = _turnover_ball(rng, end, team_for(possession).style.counter_attack)
             continue
 
         if r < pass_p + carry_p:
@@ -221,18 +216,13 @@ def rollout_from_snapshot(snapshot: MatchSnapshot, *, rollout_seed: int) -> tupl
             base = rng.uniform(1.0, 10.0)
             dx = base * (1.0 if possession == "home" else -1.0) * rng.uniform(0.2, 1.0)
             dy = rng.uniform(-6.0, 6.0)
-            end = Vec2(
-                x=_clamp(start.x + dx, 0.0, PITCH_LENGTH_M),
-                y=_clamp(start.y + dy, 0.0, PITCH_WIDTH_M),
-            )
+            end = keep_in_play(start, dx, dy, home=possession == "home")
             pressure = _clamp(opp_team.style.press_intensity * rng.uniform(0.15, 0.95), 0.0, 1.0)
             if rng.random() < (0.10 + 0.20 * pressure):
                 won = rng.random() < _clamp(0.35 + 0.45 * pressure, 0.1, 0.95)
                 if won:
                     possession = "away" if possession == "home" else "home"
-                    ball = _advance_ball_after_turnover(
-                        rng, end, team_for(possession).style.counter_attack
-                    )
+                    ball = _turnover_ball(rng, end, team_for(possession).style.counter_attack)
                 else:
                     ball = end
             else:
@@ -254,5 +244,9 @@ def rollout_from_snapshot(snapshot: MatchSnapshot, *, rollout_seed: int) -> tupl
                 away_score += 1
             possession = "away" if possession == "home" else "home"
             ball = _sample_ball_start(rng)
+        else:
+            outcome = rng.choice(["saved", "blocked", "off_target", "woodwork"])
+            possession = "away" if possession == "home" else "home"
+            _, ball = restart_after_shot(outcome, pos, defending_home=possession == "home")
 
     return home_score, away_score

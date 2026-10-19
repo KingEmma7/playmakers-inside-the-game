@@ -47,10 +47,10 @@ async def test_mock_match_spends_model_calls_on_key_moments_only() -> None:
         for event in events:
             await director.on_event(event)
     key = sum(key_moment(e) for e in events)
-    assert client.calls["tactics"] == client.calls["storyline"] == key == 102
-    assert client.calls["what_if_explanation"] == 9
+    assert client.calls["tactics"] == client.calls["storyline"] == key == 94
+    assert client.calls["what_if_explanation"] == 4
     assert client.calls["recap"] == 1
-    assert sum(client.calls.values()) == 214 <= 260  # Was 3,148 when every event called both.
+    assert sum(client.calls.values()) == 193 <= 260  # Was 3,148 when every event called both.
 
 
 @pytest.mark.asyncio
@@ -100,7 +100,8 @@ async def test_stats_tools_are_offered_to_models_only_on_shots_and_goals() -> No
         ) as director:
             for event in events:
                 await director.on_event(event)
-    assert {"shot", "kickoff", "pass"} <= {kind for kind, _ in client.tool_calls}
+    kinds = {kind for kind, _ in client.tool_calls}
+    assert {"shot", "kickoff"} <= kinds and kinds - {"shot", "goal"}
     assert all(tools == (kind in ("shot", "goal")) for kind, tools in client.tool_calls)
 
 

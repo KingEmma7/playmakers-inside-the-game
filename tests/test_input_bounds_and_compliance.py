@@ -105,7 +105,7 @@ def test_scores_read_as_two_numbers_and_each_must_be_verified(prose: str, allowe
     from playmakers_agents.contracts import Insight
     from playmakers_agents.workflow import recap_stats
 
-    events = simulate_match(MatchConfig(seed=7))
+    events = simulate_match(MatchConfig(seed=89))  # a 3-3 draw
     stats = recap_stats(events, events[-1])
     assert stats.metrics == {"home_goals": 3, "away_goals": 3}
     insight = Insight(

@@ -22,6 +22,7 @@ from playmakers_schema.models import (
 )
 
 from pitchsim.config import MatchConfig, StoryEvent, TeamStyle
+from pitchsim.shape import keep_in_play, nearest, restart_after_shot
 
 PITCH_LENGTH_M = 105.0
 PITCH_WIDTH_M = 68.0
@@ -73,12 +74,16 @@ def _sample_ball_start(rng: random.Random) -> Vec2:
     )
 
 
-def _advance_ball_after_turnover(rng: random.Random, ball: Vec2, counter_attack: float) -> Vec2:
+def _turnover_ball(rng: random.Random, ball: Vec2, counter_attack: float) -> Vec2:
+    """Where the winning team gains control after a turnover (a short loose ball, always in play)."""
     dx = rng.uniform(-12.0, 12.0) + (counter_attack * rng.uniform(-6.0, 6.0))
     dy = rng.uniform(-10.0, 10.0)
-    return Vec2(
-        x=_clamp(ball.x + dx, 0.0, PITCH_LENGTH_M), y=_clamp(ball.y + dy, 0.0, PITCH_WIDTH_M)
-    )
+    return keep_in_play(ball, dx * 0.4, dy * 0.4, home=True)
+
+
+def _pick_receiver(rng: random.Random, order: list[int]) -> int:
+    r = rng.random()
+    return order[0] if r < 0.62 or len(order) < 3 else order[1] if r < 0.88 else order[2]
 
 
 def _apply_story(style: TeamStyle, story_event: StoryEvent) -> tuple[TeamStyle, list[str]]:
@@ -132,6 +137,8 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
 
     possession = "home" if rng.random() < 0.5 else "away"
     ball = _sample_ball_start(rng)
+    # Index (shirt - 1) of the player on the ball for the team in possession.
+    holder = 9
 
     home_score = 0
     away_score = 0
@@ -170,6 +177,9 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
 
     def opp_for(pos: str) -> Team:
         return away if pos == "home" else home
+
+    def closest(side: str, point: Vec2, *, attacking: bool, exclude: set[int] | None = None) -> int:
+        return nearest(ball, point, home=side == "home", attacking=attacking, exclude=exclude)[0]
 
     add(
         PeriodStartEvent(
@@ -227,6 +237,7 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
             )
             possession = "home" if rng.random() < 0.5 else "away"
             ball = _sample_ball_start(rng)
+            holder = 9
             add(
                 KickoffEvent(
                     event_id=ev_id(),
@@ -266,9 +277,13 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
 
         if 60 <= minute <= 85 and rng.random() < 0.03:
             if possession == "home" and subs_home < 3 and this_team.bench_ids:
-                out_id = rng.choice(this_team.player_ids)
+                out_idx = rng.choice([i for i in range(1, 11) if i != holder])
+                out_id = this_team.player_ids[out_idx]
                 in_id = this_team.bench_ids[subs_home]
                 subs_home += 1
+                lineup = list(this_team.player_ids)
+                lineup[out_idx] = in_id
+                home = Team(**{**home.__dict__, "player_ids": lineup})
                 add(
                     SubstitutionEvent(
                         event_id=ev_id(),
@@ -286,9 +301,13 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
                 )
                 continue
             if possession == "away" and subs_away < 3 and this_team.bench_ids:
-                out_id = rng.choice(this_team.player_ids)
+                out_idx = rng.choice([i for i in range(1, 11) if i != holder])
+                out_id = this_team.player_ids[out_idx]
                 in_id = this_team.bench_ids[subs_away]
                 subs_away += 1
+                lineup = list(this_team.player_ids)
+                lineup[out_idx] = in_id
+                away = Team(**{**away.__dict__, "player_ids": lineup})
                 add(
                     SubstitutionEvent(
                         event_id=ev_id(),
@@ -310,7 +329,7 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
         pass_p = 0.78
         carry_p = 0.13
         foul_p = 0.04 * (1.0 - this_team.style.discipline)
-        shot_p = 0.006 + (0.012 if in_attacking_third else 0.0)
+        shot_p = 0.006 + (0.015 if in_attacking_third else 0.0)
 
         pass_p += 0.06 * (1.0 - this_team.style.directness)
         carry_p += 0.04 * (1.0 - this_team.style.directness)
@@ -321,8 +340,8 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
 
         r = rng.random()
         if r < pass_p:
-            passer = rng.choice(this_team.player_ids)
-            receiver = rng.choice([p for p in this_team.player_ids if p != passer])
+            attacking_home = possession == "home"
+            passer = this_team.player_ids[holder]
             start = ball
 
             base_len = rng.uniform(4.0, 18.0) + (
@@ -331,10 +350,17 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
             forward = rng.uniform(0.2, 1.0) * (0.6 + 0.7 * this_team.style.directness)
             dx = base_len * forward * (1.0 if possession == "home" else -1.0)
             dy = rng.uniform(-10.0, 10.0)
-            end = Vec2(
-                x=_clamp(start.x + dx, 0.0, PITCH_LENGTH_M),
-                y=_clamp(start.y + dy, 0.0, PITCH_WIDTH_M),
+            end = keep_in_play(start, dx, dy, home=attacking_home)
+            deep = (end.x if attacking_home else PITCH_LENGTH_M - end.x) > 30.0
+            options = nearest(
+                start,
+                end,
+                home=attacking_home,
+                attacking=True,
+                exclude={holder, 0} if deep else {holder},
             )
+            receiver_idx = _pick_receiver(rng, options)
+            receiver = this_team.player_ids[receiver_idx]
 
             distance_m = _dist(start, end)
             pressure = _clamp(opp_team.style.press_intensity * rng.uniform(0.2, 1.0), 0.0, 1.0)
@@ -369,12 +395,12 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
 
             if completed:
                 ball = end
+                holder = receiver_idx
             else:
                 old_team = this_team.team_id
                 possession = "away" if possession == "home" else "home"
-                ball = _advance_ball_after_turnover(
-                    rng, end, team_for(possession).style.counter_attack
-                )
+                ball = _turnover_ball(rng, end, team_for(possession).style.counter_attack)
+                holder = closest(possession, ball, attacking=False)
                 add(
                     PossessionChangeEvent(
                         event_id=ev_id(),
@@ -383,7 +409,7 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
                         clock_ms=clock_ms,
                         period=period,
                         team_id=team_for(possession).team_id,
-                        player_id=None,
+                        player_id=team_for(possession).player_ids[holder],
                         from_team_id=old_team,
                         to_team_id=team_for(possession).team_id,
                         reason="pass_incomplete",
@@ -396,15 +422,12 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
             continue
 
         if r < pass_p + carry_p:
-            carrier = rng.choice(this_team.player_ids)
+            carrier = this_team.player_ids[holder]
             start = ball
             base = rng.uniform(1.0, 10.0)
             dx = base * (1.0 if possession == "home" else -1.0) * rng.uniform(0.2, 1.0)
             dy = rng.uniform(-6.0, 6.0)
-            end = Vec2(
-                x=_clamp(start.x + dx, 0.0, PITCH_LENGTH_M),
-                y=_clamp(start.y + dy, 0.0, PITCH_WIDTH_M),
-            )
+            end = keep_in_play(start, dx, dy, home=possession == "home")
             distance_m = _dist(start, end)
             pressure = _clamp(opp_team.style.press_intensity * rng.uniform(0.15, 0.95), 0.0, 1.0)
             add(
@@ -426,7 +449,8 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
             )
 
             if rng.random() < (0.10 + 0.20 * pressure):
-                tackler = rng.choice(opp_team.player_ids)
+                defending = "away" if possession == "home" else "home"
+                tackler = opp_team.player_ids[closest(defending, end, attacking=False)]
                 won = rng.random() < _clamp(0.35 + 0.45 * pressure, 0.1, 0.95)
                 add(
                     TackleEvent(
@@ -448,9 +472,8 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
                 if won:
                     old_team = this_team.team_id
                     possession = "away" if possession == "home" else "home"
-                    ball = _advance_ball_after_turnover(
-                        rng, end, team_for(possession).style.counter_attack
-                    )
+                    ball = _turnover_ball(rng, end, team_for(possession).style.counter_attack)
+                    holder = closest(possession, ball, attacking=False)
                     add(
                         PossessionChangeEvent(
                             event_id=ev_id(),
@@ -459,7 +482,7 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
                             clock_ms=clock_ms,
                             period=period,
                             team_id=team_for(possession).team_id,
-                            player_id=None,
+                            player_id=team_for(possession).player_ids[holder],
                             from_team_id=old_team,
                             to_team_id=team_for(possession).team_id,
                             reason="tackle_won",
@@ -475,8 +498,9 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
             continue
 
         if r < pass_p + carry_p + foul_p:
-            fouler = rng.choice(opp_team.player_ids)
-            fouled = rng.choice(this_team.player_ids)
+            defending = "away" if possession == "home" else "home"
+            fouler = opp_team.player_ids[closest(defending, ball, attacking=False)]
+            fouled = this_team.player_ids[holder]
             position = ball
 
             yellow_p = 0.10 * (1.0 - this_team.style.discipline)
@@ -540,7 +564,7 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
 
             continue
 
-        shooter = rng.choice(this_team.player_ids)
+        shooter = this_team.player_ids[holder]
         pos = ball
         xg = _xg_from_position(pos, attacking_left_to_right=(possession == "home"))
 
@@ -595,6 +619,7 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
             old_team = this_team.team_id
             possession = "away" if possession == "home" else "home"
             ball = _sample_ball_start(rng)
+            holder = 9
             add(
                 PossessionChangeEvent(
                     event_id=ev_id(),
@@ -603,10 +628,32 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
                     clock_ms=clock_ms,
                     period=period,
                     team_id=team_for(possession).team_id,
-                    player_id=None,
+                    player_id=team_for(possession).player_ids[holder],
                     from_team_id=old_team,
                     to_team_id=team_for(possession).team_id,
                     reason="goal_kickoff",
+                    ball_position=ball,
+                    labels=list(active_story_labels),
+                    ground_truth=None,
+                )
+            )
+        else:
+            old_team = this_team.team_id
+            possession = "away" if possession == "home" else "home"
+            reason, ball = restart_after_shot(outcome, pos, defending_home=possession == "home")
+            holder = closest(possession, ball, attacking=False)
+            add(
+                PossessionChangeEvent(
+                    event_id=ev_id(),
+                    match_id=match_id,
+                    sequence=seq,
+                    clock_ms=clock_ms,
+                    period=period,
+                    team_id=team_for(possession).team_id,
+                    player_id=team_for(possession).player_ids[holder],
+                    from_team_id=old_team,
+                    to_team_id=team_for(possession).team_id,
+                    reason=reason,
                     ball_position=ball,
                     labels=list(active_story_labels),
                     ground_truth=None,

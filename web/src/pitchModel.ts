@@ -50,6 +50,10 @@ export function slot(
   const bv = home ? ball.y : WIDTH - ball.y;
   const [baseU, baseV] = BASE_SHAPE[index];
   const [lo, hi] = LINE_LIMITS[index];
+  if (kickoff) {
+    // Lined up for kickoff: the base shape itself, everyone in their own half.
+    return home ? { x: baseU, y: baseV } : { x: LENGTH - baseU, y: WIDTH - baseV };
+  }
   let u: number;
   let v: number;
   if (index === 0) {
@@ -59,7 +63,7 @@ export function slot(
     u = baseU + (bu - 40) * 0.72 + (attacking ? 6 : -2);
     v = 34 + (baseV - 34) * 0.85 + (bv - 34) * 0.3;
   }
-  u = clamp(u, lo, kickoff ? Math.min(hi, 50) : hi);
+  u = clamp(u, lo, hi);
   v = clamp(v, 3, WIDTH - 3);
   return home ? { x: u, y: v } : { x: LENGTH - u, y: WIDTH - v };
 }
@@ -122,6 +126,7 @@ export class PitchModel {
   private sinceArrive = 0;
   private hurry = 1;
   private tracked = new Map<string, Point>();
+  private time = 0;
 
   constructor(public reduced = false) {
     this.reset("");
@@ -374,7 +379,13 @@ export class PitchModel {
     const index = this.lineup[p.side].indexOf(p.id);
     const attacking = p.side === this.possession;
     const base = slot(Math.max(0, index), this.focus(), p.side, attacking, this.kickoff);
-    return base;
+    if (this.reduced || this.kickoff) return base;
+    // Off-the-ball players keep adjusting a little, so a quiet spell never looks frozen.
+    const phase = p.shirt * 1.7 + (p.side === "A" ? 2.3 : 0);
+    return {
+      x: base.x + Math.sin(this.time / 2300 + phase) * 0.9,
+      y: base.y + Math.cos(this.time / 3100 + phase * 1.3) * 0.9,
+    };
   }
 
   /** Advance the animation by `dt` milliseconds. */
@@ -424,6 +435,7 @@ export class PitchModel {
       }
     }
     this.sinceArrive += dt;
+    this.time += dt;
     this.ball = { x: clamp(this.ball.x, -2.2, LENGTH + 2.2), y: clamp(this.ball.y, 0.4, WIDTH - 0.4) };
     this.movePlayers(dt);
     this.updateLanes(dt);

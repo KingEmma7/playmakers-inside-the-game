@@ -1171,13 +1171,11 @@ header {
 .voice-toggle b {
   font-weight: 600;
 }
-.connection.pending {
-  position: static;
-  width: auto;
-  height: auto;
-  margin: 0;
-  overflow: visible;
-  clip-path: none;
+.pitch-status {
+  position: absolute;
+  left: var(--space-3);
+  bottom: var(--space-2);
   font-size: var(--text-xs);
-  color: var(--muted);
+  color: var(--secondary);
+  pointer-events: none;
 }

@@ -352,13 +352,7 @@ export function ViewPanel({
               : `${{ en: "English", es: "Español", fr: "Français" }[primary?.language ?? language]} · ${playerName(favourite)}`}
           </small>
         </div>
-        {event ? (
-          <span className="connection">{status}</span>
-        ) : (
-          <span className="connection pending" role="status">
-            {status === "reconnecting" ? "Reconnecting…" : "Connecting to the crew…"}
-          </span>
-        )}
+        <span className="connection">{status}</span>
       </div>
       <div className="broadcast">
         <Pitch
@@ -370,6 +364,11 @@ export function ViewPanel({
           connect={!recap || Boolean(explained)}
         />
         <div className="vignette" />
+        {!event && (
+          <span className="pitch-status" role="status">
+            {status === "reconnecting" ? "Reconnecting…" : "Connecting to the crew…"}
+          </span>
+        )}
         {safe && (
           <div className="safe-guides">
             <span>90% broadcast safe</span>

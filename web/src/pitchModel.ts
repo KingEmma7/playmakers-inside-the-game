@@ -722,9 +722,11 @@ export class PitchModel {
       if (s?.keeper === p.id && s.dive && s.keeperTo) {
         const t = s.duration ? s.elapsed / s.duration : 1;
         p.dive = Math.max(p.dive, clamp((t - 0.25) * 2, 0, 1));
-        p.diveAngle = Math.atan2(s.keeperTo.y - p.y, s.keeperTo.x - p.x);
+        // Keepers dive across the goal: the stretch runs along the goal line, toward the ball.
+        p.diveAngle =
+          Math.PI / 2 + clamp((s.keeperTo.x - p.x) * 0.15, -0.35, 0.35);
       } else {
-        p.dive = Math.max(0, p.dive - dt / 650);
+        p.dive = Math.max(0, p.dive - dt / 380);
       }
     }
   }

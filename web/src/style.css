@@ -354,19 +354,6 @@ p {
 .momentum .meter {
   flex: 1;
 }
-.loading {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: var(--secondary);
-  font-size: var(--text-md);
-}
-.loading span {
-  font-size: var(--text-xs);
-}
 .session-note {
   font-size: var(--text-xs);
   color: var(--muted);
@@ -1183,4 +1170,14 @@ header {
 }
 .voice-toggle b {
   font-weight: 600;
+}
+.connection.pending {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip-path: none;
+  font-size: var(--text-xs);
+  color: var(--muted);
 }

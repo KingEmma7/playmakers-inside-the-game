@@ -352,11 +352,17 @@ export function ViewPanel({
               : `${{ en: "English", es: "Español", fr: "Français" }[primary?.language ?? language]} · ${playerName(favourite)}`}
           </small>
         </div>
-        <span className="connection">{status}</span>
+        {event ? (
+          <span className="connection">{status}</span>
+        ) : (
+          <span className="connection pending" role="status">
+            {status === "reconnecting" ? "Reconnecting…" : "Connecting to the crew…"}
+          </span>
+        )}
       </div>
       <div className="broadcast">
         <Pitch
-          event={event}
+          events={visibleEvents}
           running={running}
           favourite={persona === "casual" ? favourite : undefined}
           involvement={involvementLabel(visibleEvents, favourite, language)}
@@ -399,12 +405,6 @@ export function ViewPanel({
               {shot.xg.toFixed(2)} <small>xG</small>
             </b>
             <small>{playerName(shot.shooter_player_id)}</small>
-          </div>
-        )}
-        {!event && (
-          <div className="loading">
-            Connecting to the Playmakers crew
-            <span>Waiting for the synthetic match feed…</span>
           </div>
         )}
       </div>

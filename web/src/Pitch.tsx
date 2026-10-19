@@ -1,15 +1,110 @@
 import { useEffect, useRef } from "react";
 import type { MatchEvent } from "./stream";
-import { eventPoint, type Point } from "./geometry";
+import type { Point } from "./geometry";
+import { LENGTH, PitchModel, WIDTH } from "./pitchModel";
+
+// Canvas units: 10 per metre plus a margin so the goals and touchline players are never clipped.
+const SCALE = 10;
+const MARGIN = 36;
+export const CANVAS_W = LENGTH * SCALE + MARGIN * 2;
+export const CANVAS_H = WIDTH * SCALE + MARGIN * 2;
+const px = (m: number) => MARGIN + m * SCALE;
+
+const INK = "#1D1D1F";
+const LINE = "#FFFFFF";
+const GRASS = "#E3ECE4";
+const GRASS_ALT = "#DCE7DE";
+const HOME = "#1F3FA8";
+const AWAY = "#C98A00";
+const FOLLOW = "#2442B5";
+const RED = "#C4282D";
+
+function drawPitch(ctx: CanvasRenderingContext2D) {
+  ctx.fillStyle = GRASS;
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+  // Mowing bands: flat alternating tones, no gradient.
+  ctx.fillStyle = GRASS_ALT;
+  for (let i = 0; i < 14; i += 2) ctx.fillRect(px((LENGTH / 14) * i), px(0), (LENGTH / 14) * SCALE, WIDTH * SCALE);
+  ctx.strokeStyle = LINE;
+  ctx.lineWidth = 3;
+  ctx.strokeRect(px(0), px(0), LENGTH * SCALE, WIDTH * SCALE);
+  ctx.beginPath();
+  ctx.moveTo(px(LENGTH / 2), px(0));
+  ctx.lineTo(px(LENGTH / 2), px(WIDTH));
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(px(LENGTH / 2), px(WIDTH / 2), 9.15 * SCALE, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = LINE;
+  const spot = (x: number, y: number) => {
+    ctx.beginPath();
+    ctx.arc(px(x), px(y), 4, 0, Math.PI * 2);
+    ctx.fill();
+  };
+  spot(LENGTH / 2, WIDTH / 2);
+  for (const end of [0, 1]) {
+    const dir = end ? -1 : 1;
+    const line = end ? LENGTH : 0;
+    const box = (depth: number, width: number) => {
+      const x = end ? line - depth : line;
+      ctx.strokeRect(px(x), px(WIDTH / 2 - width / 2), depth * SCALE, width * SCALE);
+    };
+    box(16.5, 40.32);
+    box(5.5, 18.32);
+    spot(line + dir * 11, WIDTH / 2);
+    // Penalty arc: the part of the 9.15 m circle outside the box.
+    const a = Math.acos(5.5 / 9.15);
+    ctx.beginPath();
+    if (end) ctx.arc(px(LENGTH - 11), px(WIDTH / 2), 9.15 * SCALE, Math.PI - a, Math.PI + a);
+    else ctx.arc(px(11), px(WIDTH / 2), 9.15 * SCALE, -a, a);
+    ctx.stroke();
+    // Goal, drawn behind the line.
+    ctx.save();
+    ctx.strokeStyle = "#B9C4BB";
+    ctx.lineWidth = 2;
+    const gx = end ? px(LENGTH) : px(0) - 2 * SCALE;
+    ctx.fillStyle = "#F4F7F4";
+    ctx.fillRect(gx, px(WIDTH / 2 - 3.66), 2 * SCALE, 7.32 * SCALE);
+    ctx.strokeRect(gx, px(WIDTH / 2 - 3.66), 2 * SCALE, 7.32 * SCALE);
+    ctx.restore();
+  }
+  for (const [x, y, from] of [
+    [0, 0, 0],
+    [LENGTH, 0, Math.PI / 2],
+    [LENGTH, WIDTH, Math.PI],
+    [0, WIDTH, (Math.PI * 3) / 2],
+  ]) {
+    ctx.beginPath();
+    ctx.arc(px(x), px(y), 1 * SCALE, from, from + Math.PI / 2);
+    ctx.stroke();
+  }
+}
+
+function label(ctx: CanvasRenderingContext2D, text: string, x: number, y: number) {
+  ctx.font = "500 24px Inter";
+  const width = ctx.measureText(text).width + 28;
+  const left = Math.max(10, Math.min(CANVAS_W - width - 10, x + 30));
+  const top = Math.max(10, y - 78);
+  ctx.fillStyle = "#FFFFFF";
+  ctx.strokeStyle = "#D2D2D7";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.roundRect(left, top, width, 50, 14);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = INK;
+  ctx.textAlign = "left";
+  ctx.fillText(text, left + 14, top + 33);
+}
+
 export default function Pitch({
-  event,
+  events = [],
   running,
   favourite,
   involvement = "",
   trail = [],
-  connect = true,
 }: {
-  event?: MatchEvent;
+  events?: MatchEvent[];
   running: boolean;
   favourite?: string;
   involvement?: string;
@@ -17,198 +112,158 @@ export default function Pitch({
   connect?: boolean;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
-  const current = useRef<Point>({ x: 52.5, y: 34 });
-  const target = useRef({
-    event,
-    running,
-    favourite,
-    involvement,
-    trail,
-    connect,
-  });
+  const model = useRef<PitchModel>(null);
+  const props = useRef({ running, favourite, involvement, trail });
   useEffect(() => {
-    target.current = { event, running, favourite, involvement, trail, connect };
-  }, [event, running, favourite, involvement, trail, connect]);
+    props.current = { running, favourite, involvement, trail };
+  }, [running, favourite, involvement, trail]);
+  if (!model.current) {
+    const reduced =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    model.current = new PitchModel(Boolean(reduced));
+  }
+  useEffect(() => {
+    model.current?.sync(events);
+  }, [events]);
   useEffect(() => {
     const ctx = canvas.current?.getContext("2d");
-    if (!ctx) return;
+    const m = model.current;
+    if (!ctx || !m) return;
+    const motion = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    const onMotion = () => (m.reduced = Boolean(motion?.matches));
+    motion?.addEventListener?.("change", onMotion);
     let frame = 0;
     let previous = 0;
     function draw(time: number) {
-      if (!ctx) return;
-      const dt = Math.min(50, time - previous || 16);
+      if (!ctx || !m) return;
+      const dt = Math.min(64, previous ? time - previous : 16);
       previous = time;
-      const { event, running, favourite, involvement, trail, connect } =
-        target.current;
-      const goal = eventPoint(event) ?? current.current;
-      if (running) {
-        const blend = 1 - Math.exp(-dt / 180);
-        current.current.x += (goal.x - current.current.x) * blend;
-        current.current.y += (goal.y - current.current.y) * blend;
-      }
-      const w = 1050,
-        h = 680;
-      ctx.clearRect(0, 0, w, h);
-      ctx.fillStyle = "#E6EFE7";
-      ctx.fillRect(0, 0, w, h);
-      ctx.strokeStyle = "#FFFFFF";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(30, 30, 990, 620);
-      ctx.beginPath();
-      ctx.moveTo(525, 30);
-      ctx.lineTo(525, 650);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(525, 340, 91.5, 0, Math.PI * 2);
-      ctx.stroke();
-      for (const x of [30, 855]) {
-        ctx.strokeRect(x, 138.5, 165, 403);
-        ctx.strokeRect(x === 30 ? 30 : 965, 248.5, 55, 183);
-      }
-      if (trail.length) {
-        const inside = (p: Point, r: number) => ({
-          x: Math.max(r + 2, Math.min(1048 - r, p.x * 10)),
-          y: Math.max(r + 2, Math.min(678 - r, p.y * 10)),
-        });
-        if (connect) {
-          ctx.strokeStyle = "#1D1D1F";
-          ctx.lineWidth = 2;
-          ctx.globalAlpha = 0.55;
-          ctx.beginPath();
-          trail.forEach((p, i) => {
-            const { x, y } = inside(p, 9);
-            if (i) ctx.lineTo(x, y);
-            else ctx.moveTo(x, y);
-          });
-          ctx.stroke();
-          ctx.globalAlpha = 1;
-        }
-        for (const [i, p] of trail.entries()) {
-          const last = !connect || i === trail.length - 1;
-          const r = !connect ? 16 : last ? 22 : 9;
-          const { x, y } = inside(p, r);
-          ctx.fillStyle = "#FFFFFF";
-          ctx.strokeStyle = last ? "#C4282D" : "#1D1D1F";
-          ctx.lineWidth = last ? 4 : 2;
-          ctx.beginPath();
-          ctx.arc(x, y, r, 0, Math.PI * 2);
-          if (!last) ctx.fill();
-          ctx.stroke();
-        }
+      const { running, favourite, involvement, trail } = props.current;
+      if (running) m.step(dt);
+      drawPitch(ctx);
+      const live = m.lastSequence >= 0;
+
+      // Pass lines: only the real pass, passer to target, fading once the ball has arrived.
+      for (const lane of m.lanes) {
+        if (lane.age < 0) continue;
+        const flight = m.flight;
+        const inFlight = flight?.kind === "pass" && flight.from.x === lane.from.x && flight.from.y === lane.from.y;
+        const alpha = inFlight ? 0.45 : Math.max(0, 0.45 * (1 - lane.age / 1400));
+        if (alpha <= 0.01) continue;
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = INK;
         ctx.lineWidth = 2;
-      }
-      const ball = current.current;
-      const tracking =
-        event?.event_type === "tracking_frame" ? event.players : null;
-      for (let team = 0; team < 2; team++) {
-        for (let i = 0; i < 11; i++) {
-          const tracked = tracking?.[team * 11 + i];
-          const shape = [
-            [7, 34],
-            [22, 12],
-            [20, 27],
-            [21, 43],
-            [24, 56],
-            [39, 21],
-            [42, 35],
-            [38, 51],
-            [59, 17],
-            [62, 34],
-            [57, 55],
-          ];
-          const [baseX, baseY] = shape[i];
-          const seed = Number(event?.match_id.match(/\d+/)?.[0] || 7);
-          const jitter = (axis: number) =>
-            Math.sin((i + 1) * 17.3 + team * 29 + seed + axis * 43) * 2.5;
-          let x =
-            (team ? 105 - baseX : baseX) +
-            (ball.x - 52.5) * (i ? 0.16 : 0.03) +
-            jitter(0);
-          let y = baseY + (ball.y - 34) * 0.13 + jitter(1);
-          if (tracked) {
-            x = tracked.position.x;
-            y = tracked.position.y;
-          }
-          const actor =
-            event &&
-            ("shooter_player_id" in event
-              ? event.shooter_player_id
-              : "from_player_id" in event
-                ? event.from_player_id
-                : event.player_id);
-          const active = actor?.endsWith(
-            `${team ? "A" : "H"}${String(i + 1).padStart(2, "0")}`,
-          );
-          if (active && !tracked) {
-            x = ball.x - 1.2;
-            y = ball.y + 1.2;
-          }
-          const followed =
-            favourite ===
-            `${team ? "A" : "H"}${String(i + 1).padStart(2, "0")}`;
-          if (followed) {
-            ctx.strokeStyle = "#2442B5";
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.arc(x * 10, y * 10, 27, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.lineWidth = 2;
-            const label = involvement;
-            ctx.font = "500 25px Inter";
-            const width = ctx.measureText(label).width + 32;
-            const left = Math.max(16, Math.min(1034 - width, x * 10 + 32));
-            const top = Math.max(16, y * 10 - 82);
-            ctx.fillStyle = "#FFFFFF";
-            ctx.beginPath();
-            ctx.roundRect(left, top, width, 56, 16);
-            ctx.fill();
-            ctx.fillStyle = "#1D1D1F";
-            ctx.textAlign = "left";
-            ctx.fillText(label, left + 16, top + 36);
-          }
-          ctx.shadowColor = "transparent";
-          ctx.shadowBlur = 0;
-          ctx.fillStyle = team ? "#FFFFFF" : "#1F3FA8";
-          ctx.beginPath();
-          ctx.arc(x * 10, y * 10, active ? 18 : 16, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.strokeStyle = team ? "#C98A00" : "#FFFFFF";
-          ctx.stroke();
-          ctx.shadowBlur = 0;
-          ctx.fillStyle = team ? "#7A5200" : "#FFFFFF";
-          ctx.font = "600 13px Inter";
-          ctx.textAlign = "center";
-          ctx.fillText(String(i + 1), x * 10, y * 10 + 4);
-        }
-      }
-      if (event?.event_type === "pass") {
-        ctx.strokeStyle = "#1D1D1F";
-        ctx.setLineDash([6, 8]);
+        ctx.setLineDash(lane.completed ? [] : [8, 8]);
         ctx.beginPath();
-        ctx.moveTo(event.start_position.x * 10, event.start_position.y * 10);
-        ctx.quadraticCurveTo(
-          (event.start_position.x + event.end_position.x) * 5,
-          (event.start_position.y + event.end_position.y) * 5 - 35,
-          event.end_position.x * 10,
-          event.end_position.y * 10,
-        );
+        ctx.moveTo(px(lane.from.x), px(lane.from.y));
+        ctx.lineTo(px(lane.to.x), px(lane.to.y));
         ctx.stroke();
         ctx.setLineDash([]);
       }
-      ctx.fillStyle = "#1D1D1F";
-      ctx.beginPath();
-      ctx.arc(ball.x * 10, ball.y * 10, 5, 0, Math.PI * 2);
-      ctx.fill();
+      // Passing options: faint lanes from the player on the ball to nearby teammates.
+      const carrier = m.holder ? m.players.get(m.holder) : undefined;
+      if (carrier) {
+        ctx.globalAlpha = 0.16;
+        ctx.strokeStyle = INK;
+        ctx.lineWidth = 1.5;
+        for (const p of m.options()) {
+          ctx.beginPath();
+          ctx.moveTo(px(carrier.x), px(carrier.y));
+          ctx.lineTo(px(p.x), px(p.y));
+          ctx.stroke();
+        }
+      }
+      ctx.globalAlpha = 1;
+
+      // Evidence for Why?, the recap and What-If: numbered rings at the real event positions.
+      trail.forEach((p, i) => {
+        const last = i === trail.length - 1;
+        const x = px(Math.max(0, Math.min(LENGTH, p.x)));
+        const y = px(Math.max(0, Math.min(WIDTH, p.y)));
+        // Dashed so a marked spot never reads as the ball.
+        ctx.strokeStyle = last ? RED : "#737378";
+        ctx.lineWidth = last ? 3 : 2;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.arc(x, y, last ? 26 : 22, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        if (trail.length > 1) {
+          ctx.fillStyle = last ? RED : "#515154";
+          ctx.font = "600 15px Inter";
+          ctx.textAlign = "center";
+          ctx.fillText(String(i + 1), x + (last ? 24 : 20), y - (last ? 20 : 16));
+        }
+      });
+
+      for (const p of m.players.values()) {
+        const x = px(p.x);
+        const y = px(p.y);
+        const onBall = p.id === m.holder;
+        ctx.globalAlpha = (live ? 1 : 0.35) * p.alpha;
+        if (favourite === p.id && live) {
+          ctx.strokeStyle = FOLLOW;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(x, y, 25, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.fillStyle = p.side === "H" ? HOME : AWAY;
+        ctx.strokeStyle = "#FFFFFF";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, onBall ? 17 : 15, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = p.side === "H" ? "#FFFFFF" : INK;
+        ctx.font = "600 14px Inter";
+        ctx.textAlign = "center";
+        ctx.fillText(String(p.shirt), x, y + 5);
+      }
+      ctx.globalAlpha = 1;
+
+      if (live && m.ballAlpha > 0.01) {
+        const bx = px(m.ball.x);
+        const by = px(m.ball.y);
+        const lift = m.ballHeight * SCALE * 0.9;
+        ctx.globalAlpha = m.ballAlpha * 0.22;
+        ctx.fillStyle = INK;
+        ctx.beginPath();
+        ctx.ellipse(bx + 2, by + 4, 9, 4.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = m.ballAlpha;
+        ctx.fillStyle = "#FFFFFF";
+        ctx.strokeStyle = INK;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(bx, by - lift, 9.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = INK;
+        ctx.beginPath();
+        ctx.arc(bx, by - lift, 3.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+
+      if (favourite && live) {
+        const p = m.players.get(favourite);
+        if (p && involvement) label(ctx, involvement, px(p.x), px(p.y));
+      }
       frame = requestAnimationFrame(draw);
     }
     frame = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(frame);
+      motion?.removeEventListener?.("change", onMotion);
+    };
   }, []);
   return (
     <canvas
       ref={canvas}
-      width={1050}
-      height={680}
+      width={CANVAS_W}
+      height={CANVAS_H}
       aria-label="Synthetic football pitch with 22 players and ball"
     />
   );

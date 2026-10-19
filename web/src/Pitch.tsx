@@ -5,10 +5,14 @@ import { LENGTH, PitchModel, WIDTH } from "./pitchModel";
 
 // Canvas units: 10 per metre plus a margin so the goals and touchline players are never clipped.
 const SCALE = 10;
-const MARGIN = 36;
-export const CANVAS_W = LENGTH * SCALE + MARGIN * 2;
-export const CANVAS_H = WIDTH * SCALE + MARGIN * 2;
-const px = (m: number) => MARGIN + m * SCALE;
+// Wider margin at the ends for the goals; a slimmer one along the touchlines keeps the
+// card no taller than before.
+const MARGIN_X = 36;
+const MARGIN_Y = 20;
+export const CANVAS_W = LENGTH * SCALE + MARGIN_X * 2;
+export const CANVAS_H = WIDTH * SCALE + MARGIN_Y * 2;
+const px = (m: number) => MARGIN_X + m * SCALE;
+const py = (m: number) => MARGIN_Y + m * SCALE;
 
 const INK = "#1D1D1F";
 const LINE = "#FFFFFF";
@@ -24,21 +28,21 @@ function drawPitch(ctx: CanvasRenderingContext2D) {
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
   // Mowing bands: flat alternating tones, no gradient.
   ctx.fillStyle = GRASS_ALT;
-  for (let i = 0; i < 14; i += 2) ctx.fillRect(px((LENGTH / 14) * i), px(0), (LENGTH / 14) * SCALE, WIDTH * SCALE);
+  for (let i = 0; i < 14; i += 2) ctx.fillRect(px((LENGTH / 14) * i), py(0), (LENGTH / 14) * SCALE, WIDTH * SCALE);
   ctx.strokeStyle = LINE;
   ctx.lineWidth = 3;
-  ctx.strokeRect(px(0), px(0), LENGTH * SCALE, WIDTH * SCALE);
+  ctx.strokeRect(px(0), py(0), LENGTH * SCALE, WIDTH * SCALE);
   ctx.beginPath();
-  ctx.moveTo(px(LENGTH / 2), px(0));
-  ctx.lineTo(px(LENGTH / 2), px(WIDTH));
+  ctx.moveTo(px(LENGTH / 2), py(0));
+  ctx.lineTo(px(LENGTH / 2), py(WIDTH));
   ctx.stroke();
   ctx.beginPath();
-  ctx.arc(px(LENGTH / 2), px(WIDTH / 2), 9.15 * SCALE, 0, Math.PI * 2);
+  ctx.arc(px(LENGTH / 2), py(WIDTH / 2), 9.15 * SCALE, 0, Math.PI * 2);
   ctx.stroke();
   ctx.fillStyle = LINE;
   const spot = (x: number, y: number) => {
     ctx.beginPath();
-    ctx.arc(px(x), px(y), 4, 0, Math.PI * 2);
+    ctx.arc(px(x), py(y), 4, 0, Math.PI * 2);
     ctx.fill();
   };
   spot(LENGTH / 2, WIDTH / 2);
@@ -47,7 +51,7 @@ function drawPitch(ctx: CanvasRenderingContext2D) {
     const line = end ? LENGTH : 0;
     const box = (depth: number, width: number) => {
       const x = end ? line - depth : line;
-      ctx.strokeRect(px(x), px(WIDTH / 2 - width / 2), depth * SCALE, width * SCALE);
+      ctx.strokeRect(px(x), py(WIDTH / 2 - width / 2), depth * SCALE, width * SCALE);
     };
     box(16.5, 40.32);
     box(5.5, 18.32);
@@ -55,8 +59,8 @@ function drawPitch(ctx: CanvasRenderingContext2D) {
     // Penalty arc: the part of the 9.15 m circle outside the box.
     const a = Math.acos(5.5 / 9.15);
     ctx.beginPath();
-    if (end) ctx.arc(px(LENGTH - 11), px(WIDTH / 2), 9.15 * SCALE, Math.PI - a, Math.PI + a);
-    else ctx.arc(px(11), px(WIDTH / 2), 9.15 * SCALE, -a, a);
+    if (end) ctx.arc(px(LENGTH - 11), py(WIDTH / 2), 9.15 * SCALE, Math.PI - a, Math.PI + a);
+    else ctx.arc(px(11), py(WIDTH / 2), 9.15 * SCALE, -a, a);
     ctx.stroke();
     // Goal, drawn behind the line.
     ctx.save();
@@ -64,8 +68,8 @@ function drawPitch(ctx: CanvasRenderingContext2D) {
     ctx.lineWidth = 2;
     const gx = end ? px(LENGTH) : px(0) - 2 * SCALE;
     ctx.fillStyle = "#F4F7F4";
-    ctx.fillRect(gx, px(WIDTH / 2 - 3.66), 2 * SCALE, 7.32 * SCALE);
-    ctx.strokeRect(gx, px(WIDTH / 2 - 3.66), 2 * SCALE, 7.32 * SCALE);
+    ctx.fillRect(gx, py(WIDTH / 2 - 3.66), 2 * SCALE, 7.32 * SCALE);
+    ctx.strokeRect(gx, py(WIDTH / 2 - 3.66), 2 * SCALE, 7.32 * SCALE);
     ctx.restore();
   }
   for (const [x, y, from] of [
@@ -75,7 +79,7 @@ function drawPitch(ctx: CanvasRenderingContext2D) {
     [0, WIDTH, (Math.PI * 3) / 2],
   ]) {
     ctx.beginPath();
-    ctx.arc(px(x), px(y), 1 * SCALE, from, from + Math.PI / 2);
+    ctx.arc(px(x), py(y), 1 * SCALE, from, from + Math.PI / 2);
     ctx.stroke();
   }
 }
@@ -156,8 +160,8 @@ export default function Pitch({
         ctx.lineWidth = 2;
         ctx.setLineDash(lane.completed ? [] : [8, 8]);
         ctx.beginPath();
-        ctx.moveTo(px(lane.from.x), px(lane.from.y));
-        ctx.lineTo(px(lane.to.x), px(lane.to.y));
+        ctx.moveTo(px(lane.from.x), py(lane.from.y));
+        ctx.lineTo(px(lane.to.x), py(lane.to.y));
         ctx.stroke();
         ctx.setLineDash([]);
       }
@@ -169,8 +173,8 @@ export default function Pitch({
         ctx.lineWidth = 1.5;
         for (const p of m.options()) {
           ctx.beginPath();
-          ctx.moveTo(px(carrier.x), px(carrier.y));
-          ctx.lineTo(px(p.x), px(p.y));
+          ctx.moveTo(px(carrier.x), py(carrier.y));
+          ctx.lineTo(px(p.x), py(p.y));
           ctx.stroke();
         }
       }
@@ -180,7 +184,7 @@ export default function Pitch({
       trail.forEach((p, i) => {
         const last = i === trail.length - 1;
         const x = px(Math.max(0, Math.min(LENGTH, p.x)));
-        const y = px(Math.max(0, Math.min(WIDTH, p.y)));
+        const y = py(Math.max(0, Math.min(WIDTH, p.y)));
         // Dashed so a marked spot never reads as the ball.
         ctx.strokeStyle = last ? RED : "#737378";
         ctx.lineWidth = last ? 3 : 2;
@@ -199,7 +203,7 @@ export default function Pitch({
 
       for (const p of m.players.values()) {
         const x = px(p.x);
-        const y = px(p.y);
+        const y = py(p.y);
         const onBall = p.id === m.holder;
         ctx.globalAlpha = (live ? 1 : 0.35) * p.alpha;
         if (favourite === p.id && live) {
@@ -225,7 +229,7 @@ export default function Pitch({
 
       if (live && m.ballAlpha > 0.01) {
         const bx = px(m.ball.x);
-        const by = px(m.ball.y);
+        const by = py(m.ball.y);
         const lift = m.ballHeight * SCALE * 0.9;
         ctx.globalAlpha = m.ballAlpha * 0.22;
         ctx.fillStyle = INK;
@@ -249,7 +253,7 @@ export default function Pitch({
 
       if (favourite && live) {
         const p = m.players.get(favourite);
-        if (p && involvement) label(ctx, involvement, px(p.x), px(p.y));
+        if (p && involvement) label(ctx, involvement, px(p.x), py(p.y));
       }
       frame = requestAnimationFrame(draw);
     }

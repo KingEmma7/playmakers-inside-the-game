@@ -346,11 +346,38 @@ export function ViewPanel({
         <div>
           <span className="view-dot" />
           {title}
-          <small>
+          <small className="view-subtitle">
             {persona === "analyst"
               ? "Tactics and verified metrics"
               : `${{ en: "English", es: "Español", fr: "Français" }[primary?.language ?? language]} · ${playerName(favourite)}`}
           </small>
+          {/* The analyst's live cards sit in the heading strip, never on top of the pitch. */}
+          {persona === "analyst" && (
+            <span className="pitch-strip" aria-label="Last pass and shot">
+              <span className="pass-stat">
+                <small>
+                  <span className="long">Pass difficulty</span>
+                  <span className="short">Pass</span>
+                </small>
+                <b>
+                  {lastPass?.event_type === "pass"
+                    ? lastPass.difficulty.toFixed(2)
+                    : "—"}
+                </b>
+              </span>
+              <span className="shot-card">
+                <b>
+                  {shot?.event_type === "shot" ? shot.xg.toFixed(2) : "—"}{" "}
+                  <small>xG</small>
+                </b>
+                {shot?.event_type === "shot" && (
+                  <small className="shooter">
+                    {playerName(shot.shooter_player_id)}
+                  </small>
+                )}
+              </span>
+            </span>
+          )}
         </div>
         <span className="connection">{status}</span>
       </div>
@@ -366,44 +393,14 @@ export function ViewPanel({
         <div className="vignette" />
         {!event && (
           <span className="pitch-status" role="status">
-            {status === "reconnecting" ? "Reconnecting…" : "Connecting to the crew…"}
+            {status === "reconnecting"
+              ? "Reconnecting…"
+              : "Connecting to the crew…"}
           </span>
         )}
         {safe && (
           <div className="safe-guides">
             <span>90% broadcast safe</span>
-          </div>
-        )}
-        {persona === "analyst" && lastPass?.event_type === "pass" && (
-          <div className="pass-stat">
-            <svg viewBox="0 0 100 60">
-              <path
-                d="M10 50 A40 40 0 0 1 90 50"
-                pathLength="100"
-                fill="none"
-                stroke="var(--rule)"
-                strokeWidth="5"
-              />
-              <path
-                d="M10 50 A40 40 0 0 1 90 50"
-                pathLength="100"
-                fill="none"
-                stroke="var(--home)"
-                strokeWidth="5"
-                strokeDasharray={`${lastPass.difficulty * 100} 100`}
-              />
-            </svg>
-            <b>{lastPass.difficulty.toFixed(2)}</b>
-            <small>Pass difficulty</small>
-          </div>
-        )}
-        {persona === "analyst" && shot?.event_type === "shot" && (
-          <div className="shot-card">
-            <span>Shot quality</span>
-            <b>
-              {shot.xg.toFixed(2)} <small>xG</small>
-            </b>
-            <small>{playerName(shot.shooter_player_id)}</small>
           </div>
         )}
       </div>
@@ -493,7 +490,9 @@ export function ViewPanel({
         {
           <div className="momentum">
             <div>
-              <span>{labelsFor(persona === "casual" ? language : "en").dominance}</span>
+              <span>
+                {labelsFor(persona === "casual" ? language : "en").dominance}
+              </span>
               <b>
                 {momentum > 0
                   ? "NBR"

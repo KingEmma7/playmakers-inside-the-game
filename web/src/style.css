@@ -231,33 +231,61 @@ canvas {
   font-size: var(--text-xs);
   background: var(--surface);
 }
+.view-subtitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pitch-strip {
+  display: flex;
+  flex: none;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin-left: auto;
+  font-size: var(--text-xs);
+  font-weight: 400;
+  white-space: nowrap;
+}
 .pass-stat,
 .shot-card {
-  position: absolute;
-  top: var(--space-2);
-  background: var(--surface);
-  padding: var(--space-2);
-  border-radius: var(--radius);
-  font-size: var(--text-xs);
-  display: flex;
-  align-items: center;
+  display: inline-flex;
+  align-items: baseline;
   gap: var(--space-1);
 }
-.pass-stat {
-  left: var(--space-2);
-  flex-direction: row-reverse;
+.pitch-strip b {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
-.pass-stat svg {
+.pitch-strip .short {
   display: none;
 }
-.shot-card {
-  right: var(--space-2);
+@media (max-width: 1200px) {
+  .pitch-strip .long,
+  .shot-card .shooter {
+    display: none;
+  }
+  .pitch-strip .short {
+    display: inline;
+  }
+  /* The heading stacks here: keep the strip on the subtitle line so both pitches stay level. */
+  .view-heading > div {
+    position: relative;
+  }
+  .view-heading .pitch-strip {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+  }
+  .view-heading .view-subtitle {
+    max-width: calc(100% - 120px);
+  }
 }
-.shot-card > span {
-  display: none;
-}
-.shot-card b {
-  font-size: var(--text-md);
+.shot-card .shooter {
+  max-width: 9em;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .lower-thirds {
   display: flex;

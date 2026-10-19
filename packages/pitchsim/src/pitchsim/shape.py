@@ -7,6 +7,7 @@ Coordinates are metres on a 105 x 68 pitch. The home team attacks towards x=105 
 from __future__ import annotations
 
 import math
+import random
 
 from playmakers_schema.models import Vec2
 
@@ -86,8 +87,8 @@ def nearest(
 
 
 THIRD_SHOT_P = 0.006
-BOX_SHOT_P = 0.02
-CENTRAL_SHOT_P = 0.2
+BOX_SHOT_P = 0.04
+CENTRAL_SHOT_P = 0.4
 
 
 def shot_bonus(ball: Vec2, *, home: bool) -> float:
@@ -134,3 +135,54 @@ def restart_after_shot(outcome: str, position: Vec2, *, defending_home: bool) ->
         u, v = to_team(position, defending_home)
         return "shot_blocked", from_team(_clamp(u + 6.0, 6.0, 40.0), v, defending_home)
     return "goal_kick", from_team(5.5, 34.0 + (4.0 if position.y > 34.0 else -4.0), defending_home)
+
+
+BUILD_UP_PUSH = 0.6
+RESET_P = 0.07
+SWITCH_P = 0.14
+SWITCH_WIDE_M = 9.0
+SWITCH_MAX_U = 75.0
+SQUEEZE_U = 75.0
+SQUEEZE = 0.05
+CENTRE_PULL = 0.03
+
+
+def pass_target(rng: random.Random, start: Vec2, *, home: bool, directness: float) -> Vec2:
+    """Where a pass from `start` is aimed: build-up out of the back, recycling near the box,
+    resets to the back line when an attack is held up, and switches of play to the far side."""
+    u, v = to_team(start, home)
+    base_len = rng.uniform(4.0, 18.0) + directness * rng.uniform(4.0, 18.0)
+    forward = rng.uniform(0.2, 1.0) * (0.6 + 0.7 * directness)
+    forward -= recycle(start, home=home)
+    forward += BUILD_UP_PUSH * max(0.0, 40.0 - u) / 34.0
+    du = base_len * forward
+    dv = rng.uniform(-10.0, 10.0) + CENTRE_PULL * (PITCH_WIDTH_M / 2.0 - v)
+    if (
+        u < SWITCH_MAX_U
+        and abs(v - PITCH_WIDTH_M / 2.0) > SWITCH_WIDE_M
+        and rng.random() < SWITCH_P
+    ):
+        # Switch of play: a long diagonal to the far side, the wide player there holding width.
+        far = PITCH_WIDTH_M - v + rng.uniform(-6.0, 6.0)
+        dv = _clamp(far, 6.0, PITCH_WIDTH_M - 6.0) - v
+        du = rng.uniform(-4.0, 14.0)
+    elif u > 70.0 and rng.random() < RESET_P:
+        # Reset: the attack is held up, so the ball goes back to the midfield or the back line.
+        du = -rng.uniform(14.0, 30.0)
+    return keep_in_play(start, du if home else -du, dv if home else -dv, home=home)
+
+
+def carry_target(rng: random.Random, start: Vec2, *, home: bool) -> Vec2:
+    """Where a carry from `start` ends: forward, less so near the box, drifting inside off a wing."""
+    u, v = to_team(start, home)
+    base = rng.uniform(1.0, 10.0)
+    push = rng.uniform(0.2, 1.0) - 0.8 * recycle(start, home=home)
+    du = base * push
+    dv = rng.uniform(-6.0, 6.0) + 0.04 * (PITCH_WIDTH_M / 2.0 - v)
+    return keep_in_play(start, du if home else -du, dv if home else -dv, home=home)
+
+
+def squeeze(end: Vec2, *, home: bool) -> float:
+    """Lower completion for passes into a packed final third, so long spells there end."""
+    u, _ = to_team(end, home)
+    return SQUEEZE if u > SQUEEZE_U else 0.0

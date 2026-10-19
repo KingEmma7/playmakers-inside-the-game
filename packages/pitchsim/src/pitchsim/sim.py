@@ -22,7 +22,15 @@ from playmakers_schema.models import (
 )
 
 from pitchsim.config import MatchConfig, StoryEvent, TeamStyle
-from pitchsim.shape import keep_in_play, nearest, recycle, restart_after_shot, shot_bonus
+from pitchsim.shape import (
+    carry_target,
+    keep_in_play,
+    nearest,
+    pass_target,
+    restart_after_shot,
+    shot_bonus,
+    squeeze,
+)
 
 PITCH_LENGTH_M = 105.0
 PITCH_WIDTH_M = 68.0
@@ -344,14 +352,9 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
             passer = this_team.player_ids[holder]
             start = ball
 
-            base_len = rng.uniform(4.0, 18.0) + (
-                this_team.style.directness * rng.uniform(4.0, 18.0)
+            end = pass_target(
+                rng, start, home=attacking_home, directness=this_team.style.directness
             )
-            forward = rng.uniform(0.2, 1.0) * (0.6 + 0.7 * this_team.style.directness)
-            forward -= recycle(start, home=possession == "home")
-            dx = base_len * forward * (1.0 if possession == "home" else -1.0)
-            dy = rng.uniform(-10.0, 10.0)
-            end = keep_in_play(start, dx, dy, home=attacking_home)
             deep = (end.x if attacking_home else PITCH_LENGTH_M - end.x) > 30.0
             options = nearest(
                 start,
@@ -370,6 +373,7 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
 
             risk = this_team.style.pass_risk
             p_complete = 0.90 - 0.25 * difficulty - 0.10 * risk
+            p_complete -= squeeze(end, home=possession == "home")
             completed = rng.random() < _clamp(p_complete, 0.45, 0.98)
 
             add(
@@ -425,11 +429,7 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
         if r < pass_p + carry_p:
             carrier = this_team.player_ids[holder]
             start = ball
-            base = rng.uniform(1.0, 10.0)
-            push = rng.uniform(0.2, 1.0) - 0.8 * recycle(start, home=possession == "home")
-            dx = base * (1.0 if possession == "home" else -1.0) * push
-            dy = rng.uniform(-6.0, 6.0)
-            end = keep_in_play(start, dx, dy, home=possession == "home")
+            end = carry_target(rng, start, home=possession == "home")
             distance_m = _dist(start, end)
             pressure = _clamp(opp_team.style.press_intensity * rng.uniform(0.15, 0.95), 0.0, 1.0)
             add(

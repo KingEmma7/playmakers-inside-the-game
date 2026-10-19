@@ -8,7 +8,7 @@ from playmakers_schema.models import MatchEvent, Vec2
 from pydantic import BaseModel, ConfigDict, Field
 
 from pitchsim.config import StoryEvent, TeamStyle
-from pitchsim.shape import keep_in_play, recycle, restart_after_shot, shot_bonus
+from pitchsim.shape import carry_target, pass_target, restart_after_shot, shot_bonus, squeeze
 from pitchsim.sim import (
     BASE_EVENT_RATE_PER_S,
     MATCH_MS,
@@ -186,14 +186,9 @@ def rollout_from_snapshot(snapshot: MatchSnapshot, *, rollout_seed: int) -> tupl
         r = rng.random()
         if r < pass_p:
             start = ball
-            base_len = rng.uniform(4.0, 18.0) + (
-                this_team.style.directness * rng.uniform(4.0, 18.0)
+            end = pass_target(
+                rng, start, home=possession == "home", directness=this_team.style.directness
             )
-            forward = rng.uniform(0.2, 1.0) * (0.6 + 0.7 * this_team.style.directness)
-            forward -= recycle(start, home=possession == "home")
-            dx = base_len * forward * (1.0 if possession == "home" else -1.0)
-            dy = rng.uniform(-10.0, 10.0)
-            end = keep_in_play(start, dx, dy, home=possession == "home")
             rng.random()  # receiver choice in simulate_match
 
             distance_m = ((start.x - end.x) ** 2 + (start.y - end.y) ** 2) ** 0.5
@@ -202,6 +197,7 @@ def rollout_from_snapshot(snapshot: MatchSnapshot, *, rollout_seed: int) -> tupl
             difficulty = _clamp((distance_m / 40.0) * (1.0 - lane_open) + pressure * 0.3, 0.0, 1.0)
             risk = this_team.style.pass_risk
             p_complete = 0.90 - 0.25 * difficulty - 0.10 * risk
+            p_complete -= squeeze(end, home=possession == "home")
             completed = rng.random() < _clamp(p_complete, 0.45, 0.98)
 
             if completed:
@@ -213,11 +209,7 @@ def rollout_from_snapshot(snapshot: MatchSnapshot, *, rollout_seed: int) -> tupl
 
         if r < pass_p + carry_p:
             start = ball
-            base = rng.uniform(1.0, 10.0)
-            push = rng.uniform(0.2, 1.0) - 0.8 * recycle(start, home=possession == "home")
-            dx = base * (1.0 if possession == "home" else -1.0) * push
-            dy = rng.uniform(-6.0, 6.0)
-            end = keep_in_play(start, dx, dy, home=possession == "home")
+            end = carry_target(rng, start, home=possession == "home")
             pressure = _clamp(opp_team.style.press_intensity * rng.uniform(0.15, 0.95), 0.0, 1.0)
             if rng.random() < (0.10 + 0.20 * pressure):
                 won = rng.random() < _clamp(0.35 + 0.45 * pressure, 0.1, 0.95)

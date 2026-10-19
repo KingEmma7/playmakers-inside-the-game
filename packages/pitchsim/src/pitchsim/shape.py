@@ -170,7 +170,9 @@ def restart_after_shot(outcome: str, position: Vec2, *, defending_home: bool) ->
     if outcome == "saved":
         # The keeper holds it where the save was made: on the line from the shot to the goal.
         _, v = to_team(position, defending_home)
-        return "keeper_save", from_team(3.0, 34.0 + _clamp((v - 34.0) * 0.12, -3.0, 3.0), defending_home)
+        return "keeper_save", from_team(
+            3.0, 34.0 + _clamp((v - 34.0) * 0.12, -3.0, 3.0), defending_home
+        )
     if outcome == "blocked":
         u, v = to_team(position, defending_home)
         return "shot_blocked", from_team(_clamp(u + 6.0, 6.0, 40.0), v, defending_home)

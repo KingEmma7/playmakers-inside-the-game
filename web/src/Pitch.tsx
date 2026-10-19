@@ -28,7 +28,13 @@ function drawPitch(ctx: CanvasRenderingContext2D) {
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
   // Mowing bands: flat alternating tones, no gradient.
   ctx.fillStyle = GRASS_ALT;
-  for (let i = 0; i < 14; i += 2) ctx.fillRect(px((LENGTH / 14) * i), py(0), (LENGTH / 14) * SCALE, WIDTH * SCALE);
+  for (let i = 0; i < 14; i += 2)
+    ctx.fillRect(
+      px((LENGTH / 14) * i),
+      py(0),
+      (LENGTH / 14) * SCALE,
+      WIDTH * SCALE,
+    );
   ctx.strokeStyle = LINE;
   ctx.lineWidth = 3;
   ctx.strokeRect(px(0), py(0), LENGTH * SCALE, WIDTH * SCALE);
@@ -51,7 +57,12 @@ function drawPitch(ctx: CanvasRenderingContext2D) {
     const line = end ? LENGTH : 0;
     const box = (depth: number, width: number) => {
       const x = end ? line - depth : line;
-      ctx.strokeRect(px(x), py(WIDTH / 2 - width / 2), depth * SCALE, width * SCALE);
+      ctx.strokeRect(
+        px(x),
+        py(WIDTH / 2 - width / 2),
+        depth * SCALE,
+        width * SCALE,
+      );
     };
     box(16.5, 40.32);
     box(5.5, 18.32);
@@ -59,7 +70,14 @@ function drawPitch(ctx: CanvasRenderingContext2D) {
     // Penalty arc: the part of the 9.15 m circle outside the box.
     const a = Math.acos(5.5 / 9.15);
     ctx.beginPath();
-    if (end) ctx.arc(px(LENGTH - 11), py(WIDTH / 2), 9.15 * SCALE, Math.PI - a, Math.PI + a);
+    if (end)
+      ctx.arc(
+        px(LENGTH - 11),
+        py(WIDTH / 2),
+        9.15 * SCALE,
+        Math.PI - a,
+        Math.PI + a,
+      );
     else ctx.arc(px(11), py(WIDTH / 2), 9.15 * SCALE, -a, a);
     ctx.stroke();
     // Goal, drawn behind the line.
@@ -84,7 +102,12 @@ function drawPitch(ctx: CanvasRenderingContext2D) {
   }
 }
 
-function label(ctx: CanvasRenderingContext2D, text: string, x: number, y: number) {
+function label(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+) {
   ctx.font = "500 24px Inter";
   const width = ctx.measureText(text).width + 28;
   const left = Math.max(10, Math.min(CANVAS_W - width - 10, x + 30));
@@ -152,8 +175,13 @@ export default function Pitch({
       for (const lane of m.lanes) {
         if (lane.age < 0) continue;
         const flight = m.flight;
-        const inFlight = flight?.kind === "pass" && flight.from.x === lane.from.x && flight.from.y === lane.from.y;
-        const alpha = inFlight ? 0.45 : Math.max(0, 0.45 * (1 - lane.age / 1400));
+        const inFlight =
+          flight?.kind === "pass" &&
+          flight.from.x === lane.from.x &&
+          flight.from.y === lane.from.y;
+        const alpha = inFlight
+          ? 0.45
+          : Math.max(0, 0.45 * (1 - lane.age / 1400));
         if (alpha <= 0.01) continue;
         ctx.globalAlpha = alpha;
         ctx.strokeStyle = INK;
@@ -197,7 +225,11 @@ export default function Pitch({
           ctx.fillStyle = last ? RED : "#515154";
           ctx.font = "600 15px Inter";
           ctx.textAlign = "center";
-          ctx.fillText(String(i + 1), x + (last ? 24 : 20), y - (last ? 20 : 16));
+          ctx.fillText(
+            String(i + 1),
+            x + (last ? 24 : 20),
+            y - (last ? 20 : 16),
+          );
         }
       });
 
@@ -217,7 +249,21 @@ export default function Pitch({
         ctx.strokeStyle = "#FFFFFF";
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(x, y, onBall ? 17 : 15, 0, Math.PI * 2);
+        const r = onBall ? 17 : 15;
+        if (p.dive > 0.02) {
+          // A keeper diving: the disc stretches toward the shot.
+          ctx.ellipse(
+            x,
+            y,
+            r * (1 + 0.75 * p.dive),
+            r * (1 - 0.25 * p.dive),
+            p.diveAngle,
+            0,
+            Math.PI * 2,
+          );
+        } else {
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+        }
         ctx.fill();
         ctx.stroke();
         ctx.fillStyle = p.side === "H" ? "#FFFFFF" : INK;

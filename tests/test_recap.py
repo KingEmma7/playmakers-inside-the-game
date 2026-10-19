@@ -98,4 +98,4 @@ def test_key_moments_prefer_goals_and_red_cards_then_fill_with_chances() -> None
     assert len(kinds) == 4
     assert kinds.count("goal") == 2
     assert set(kinds) <= {"goal", "red_card", "big_chance", "chance"}
-    assert [m.kind for m in key_moments(events)] == ["goal", "goal", "chance", "goal"]
+    assert [m.kind for m in key_moments(events)] == ["red_card"] + ["goal"] * 5

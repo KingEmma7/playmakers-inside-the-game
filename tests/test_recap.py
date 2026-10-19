@@ -93,10 +93,9 @@ async def test_compliance_rejects_recap_moments_that_are_not_cited() -> None:
 def test_key_moments_prefer_goals_and_red_cards_then_fill_with_chances() -> None:
     events = simulate_match(MatchConfig(seed=7))
     goals = [e for e in events if e.event_type == "goal"]
-    first_goal = events.index(goals[0])
-    moments = key_moments(events[: first_goal + 1])
-    kinds = [m.kind for m in moments]
-    assert len(moments) == 4
-    assert kinds.count("goal") == 1 and kinds.count("red_card") == 1
-    assert all(m.kind in ("goal", "red_card", "big_chance", "chance") for m in moments)
-    assert [m.kind for m in key_moments(events)] == ["big_chance", "red_card", "goal", "goal"]
+    second_goal = events.index(goals[1])
+    kinds = [m.kind for m in key_moments(events[: second_goal + 1])]
+    assert len(kinds) == 4
+    assert kinds.count("goal") == 2
+    assert set(kinds) <= {"goal", "red_card", "big_chance", "chance"}
+    assert [m.kind for m in key_moments(events)] == ["goal", "goal", "chance", "goal"]

@@ -47,10 +47,10 @@ async def test_mock_match_spends_model_calls_on_key_moments_only() -> None:
         for event in events:
             await director.on_event(event)
     key = sum(key_moment(e) for e in events)
-    assert client.calls["tactics"] == client.calls["storyline"] == key == 94
-    assert client.calls["what_if_explanation"] == 4
+    assert client.calls["tactics"] == client.calls["storyline"] == key == 98
+    assert client.calls["what_if_explanation"] == 3
     assert client.calls["recap"] == 1
-    assert sum(client.calls.values()) == 193 <= 260  # Was 3,148 when every event called both.
+    assert sum(client.calls.values()) == 200 <= 260  # Was 2,992 when every event called both.
 
 
 @pytest.mark.asyncio
@@ -92,7 +92,7 @@ async def test_routine_events_get_templated_insights_that_pass_compliance() -> N
 
 @pytest.mark.asyncio
 async def test_stats_tools_are_offered_to_models_only_on_shots_and_goals() -> None:
-    events = simulate_match(MatchConfig(seed=7))[:60]
+    events = simulate_match(MatchConfig(seed=7))[:80]
     client = CountingClient()
     async with serve(create_mcp().streamable_http_app()) as base_url:
         async with Director(

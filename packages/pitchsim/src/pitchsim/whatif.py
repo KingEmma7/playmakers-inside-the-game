@@ -8,7 +8,7 @@ from playmakers_schema.models import MatchEvent, Vec2
 from pydantic import BaseModel, ConfigDict, Field
 
 from pitchsim.config import StoryEvent, TeamStyle
-from pitchsim.shape import keep_in_play, restart_after_shot
+from pitchsim.shape import keep_in_play, recycle, restart_after_shot, shot_bonus
 from pitchsim.sim import (
     BASE_EVENT_RATE_PER_S,
     MATCH_MS,
@@ -173,11 +173,10 @@ def rollout_from_snapshot(snapshot: MatchSnapshot, *, rollout_seed: int) -> tupl
                 subs_away += 1
                 continue
 
-        in_attacking_third = (ball.x > 70.0) if possession == "home" else (ball.x < 35.0)
         pass_p = 0.78
         carry_p = 0.13
-        foul_p = 0.04 * (1.0 - this_team.style.discipline)
-        shot_p = 0.006 + (0.012 if in_attacking_third else 0.0)
+        foul_p = 0.044 * (1.0 - this_team.style.discipline)
+        shot_p = 0.006 + shot_bonus(ball, home=possession == "home")
         pass_p += 0.06 * (1.0 - this_team.style.directness)
         carry_p += 0.04 * (1.0 - this_team.style.directness)
         shot_p += 0.006 * this_team.style.directness
@@ -191,6 +190,7 @@ def rollout_from_snapshot(snapshot: MatchSnapshot, *, rollout_seed: int) -> tupl
                 this_team.style.directness * rng.uniform(4.0, 18.0)
             )
             forward = rng.uniform(0.2, 1.0) * (0.6 + 0.7 * this_team.style.directness)
+            forward -= recycle(start, home=possession == "home")
             dx = base_len * forward * (1.0 if possession == "home" else -1.0)
             dy = rng.uniform(-10.0, 10.0)
             end = keep_in_play(start, dx, dy, home=possession == "home")
@@ -214,7 +214,8 @@ def rollout_from_snapshot(snapshot: MatchSnapshot, *, rollout_seed: int) -> tupl
         if r < pass_p + carry_p:
             start = ball
             base = rng.uniform(1.0, 10.0)
-            dx = base * (1.0 if possession == "home" else -1.0) * rng.uniform(0.2, 1.0)
+            push = rng.uniform(0.2, 1.0) - 0.8 * recycle(start, home=possession == "home")
+            dx = base * (1.0 if possession == "home" else -1.0) * push
             dy = rng.uniform(-6.0, 6.0)
             end = keep_in_play(start, dx, dy, home=possession == "home")
             pressure = _clamp(opp_team.style.press_intensity * rng.uniform(0.15, 0.95), 0.0, 1.0)

@@ -60,8 +60,8 @@ under light pressure / Northbridge Rovers keep the ball moving; this pass rated 
 difficulty."), which goes through the same
 Compliance check and carries provenance `source: template, compliance: verified`; the
 trace shows `templated`. Kill-recover replays only gated events. Measured with the mock
-and two viewer profiles: 193 model calls for seed 7 and 190 for seed 42 (94 events
-per agent each, 4 and 1 What-If explanations, one recap), down from 2,965 and 3,142.
+and two viewer profiles: 200 model calls for seed 7 and 204 for seed 42 (98 and 100
+events per agent, 3 What-If explanations each, one recap), down from 2,992 and 3,196.
 `tests/test_model_gate.py` pins the seed-7 count.
 
 Configuration (see [.env.example](../.env.example); export variables in your shell):
@@ -356,8 +356,17 @@ Set `PLAYMAKERS_WEB_URL` to override the screenshot target URL (default `http://
 CI runs npm ci, contract drift detection, lint, unit tests and production build on Node 20.
 
 Current visual limits: PitchSim emits ball/action positions but no full player tracking frames
-in its default replay. The 22 dots therefore use formation-based motion around the observed ball;
-tracking frames are supported when present. Pause/resume is a local program freeze, not server pause.
+in its default replay. The 22 dots therefore use formation-based motion around the observed ball
+(`web/src/pitchModel.ts`, mirroring `packages/pitchsim/src/pitchsim/shape.py`); tracking frames
+are used when present. Each event becomes a ball movement: passes travel from the passer to the
+receiver, who runs onto the ball; carries move with the player on the ball; shots go to the goal,
+the keeper or wide of the post; goals and goal kicks restart with a short fade. Players are keyed
+by player ID, ease towards their targets with a speed cap, and keep their shirt numbers; a
+substitute takes the place of the player he replaces. The canvas has a margin so the goals and
+touchline players are never clipped, and `prefers-reduced-motion` jumps straight to each state.
+PitchSim itself keeps the ball in play (deep balls are cut back, wide ones folded in), makes the
+player on the ball the one who passes, carries or shoots, picks the receiver whose formation slot
+is nearest the target, and hands the ball to the defending team after a save, block or miss. Pause/resume is a local program freeze, not server pause.
 Reconnect rebuilds ephemeral server sessions rather than resuming a stored session. Offline fan
 translations use the small phrase table. What-If probabilities remain synthetic approximations.
 The Azure template in `infra/` and Application Insights tracing are written and validated

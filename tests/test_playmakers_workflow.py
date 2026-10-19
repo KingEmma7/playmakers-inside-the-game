@@ -268,7 +268,7 @@ async def test_mcp_stats_agree_with_local_engine_for_every_event_type() -> None:
     from pitchsim.config import MatchConfig
     from pitchsim.sim import simulate_match
 
-    events = simulate_match(MatchConfig(seed=7))[:60]
+    events = simulate_match(MatchConfig(seed=7))[:80]
     assert {"pass", "shot", "carry", "tackle"} <= {event.event_type for event in events}
     async with serve(create_mcp().streamable_http_app()) as base_url:
         async with Director(

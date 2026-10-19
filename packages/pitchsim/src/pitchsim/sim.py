@@ -22,7 +22,7 @@ from playmakers_schema.models import (
 )
 
 from pitchsim.config import MatchConfig, StoryEvent, TeamStyle
-from pitchsim.shape import keep_in_play, nearest, restart_after_shot
+from pitchsim.shape import keep_in_play, nearest, recycle, restart_after_shot, shot_bonus
 
 PITCH_LENGTH_M = 105.0
 PITCH_WIDTH_M = 68.0
@@ -325,11 +325,11 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
                 )
                 continue
 
-        in_attacking_third = (ball.x > 70.0) if possession == "home" else (ball.x < 35.0)
         pass_p = 0.78
         carry_p = 0.13
-        foul_p = 0.04 * (1.0 - this_team.style.discipline)
-        shot_p = 0.006 + (0.015 if in_attacking_third else 0.0)
+        foul_p = 0.044 * (1.0 - this_team.style.discipline)
+        # Goalkeepers on the ball never shoot.
+        shot_p = 0.006 + shot_bonus(ball, home=possession == "home") if holder else 0.0
 
         pass_p += 0.06 * (1.0 - this_team.style.directness)
         carry_p += 0.04 * (1.0 - this_team.style.directness)
@@ -348,6 +348,7 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
                 this_team.style.directness * rng.uniform(4.0, 18.0)
             )
             forward = rng.uniform(0.2, 1.0) * (0.6 + 0.7 * this_team.style.directness)
+            forward -= recycle(start, home=possession == "home")
             dx = base_len * forward * (1.0 if possession == "home" else -1.0)
             dy = rng.uniform(-10.0, 10.0)
             end = keep_in_play(start, dx, dy, home=attacking_home)
@@ -425,7 +426,8 @@ def simulate_match(config: MatchConfig) -> list[MatchEvent]:
             carrier = this_team.player_ids[holder]
             start = ball
             base = rng.uniform(1.0, 10.0)
-            dx = base * (1.0 if possession == "home" else -1.0) * rng.uniform(0.2, 1.0)
+            push = rng.uniform(0.2, 1.0) - 0.8 * recycle(start, home=possession == "home")
+            dx = base * (1.0 if possession == "home" else -1.0) * push
             dy = rng.uniform(-6.0, 6.0)
             end = keep_in_play(start, dx, dy, home=possession == "home")
             distance_m = _dist(start, end)

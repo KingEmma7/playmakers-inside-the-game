@@ -85,6 +85,29 @@ def nearest(
     )
 
 
+THIRD_SHOT_P = 0.006
+BOX_SHOT_P = 0.02
+CENTRAL_SHOT_P = 0.2
+
+
+def shot_bonus(ball: Vec2, *, home: bool) -> float:
+    """Extra per-event shot probability: a little in the final third, most in the central box."""
+    u, v = to_team(ball, home)
+    in_box = u > PITCH_LENGTH_M - 16.5 and abs(v - PITCH_WIDTH_M / 2.0) < 20.16
+    central = in_box and abs(v - PITCH_WIDTH_M / 2.0) < 11.0
+    return (
+        (THIRD_SHOT_P if u > 70.0 else 0.0)
+        + (BOX_SHOT_P if in_box else 0.0)
+        + (CENTRAL_SHOT_P if central else 0.0)
+    )
+
+
+def recycle(ball: Vec2, *, home: bool) -> float:
+    """Pull on the forward share of a pass near the opponent's box, so attacks circulate."""
+    u, _ = to_team(ball, home)
+    return 0.9 * max(0.0, u - 62.0) / 37.0
+
+
 def keep_in_play(start: Vec2, dx: float, dy: float, *, home: bool) -> Vec2:
     """Move the ball by (dx, dy) but keep it in play: deep balls are cut back, wide ones folded in."""
     u, v = to_team(start, home)

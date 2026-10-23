@@ -5,7 +5,7 @@ import json
 import os
 from collections.abc import AsyncGenerator
 from concurrent.futures import ProcessPoolExecutor
-from contextlib import aclosing, asynccontextmanager
+from contextlib import aclosing, asynccontextmanager, suppress
 from typing import Annotated, Any, Literal
 
 from anyio import CancelScope
@@ -15,12 +15,13 @@ from fastapi.responses import PlainTextResponse, StreamingResponse
 from pitchsim.config import MatchConfig
 from pitchsim.replay import replay_events
 from pitchsim.sim import simulate_match
-from playmakers_agents.contracts import ViewerProfile
+from playmakers_agents.contracts import AgentTraceEvent, OverlayCue, ViewerProfile
 from playmakers_agents.model_clients import DeterministicMockChatClient, live_model_configured
 from playmakers_agents.resilience import KillSpec
 from playmakers_agents.telemetry import configure_tracing
 from playmakers_agents.what_if import create_rollout_pool
 from playmakers_agents.workflow import Director
+from playmakers_schema.models import MatchEvent
 from pydantic import TypeAdapter
 from starlette.routing import Mount
 from stats_mcp.server import create_mcp
@@ -200,12 +201,48 @@ async def _director_messages(
                 yield event
 
         async for event in paced_events():
-            yield {"type": "event", **event.model_dump(mode="json")}
-            cues = await director.on_event(event)
-            for trace in director.last_traces:
-                yield {"type": "trace", **trace.model_dump(mode="json")}
-            for cue in cues:
-                yield {"type": "cue", **cue.model_dump(mode="json")}
+            async with aclosing(_event_messages(director, event)) as messages:
+                async for message in messages:
+                    yield message
+
+
+async def _event_messages(
+    director: Director, event: MatchEvent
+) -> AsyncGenerator[dict[str, Any], None]:
+    """Stream checked captions first, then simulations, cancelling work on disconnect."""
+    queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+    published_cues = 0
+    published_traces = 0
+
+    async def publish(cues: list[OverlayCue], traces: list[AgentTraceEvent]) -> None:
+        nonlocal published_cues, published_traces
+        # Publish the clock/score and its checked captions together, before rollouts.
+        queue.put_nowait({"type": "event", **event.model_dump(mode="json")})
+        for trace in traces:
+            queue.put_nowait({"type": "trace", **trace.model_dump(mode="json")})
+        for cue in cues:
+            queue.put_nowait({"type": "cue", **cue.model_dump(mode="json")})
+        published_cues, published_traces = len(cues), len(traces)
+
+    async def produce() -> None:
+        try:
+            cues = await director.on_event(event, publish=publish)
+            for trace in director.last_traces[published_traces:]:
+                queue.put_nowait({"type": "trace", **trace.model_dump(mode="json")})
+            for cue in cues[published_cues:]:
+                queue.put_nowait({"type": "cue", **cue.model_dump(mode="json")})
+        finally:
+            queue.put_nowait(None)
+
+    task = asyncio.create_task(produce())
+    try:
+        while (message := await queue.get()) is not None:
+            yield message
+        await task
+    finally:
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
 
 
 class MatchSession:

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { clockLabel, agentStatus, type Trace } from "./stream";
+import { useEffect, useRef, useState } from "react";
+import { agentStatus, type Trace } from "./stream";
 // Tactics and Storyline write with a language model (What-If narrates with one); the rest are rules.
 const MODEL_AGENTS = new Set(["tactics", "storyline", "what_if"]);
 const agents = [
@@ -16,13 +16,11 @@ export default function TracePanel({
   traces,
   onKill,
   disabled,
-  recoveryClock = 0,
   mockModel = false,
 }: {
   traces: Trace[];
   onKill: () => void;
   disabled: boolean;
-  recoveryClock?: number;
   mockModel?: boolean;
 }) {
   const [showAll, setShowAll] = useState(false);
@@ -48,8 +46,59 @@ export default function TracePanel({
     )
       latest.set(trace.agent, trace);
   }
-  const recovery = latest.get("tactics");
-  const recoveryStatus = recovery ? agentStatus(recovery) : "waiting";
+  const [recoveryStep, setRecoveryStep] = useState(0);
+  const recoveryActions = [...new Set(traces.filter((t) =>
+    t.agent === "tactics" && ["agent_down", "fallback_on", "restarted_from_checkpoint", "caught_up"].includes(t.action),
+  ).map((t) => t.action))];
+  const recoveryAction = recoveryActions[recoveryStep];
+  useEffect(() => {
+    if (!recoveryAction) return;
+    const timer = setTimeout(() => setRecoveryStep((step) => step + 1), 1500);
+    return () => clearTimeout(timer);
+  }, [recoveryAction]);
+  const [active, setActive] = useState(new Set<string>());
+  const lastActions = useRef(new Map<string, Trace>());
+  const activityTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    const changed: string[] = [];
+    const newest = new Map(traces.map((trace) => [trace.agent, trace]));
+    for (const trace of newest.values()) {
+      if (lastActions.current.get(trace.agent) === trace) continue;
+      changed.push(trace.agent);
+      lastActions.current.set(trace.agent, trace);
+    }
+    if (!changed.length) return;
+    setActive((previous) => new Set([...previous, ...changed]));
+    for (const agent of new Set(changed)) {
+      clearTimeout(activityTimers.current.get(agent));
+      activityTimers.current.set(agent, setTimeout(() => {
+        setActive((previous) => { const next = new Set(previous); next.delete(agent); return next; });
+      }, 1500));
+    }
+  }, [traces]);
+  useEffect(() => {
+    const timers = activityTimers.current;
+    const previous = lastActions.current;
+    return () => {
+      for (const timer of timers.values()) clearTimeout(timer);
+      previous.clear();
+    };
+  }, []);
+  const recoveryStatus = recoveryAction ? "recovering" : "up";
+  const timing = (t: Trace, agent: string) =>
+    mockModel && MODEL_AGENTS.has(agent) ? "offline mock model" :
+      t.latency_ms >= 1 ? `${Math.round(t.latency_ms)} ms` : "";
+  const actionLine = (t: Trace, agent: string) => t.detail ?? ({
+    computed: "Stats computed match metrics",
+    insight: `${agent[0].toUpperCase() + agent.slice(1)} drafted a caption`,
+    templated: `${agent[0].toUpperCase() + agent.slice(1)} used a template caption`,
+    verified: "Compliance checked the claims",
+    schema_validated: "Graphics validated the cue",
+    fan_out: "Audience shaped the viewer feeds",
+    rollouts_verified: "What-If ran simulations",
+    recap: "Storyline wrote the full-time recap",
+    recap_verified: "Compliance checked the recap",
+  }[t.action] ?? t.action.replaceAll("_", " "));
   const history = traces.filter(
     (t) =>
       showAll ||
@@ -70,56 +119,26 @@ export default function TracePanel({
       </div>
       <div className="agent-grid">
         {agents.map((agent) => {
-          const t =
-            latest.get(agent) ??
-            (agent === "director" ? traces.at(-1) : undefined);
-          let status = t
-            ? agent === "director"
-              ? "up"
-              : agentStatus(t)
-            : "waiting";
-          if (agent === "tactics" && ["down", "fallback"].includes(status))
-            status = "recovering";
-          if (
-            agent === "graphics" &&
-            ["down", "fallback", "recovering"].includes(recoveryStatus)
-          )
-            status = "fallback";
+          const t = latest.get(agent);
+          const recoveryLabels: Record<string, string> = {
+            agent_down: "Down",
+            fallback_on: "Template cover: captions from templates",
+            restarted_from_checkpoint: "Restored from checkpoint",
+            caught_up: "Caught up",
+          };
+          const recovery = agent === "tactics" && recoveryAction;
+          const abnormal = t && agentStatus(t) !== "up" && agent !== "director";
+          const line = recovery ? recoveryLabels[recoveryAction!] :
+            t ? actionLine(t, agent) : "Waiting for match events";
+          const latency = t && !recovery && agent !== "director" ? timing(t, agent) : "";
           return (
-            <div key={agent}>
+            <div key={agent} className={active.has(agent) ? "agent-active" : ""}>
               <div>
-                <span>
-                  {agent === "what_if"
-                    ? "What-If"
-                    : agent[0].toUpperCase() + agent.slice(1)}
-                </span>
-                <small>
-                  {agent === "tactics" && status === "recovering"
-                    ? `replaying from ${clockLabel(recoveryClock)}`
-                    : agent === "graphics" && status === "fallback"
-                      ? "template mode"
-                      : agent === "director"
-                        ? "Orchestrating the crew"
-                        : t
-                          ? `${t.action.replaceAll("_", " ")} · ${
-                              mockModel && MODEL_AGENTS.has(agent)
-                                ? "offline mock model"
-                                : `${t.latency_ms.toFixed(1)} ms`
-                            }`
-                          : "Waiting for match events"}
+                <span>{agent === "what_if" ? "What-If" : agent[0].toUpperCase() + agent.slice(1)}</span>
+                <small className={recovery ? `recovering ${recoveryAction === "agent_down" ? "down" : ""}` : abnormal ? agentStatus(t!) : ""}>
+                  {line}{latency ? ` · ${latency}` : ""}
                 </small>
               </div>
-              <b className={`status ${status}`}>
-                {
-                  {
-                    up: "Running",
-                    recovering: "Recovering",
-                    fallback: "Fallback",
-                    down: "Down",
-                    waiting: "Waiting",
-                  }[status]
-                }
-              </b>
             </div>
           );
         })}
@@ -163,10 +182,7 @@ export default function TracePanel({
                   </b>
                   <p>{t.action.replaceAll("_", " ")}</p>
                 </div>
-                <time>
-                  {t.latency_ms.toFixed(1)}
-                  <small>ms</small>
-                </time>
+                {timing(t, t.agent) && <time>{timing(t, t.agent)}</time>}
               </div>
             ))}
         </div>

@@ -622,34 +622,43 @@ describe("broadcast cues", () => {
     fireEvent.click(screen.getByRole("button", { name: "Show key events" }));
     expect(container.querySelectorAll(".trace-row")).toHaveLength(8);
   });
-  it("updates trace, latency and recovery status, and dispatches kill", () => {
+  it("holds each real recovery step for 1.5 seconds, including batched traces", () => {
+    vi.useFakeTimers();
     const kill = vi.fn();
-    const { rerender } = render(
+    const { rerender, container, unmount } = render(
       <TracePanel traces={[trace()]} onKill={kill} disabled={false} />,
     );
     fireEvent.click(screen.getByRole("button", { name: /Stop Tactics/ }));
     expect(kill).toHaveBeenCalledOnce();
-    for (const [action, status] of [
-      ["agent_down", "Recovering"],
-      ["fallback_on", "Recovering"],
-      ["restarted_from_checkpoint", "Recovering"],
-      ["caught_up", "Running"],
-    ]) {
-      rerender(
-        <TracePanel
-          traces={[
-            trace({ action, status: action === "agent_down" ? "error" : "ok" }),
-          ]}
-          onKill={kill}
-          disabled={false}
-        />,
-      );
-      expect(screen.getAllByText(status)[0]).toBeInTheDocument();
-      expect(screen.getByRole("log")).toHaveTextContent(
-        action.replaceAll("_", " "),
-      );
-      expect(screen.getByRole("log")).toHaveTextContent("12.3");
+    const actions = ["agent_down", "fallback_on", "restarted_from_checkpoint", "caught_up"];
+    const labels = ["Down", "Template cover: captions from templates", "Restored from checkpoint", "Caught up"];
+    const traces = ["analyst", "casual"].flatMap((view) =>
+      actions.map((action) => trace({ action, view, latency_ms: 0.1 })),
+    );
+    rerender(<TracePanel traces={traces} onKill={kill} disabled={false} />);
+    for (const label of labels) {
+      const row = container.querySelector(".agent-grid > div:nth-child(3)")!;
+      expect(row).toHaveTextContent(label);
+      expect(row.querySelector(".recovering")).not.toBeNull();
+      act(() => vi.advanceTimersByTime(1499));
+      expect(row).toHaveTextContent(label);
+      act(() => vi.advanceTimersByTime(1));
     }
+    expect(container.querySelector(".agent-grid .recovering")).toBeNull();
+    expect(screen.getByRole("log")).not.toHaveTextContent("0.1");
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it("briefly tints agents that produced a trace and renders its actual detail", () => {
+    vi.useFakeTimers();
+    const traces = [trace({ agent: "compliance", detail: "Compliance checked 3 numbers", latency_ms: 0.1 })];
+    const { container, rerender } = render(<TracePanel traces={traces} onKill={() => {}} disabled={false} />);
+    expect(screen.getByText("Compliance checked 3 numbers")).toBeInTheDocument();
+    expect(container.querySelector(".agent-grid > div:nth-child(5)")).toHaveClass("agent-active");
+    act(() => vi.advanceTimersByTime(1500));
+    expect(container.querySelector(".agent-active")).toBeNull();
+    rerender(<TracePanel traces={[...traces]} onKill={() => {}} disabled={false} />);
+    expect(container.querySelector(".agent-active")).toBeNull();
   });
   it("names the crew honestly and labels mock-model timings as mock", () => {
     const traces = [trace(), trace({ agent: "compliance", latency_ms: 0.4 })];
@@ -659,7 +668,7 @@ describe("broadcast cues", () => {
     expect(
       screen.getByText("2 AI agents + 6 rule-based steps"),
     ).toBeInTheDocument();
-    expect(screen.getByText("insight · 12.3 ms")).toBeInTheDocument();
+    expect(screen.getByText("Tactics drafted a caption · 12 ms")).toBeInTheDocument();
     rerender(
       <TracePanel
         traces={traces}
@@ -669,10 +678,11 @@ describe("broadcast cues", () => {
       />,
     );
     expect(
-      screen.getByText("insight · offline mock model"),
+      screen.getByText("Tactics drafted a caption · offline mock model"),
     ).toBeInTheDocument();
-    expect(screen.queryByText("insight · 12.3 ms")).not.toBeInTheDocument();
-    expect(screen.getByText("insight · 0.4 ms")).toBeInTheDocument();
+    expect(screen.queryByText("Tactics drafted a caption · 12 ms")).not.toBeInTheDocument();
+    expect(screen.getByText("Compliance drafted a caption")).toBeInTheDocument();
+    expect(screen.queryByText(/0.4 ms/)).not.toBeInTheDocument();
   });
   it("waits for enough events before showing possession and field tilt", () => {
     const passes = (count: number, team: string, x: number) =>
@@ -726,7 +736,7 @@ describe("broadcast cues", () => {
         disabled={false}
       />,
     );
-    expect(screen.getByText("Fallback")).toBeInTheDocument();
+    expect(screen.getByText("Template cover: captions from templates")).toBeInTheDocument();
   });
 });
 class MockSource {

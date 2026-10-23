@@ -109,15 +109,38 @@ describe("voice commentary", () => {
     ).toBe(
       "¡Gol de Okafor para Northbridge Rovers! Qué definición. La grada se pone en pie.",
     );
+  });
+  it.each([
+    [
+      "en",
+      "If Okafor's 1' shot had been saved: Northbridge Rovers' win chance 41% instead of 65%.",
+    ],
+    [
+      "es",
+      "Si el disparo de Okafor en el 1' hubiera sido detenido: probabilidad de victoria de Northbridge Rovers, 41% en vez de 65%.",
+    ],
+    [
+      "fr",
+      "Si le tir de Okafor à la 1' avait été arrêté : chances de victoire de Northbridge Rovers, 41% au lieu de 65%.",
+    ],
+  ] as const)("reads the panel's named What-If line in %s", (language, expected) => {
+    const goal = events[0];
+    if (goal.event_type !== "goal") throw new Error("expected goal fixture");
     expect(
       spokenLine(
         cue({
           template: "what_if",
-          payload: { scenario: "if the shot had been saved" },
+          language,
+          payload: {
+            scenario: "if the shot had been saved",
+            moment: { player_id: goal.scorer_player_id, minute: 1 },
+            win_team_id: goal.scoring_team_id,
+            metrics: { win_prob_after: 0.65, win_prob_counterfactual: 0.41 },
+          },
         }),
         events,
       ),
-    ).toBe("¿Y si ese disparo se hubiera detenido?");
+    ).toBe(expected);
   });
   it("uses the browser voice for the chosen locale", async () => {
     const spoken: { text: string; lang: string }[] = [];

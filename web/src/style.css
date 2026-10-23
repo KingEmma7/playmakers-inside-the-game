@@ -1306,3 +1306,40 @@ header {
     overflow-y: auto;
   }
 }
+
+/* Work is visible without making routine status compete with the captions. */
+.agent-grid > div {
+  transition: background-color 200ms ease;
+}
+.agent-grid > .agent-active {
+  background-color: var(--track);
+}
+.agent-grid small.recovering {
+  color: var(--orange);
+}
+.agent-grid small.down {
+  color: var(--red);
+}
+/* Keep the complete goal and simulation visible together at the demo viewport. */
+@media (min-width: 901px) {
+  .casual .lower-thirds {
+    margin-top: 8px;
+    gap: 6px;
+  }
+  .casual .cue + .cue {
+    padding-top: 6px;
+  }
+  .casual .evidence {
+    margin-top: 4px;
+  }
+  .casual .cue.whatif p {
+    margin-bottom: 4px;
+    line-height: 1.35;
+  }
+  .casual .momentum {
+    margin-top: 4px;
+  }
+  .casual .dominance-bars {
+    margin: 8px 0;
+  }
+}

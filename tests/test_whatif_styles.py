@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from typing import Any
 
 import pytest
@@ -74,6 +74,7 @@ async def test_playmakers_failure_replay_fast_forwards_prefix(
 
     events = simulate_match(MatchConfig(seed=3))[:5]
     calls = []
+    processed: list[MatchEvent] = []
 
     class DirectorStub:
         last_traces: list[AgentTraceEvent] = []
@@ -87,7 +88,15 @@ async def test_playmakers_failure_replay_fast_forwards_prefix(
         async def __aexit__(self, *args: Any) -> None:
             pass
 
-        async def on_event(self, event: MatchEvent) -> list[OverlayCue]:
+        async def on_event(
+            self,
+            event: MatchEvent,
+            publish: Callable[[list[OverlayCue], list[AgentTraceEvent]], Awaitable[None]]
+            | None = None,
+        ) -> list[OverlayCue]:
+            processed.append(event)
+            if publish:
+                await publish([], [])
             return []
 
     async def replay(items: list[MatchEvent], *, speed: float) -> AsyncGenerator[MatchEvent, None]:
@@ -106,6 +115,7 @@ async def test_playmakers_failure_replay_fast_forwards_prefix(
         )
     ]
     assert [m["event_id"] for m in messages] == [e.event_id for e in events]
+    assert processed == events
     assert calls == [
         ([e for e in events if e.clock_ms < cutoff], 0),
         ([e for e in events if e.clock_ms >= cutoff], 10),

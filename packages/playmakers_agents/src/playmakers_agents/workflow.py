@@ -7,7 +7,7 @@ import os
 import re
 import tempfile
 import uuid
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from concurrent.futures import ProcessPoolExecutor
 from time import perf_counter
 from typing import Any, Literal, NamedTuple
@@ -324,11 +324,20 @@ def templated_insight(stats: StatsPacket, kind: Literal["tactics", "storyline"])
 
 
 async def trace(
-    ctx: WorkflowContext, agent: str, action: str, started: float, status: str = "ok"
+    ctx: WorkflowContext,
+    agent: str,
+    action: str,
+    started: float,
+    status: str = "ok",
+    detail: str | None = None,
 ) -> None:
     await ctx.yield_output(
         AgentTraceEvent(
-            agent=agent, action=action, latency_ms=(perf_counter() - started) * 1000, status=status
+            agent=agent,
+            action=action,
+            detail=detail,
+            latency_ms=(perf_counter() - started) * 1000,
+            status=status,
         )
     )
 
@@ -353,7 +362,14 @@ class StatsExecutor(Executor):
                 )
             except Exception:
                 await trace(ctx, self.id, "fallback_on", started, "fallback")
-        await trace(ctx, self.id, "computed", started)
+        await trace(
+            ctx,
+            self.id,
+            "computed",
+            started,
+            detail="Stats computed "
+            + ("xG and possession" if event.event_type == "shot" else "possession and momentum"),
+        )
         await ctx.send_message(packet)
 
     async def enrich_mcp(self, packet: StatsPacket) -> None:
@@ -487,7 +503,13 @@ class InsightExecutor(Executor):
                 self.breaker.fail(stats.event.sequence)
         if not self.down and not self.director.model_events(stats.event):
             self.agent_sequences[stats.event.match_id] = stats.event.sequence
-            await trace(ctx, self.id, "templated", started)
+            await trace(
+                ctx,
+                self.id,
+                "templated",
+                started,
+                detail=f"{self.kind.title()} used a template caption",
+            )
             await ctx.send_message(
                 InsightPacket(
                     stats=stats,
@@ -504,7 +526,14 @@ class InsightExecutor(Executor):
             await trace(ctx, self.id, "fallback_on", started, "fallback")
         elif packet.insight:
             self.agent_sequences[stats.event.match_id] = stats.event.sequence
-        await trace(ctx, self.id, "insight", started, "ok" if packet.insight else "rejected")
+        await trace(
+            ctx,
+            self.id,
+            "insight",
+            started,
+            "ok" if packet.insight else "rejected",
+            detail=f"{self.kind.title()} drafted a caption" if packet.insight else None,
+        )
         await ctx.send_message(packet)
 
 
@@ -546,14 +575,17 @@ class ComplianceExecutor(Executor):
         prose = re.sub(r"\b\d{1,3}:[0-5]\d\b", "", insight.headline + " " + insight.detail)
         prose = re.sub(r"(?i)(?:jersey|shirt|number|no\.)\s*#?\s*(?:[1-9]\d?)(?![\d.])", "", prose)
         # A hyphen right after a digit joins a score ("3-3"); it is not a minus sign.
-        for number, percent in re.findall(
-            r"((?<![\d.])-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)(%?)", prose
-        ):
+        numeric_prose = re.findall(r"((?<![\d.])-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)(%?)", prose)
+        for number, percent in numeric_prose:
             value = float(number)
             allowed = [round(v * (100 if percent else 1), 2) for v in verified]
             if value not in allowed:
                 reasons.append("Ungrounded number in prose")
-        return ComplianceDecision(ok=not reasons, reasons=reasons)
+        return ComplianceDecision(
+            ok=not reasons,
+            reasons=reasons,
+            numbers_checked=len(insight.metrics) + len(numeric_prose),
+        )
 
     @handler
     async def handle(
@@ -563,6 +595,7 @@ class ComplianceExecutor(Executor):
         approved: list[Insight] = []
         reviews: list[CueProvenance] = []
         fallback = False
+        numbers_checked = 0
         for packet in packets:
             event = packet.stats.event
             if is_significant(event):
@@ -597,6 +630,7 @@ class ComplianceExecutor(Executor):
                 )
                 packet.templated = True
             decision = self.validate(packet)
+            numbers_checked += decision.numbers_checked
             attempts = 1
             reasons = list(decision.reasons)
             if not decision.ok:
@@ -615,6 +649,7 @@ class ComplianceExecutor(Executor):
                     "ok" if packet.insight else "rejected",
                 )
                 decision = self.validate(packet)
+                numbers_checked += decision.numbers_checked
                 attempts += 1
                 reasons += decision.reasons
             if decision.ok and packet.insight:
@@ -663,6 +698,7 @@ class ComplianceExecutor(Executor):
             "verified" if not fallback else "template",
             started,
             "ok" if not fallback else "fallback",
+            detail=f"Compliance checked {numbers_checked} numbers",
         )
         await ctx.send_message(
             ApprovedPacket(
@@ -704,7 +740,7 @@ class GraphicsExecutor(Executor):
                 )
             ]
             await trace(ctx, self.id, "fallback_on", started, "fallback")
-        await trace(ctx, self.id, "schema_validated", started)
+        await trace(ctx, self.id, "schema_validated", started, detail="Graphics validated the cues")
         await ctx.send_message(CuePacket(match_id=packet.stats.event.match_id, cues=cues))
 
     async def render(self, packet: ApprovedPacket) -> list[OverlayCue]:
@@ -792,7 +828,20 @@ class AudienceExecutor(Executor):
                         raise ValueError(f"Unverified audience caption: {decision.reasons}")
                 self.store.add_overlay_cue(packet.match_id, shaped)
                 await ctx.yield_output(shaped)
-        await trace(ctx, self.id, "fan_out", started)
+        await trace(
+            ctx,
+            self.id,
+            "fan_out",
+            started,
+            detail="Audience made "
+            + " and ".join(
+                dict.fromkeys(
+                    {"en": "English", "es": "Spanish", "fr": "French"}[p.language]
+                    for p in self.profiles
+                )
+            )
+            + " versions",
+        )
 
 
 class Director:
@@ -1060,7 +1109,11 @@ class Director:
         ]
         return cues
 
-    async def on_event(self, event: MatchEvent) -> list[OverlayCue]:
+    async def on_event(
+        self,
+        event: MatchEvent,
+        publish: Callable[[list[OverlayCue], list[AgentTraceEvent]], Awaitable[None]] | None = None,
+    ) -> list[OverlayCue]:
         if self.stats_mcp_url and not self.mcp_tool:
             raise RuntimeError("Use async with Director() to connect MCP")
         async with self._lock:
@@ -1071,9 +1124,18 @@ class Director:
                 writer.down = True
                 writer.breaker.fail(event.sequence)
                 self.killed = injected = True
+            workflow_started = perf_counter()
             result = await self.workflow.run(event)
             outputs = result.get_outputs()
             self.last_traces = [row for row in outputs if isinstance(row, AgentTraceEvent)]
+            self.last_traces.append(
+                AgentTraceEvent(
+                    agent="director",
+                    action="coordinated",
+                    detail="Director coordinated the cue",
+                    latency_ms=(perf_counter() - workflow_started) * 1000,
+                )
+            )
             if injected:
                 self.last_traces.insert(
                     0,
@@ -1082,6 +1144,8 @@ class Director:
                     ),
                 )
             cues = [row for row in outputs if isinstance(row, OverlayCue)]
+            if publish:
+                await publish(cues.copy(), self.last_traces.copy())
             started = perf_counter()
             extra = await self.what_if.evaluate(self.store.get_or_create(event.match_id).events)
             if extra:
@@ -1095,6 +1159,7 @@ class Director:
                     AgentTraceEvent(
                         agent="what_if",
                         action="rollouts_verified",
+                        detail=f"What-If ran {extra.payload['metrics']['rollouts']} simulations",
                         latency_ms=(perf_counter() - started) * 1000,
                     )
                 )

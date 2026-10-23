@@ -209,3 +209,65 @@ def test_invalid_viewer_lists_are_rejected() -> None:
                 ).status_code
                 == 422
             )
+
+
+@pytest.mark.asyncio
+async def test_goal_captions_stream_before_slow_whatif(monkeypatch: pytest.MonkeyPatch) -> None:
+    from pitchsim.config import MatchConfig
+    from pitchsim.sim import simulate_match
+    from playmakers_agents.what_if import WhatIfAgent
+
+    goal = next(e for e in simulate_match(MatchConfig(seed=382)) if e.event_type == "goal")
+    monkeypatch.setattr(api, "simulate_match", lambda _: [goal])
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    async def slow_rollouts(self, events):
+        entered.set()
+        await release.wait()
+        return None
+
+    monkeypatch.setattr(WhatIfAgent, "evaluate", slow_rollouts)
+    profiles = [ViewerProfile(), ViewerProfile(persona="casual")]
+    messages = api._director_messages(382, 0, profiles[0], None, 4, 0, None, profiles, None)
+    try:
+        event = await asyncio.wait_for(anext(messages), 5)
+        assert event["type"] == "event"
+        assert event["event_id"] == goal.event_id
+        captions = []
+        while len(captions) < 4:
+            message = await asyncio.wait_for(anext(messages), 5)
+            if message["type"] == "cue":
+                captions.append(message)
+        await asyncio.wait_for(entered.wait(), 5)
+        assert not release.is_set()
+        assert {c["persona"] for c in captions} == {"analyst", "casual"}
+        assert all(c["payload"]["headline"].startswith("GOAL,") for c in captions)
+        assert all(c["clock_ms"] == goal.clock_ms for c in captions)
+        assert all(c["provenance"]["compliance"] == "verified" for c in captions)
+        release.set()
+        assert [m async for m in messages] == []  # No duplicate primary cues or traces.
+    finally:
+        release.set()
+        await messages.aclose()
+
+
+@pytest.mark.asyncio
+async def test_closing_event_stream_cancels_pending_rollouts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entered, cancelled = asyncio.Event(), asyncio.Event()
+    async with Director(checkpoint_path=str(tmp_path)) as director:
+
+        async def stalled(events):
+            entered.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.set()
+
+        monkeypatch.setattr(director.what_if, "evaluate", stalled)
+        messages = api._event_messages(director, passing())
+        assert (await anext(messages))["type"] == "event"
+        await entered.wait()
+        await messages.aclose()
+        assert cancelled.is_set()

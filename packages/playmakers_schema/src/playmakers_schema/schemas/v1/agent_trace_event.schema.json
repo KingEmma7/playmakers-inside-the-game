@@ -11,6 +11,18 @@
       "title": "Agent",
       "type": "string"
     },
+    "detail": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Detail"
+    },
     "latency_ms": {
       "minimum": 0,
       "title": "Latency Ms",

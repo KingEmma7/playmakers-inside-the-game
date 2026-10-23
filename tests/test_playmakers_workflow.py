@@ -33,6 +33,7 @@ async def test_workflow_fan_out_and_grounded_cues(tmp_path: Path) -> None:
     )
     assert all(cue.payload["metrics"] == {} for cue in cues if cue.persona == "casual")
     assert {trace.agent for trace in director.last_traces} == {
+        "director",
         "stats",
         "tactics",
         "storyline",
@@ -294,3 +295,31 @@ async def test_sessions_replaying_the_same_match_keep_separate_mcp_state() -> No
                     stats = [t for t in director.last_traces if t.agent == "stats"]
                     assert [t.action for t in stats] == ["computed"]
                     assert cues[0].payload["metrics"]["difficulty"] == 0.6
+
+
+def test_compliance_counts_metric_and_prose_numbers_checked() -> None:
+    from playmakers_agents.contracts import Insight
+    from playmakers_agents.state_store import InMemoryMatchStore
+    from playmakers_agents.workflow import ComplianceExecutor
+    from playmakers_stats.engine import StatsEngine
+
+    event = passing()
+    engine = StatsEngine()
+    engine.ingest(event)
+    stats = compute_stats(engine, event)
+    packet = InsightPacket(
+        stats=stats,
+        kind="tactics",
+        insight=Insight(
+            insight_id="counted",
+            clock_ms=event.clock_ms,
+            kind="tactics",
+            headline="Pass difficulty 0.6",
+            detail="Difficulty remains 0.6.",
+            metrics={"difficulty": 0.6},
+            evidence_event_ids=[event.event_id],
+        ),
+    )
+    decision = ComplianceExecutor(InMemoryMatchStore(), []).validate(packet)
+    assert decision.ok
+    assert decision.numbers_checked == 3

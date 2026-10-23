@@ -368,7 +368,7 @@ async def test_sse_disconnect_cancels_inflight_director(monkeypatch: pytest.Monk
         async def __aexit__(self, *args):
             closed.set()
 
-        async def on_event(self, event):
+        async def on_event(self, event, publish=None):
             started.set()
             try:
                 await asyncio.Event().wait()

@@ -4,7 +4,7 @@ import symbolUrl from "./assets/playmakers-symbol.svg";
 import { ViewPanel, Crest } from "./Overlay";
 import { countLabel, playerName } from "./players";
 import TracePanel from "./TracePanel";
-import { apiBaseUrl, usePlaymakersStream, clockLabel } from "./stream";
+import { apiBaseUrl, usePlaymakersStream, clockLabel, type Stream } from "./stream";
 import { chooseSpeaker, useVoice, type Speaker } from "./voice";
 const FAN_LANGUAGES = ["en", "es", "fr"] as const;
 type FanLanguage = (typeof FAN_LANGUAGES)[number];
@@ -148,15 +148,30 @@ function Playmakers() {
     whatif_rollouts: 200,
     viewer_profiles,
   });
+  // Failure injection rebuilds a deterministic prefix in a new shared session.
+  // Keep the current event, pitch and cues until both feeds reach that prefix.
+  const [held, setHeld] = useState<{
+    analyst: Stream;
+    fan: Stream;
+    sequence: number;
+  }>();
+  const replaying = Boolean(
+    held && Math.min(
+      analyst.events.at(-1)?.sequence ?? -1,
+      fan.events.at(-1)?.sequence ?? -1,
+    ) < held.sequence,
+  );
+  const displayedAnalyst = replaying && held ? held.analyst : analyst;
+  const displayedFan = replaying && held ? held.fan : fan;
   const shared = Math.min(
-    analyst.events.at(-1)?.sequence ?? -1,
-    fan.events.at(-1)?.sequence ?? -1,
+    displayedAnalyst.events.at(-1)?.sequence ?? -1,
+    displayedFan.events.at(-1)?.sequence ?? -1,
   );
   const sequence = running ? shared : Math.min(pausedSequence, shared);
-  const event = analyst.events.find((e) => e.sequence === sequence);
+  const event = displayedAnalyst.events.find((e) => e.sequence === sequence);
   const clock = event?.clock_ms ?? 0;
   useVoice({
-    enabled: voice && running,
+    enabled: voice && running && !replaying,
     cues: fan.cues,
     events: fan.events,
     clock,
@@ -167,6 +182,7 @@ function Playmakers() {
     ...fan.traces.filter((t) => t.sequence <= sequence),
   ].sort((a, b) => a.sequence - b.sequence);
   function restart() {
+    setHeld(undefined);
     setReplayFrom(0);
     setKill(undefined);
     setRunning(true);
@@ -315,7 +331,7 @@ function Playmakers() {
             <Crest />
             <strong>
               {
-                analyst.events.filter(
+                displayedAnalyst.events.filter(
                   (e) =>
                     e.sequence <= sequence &&
                     e.event_type === "goal" &&
@@ -331,7 +347,7 @@ function Playmakers() {
             </div>
             <strong>
               {
-                analyst.events.filter(
+                displayedAnalyst.events.filter(
                   (e) =>
                     e.sequence <= sequence &&
                     e.event_type === "goal" &&
@@ -368,22 +384,22 @@ function Playmakers() {
                   title="Analyst"
                   persona="analyst"
                   event={event}
-                  events={analyst.events}
-                  cues={analyst.cues}
+                  events={displayedAnalyst.events}
+                  cues={displayedAnalyst.cues}
                   clock={clock}
                   safe={safe}
-                  running={running}
+                  running={running && !replaying}
                   status={analyst.status}
                 />
                 <ViewPanel
                   title="For you"
                   persona="casual"
-                  event={fan.events.find((e) => e.sequence === sequence)}
-                  events={fan.events}
-                  cues={fan.cues}
+                  event={displayedFan.events.find((e) => e.sequence === sequence)}
+                  events={displayedFan.events}
+                  cues={displayedFan.cues}
                   clock={clock}
                   safe={safe}
-                  running={running}
+                  running={running && !replaying}
                   status={fan.status}
                   favourite={favourite}
                   language={language}
@@ -392,12 +408,13 @@ function Playmakers() {
             </div>
             <TracePanel
               traces={traces}
-              recoveryClock={replayFrom}
+              key={`${seed}-${speed}-${kill ?? "normal"}-${language}`}
               mockModel={!liveModel || Boolean(analyst.offline || fan.offline)}
               disabled={!event || !running || Boolean(kill)}
               onKill={() => {
                 const minute = Math.floor(clock / 60000);
-                setReplayFrom(Math.floor(clock / 60000) * 60000);
+                setHeld({ analyst: displayedAnalyst, fan: displayedFan, sequence });
+                setReplayFrom(clock);
                 setKill(`tactics@${minute}`);
               }}
             />
@@ -407,7 +424,7 @@ function Playmakers() {
               <b>Match so far</b>
               <span>
                 {countLabel(
-                  analyst.events.filter(
+                  displayedAnalyst.events.filter(
                     (e) => e.sequence <= sequence && e.event_type === "shot",
                   ).length,
                   "shot",
@@ -419,7 +436,7 @@ function Playmakers() {
               <i
                 style={{ width: `${Math.min(100, (clock / 5400000) * 100)}%` }}
               />
-              {analyst.events
+              {displayedAnalyst.events
                 .filter(
                   (e) =>
                     e.sequence <= sequence &&

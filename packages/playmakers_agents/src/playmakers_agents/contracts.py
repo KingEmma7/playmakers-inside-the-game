@@ -55,11 +55,13 @@ class OverlayCue(PlaymakersContractsBaseModel):
 
 
 class ComplianceDecision(PlaymakersContractsBaseModel):
+    numbers_checked: int = Field(default=0, ge=0)
     ok: bool
     reasons: list[str] = Field(default_factory=list)
 
 
 class AgentTraceEvent(PlaymakersContractsBaseModel):
+    detail: str | None = None
     schema_version: Literal["1.0.0"] = "1.0.0"
     agent: str
     action: str

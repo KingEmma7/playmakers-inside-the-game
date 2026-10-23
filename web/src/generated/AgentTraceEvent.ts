@@ -2,6 +2,7 @@
 
 export type Action = string;
 export type Agent = string;
+export type Detail = string | null;
 export type LatencyMs = number;
 export type SchemaVersion = "1.0.0";
 export type Status = "ok" | "rejected" | "retry" | "fallback" | "error";
@@ -9,6 +10,7 @@ export type Status = "ok" | "rejected" | "retry" | "fallback" | "error";
 export interface AgentTraceEvent {
   action: Action;
   agent: Agent;
+  detail?: Detail;
   latency_ms: LatencyMs;
   schema_version?: SchemaVersion;
   status?: Status;

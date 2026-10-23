@@ -408,9 +408,10 @@ function Playmakers() {
             </div>
             <TracePanel
               traces={traces}
-              key={`${seed}-${speed}-${kill ?? "normal"}-${language}`}
+              key={`${seed}-${speed}-${kill ?? "normal"}-${replayFrom}-${language}`}
+              killRequested={Boolean(kill)}
               mockModel={!liveModel || Boolean(analyst.offline || fan.offline)}
-              disabled={!event || !running || Boolean(kill)}
+              disabled={!event || !running || replaying}
               onKill={() => {
                 const minute = Math.floor(clock / 60000);
                 setHeld({ analyst: displayedAnalyst, fan: displayedFan, sequence });

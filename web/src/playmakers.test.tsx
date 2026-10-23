@@ -11,8 +11,14 @@ import { whatIfQuestion } from "./whatifCopy";
 import { RecapCard } from "./Recap";
 import { ProvenancePanel } from "./Provenance";
 import TracePanel from "./TracePanel";
+import offlineRecoveryRows from "./test-fixtures/offline-recovery.json";
 import { parseStreamMessage } from "./parse";
 import type { MatchEvent } from "./stream";
+const offlineRecovery: Trace[] = offlineRecoveryRows.map((row) => {
+  const parsed = parseStreamMessage(JSON.stringify({ type: "trace", ...row }));
+  if (parsed.kind !== "trace") throw new Error("Invalid offline recovery fixture");
+  return { ...parsed.trace, sequence: row.sequence, view: row.view };
+});
 vi.mock("./Pitch", () => ({
   default: ({ trail = [] }: { trail?: { x: number; y: number }[] }) => (
     <div data-testid="pitch" data-trail={JSON.stringify(trail)} />
@@ -630,6 +636,8 @@ describe("broadcast cues", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /Stop Tactics/ }));
     expect(kill).toHaveBeenCalledOnce();
+    expect(container.querySelector(".agent-grid > div:nth-child(3) .down")).toHaveTextContent("Down");
+    expect(screen.getByRole("button", { name: /Stop Tactics/ })).toBeDisabled();
     const actions = ["agent_down", "fallback_on", "restarted_from_checkpoint", "caught_up"];
     const labels = ["Down", "Template cover: captions from templates", "Restored from checkpoint", "Caught up"];
     const traces = ["analyst", "casual"].flatMap((view) =>
@@ -645,7 +653,56 @@ describe("broadcast cues", () => {
       act(() => vi.advanceTimersByTime(1));
     }
     expect(container.querySelector(".agent-grid .recovering")).toBeNull();
+    expect(screen.getByRole("button", { name: /Stop Tactics/ })).toBeEnabled();
     expect(screen.getByRole("log")).not.toHaveTextContent("0.1");
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it("displays restoration and catch-up in the real offline trace order, then allows another stop", () => {
+    vi.useFakeTimers();
+    // Captured from Director with the offline client, default key-moment policy,
+    // four passing events and kill=tactics@20. Rejected insight follows fallback;
+    // restoration and catch-up precede the routine template on the next event.
+    const props = { onKill: vi.fn(), disabled: false, mockModel: true };
+    const { container, rerender, unmount } = render(
+      <TracePanel {...props} traces={offlineRecovery.filter((t) => t.sequence === 1)} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Stop Tactics/ }));
+    const row = () => container.querySelector(".agent-grid > div:nth-child(3)")!;
+    expect(row()).toHaveTextContent("Down");
+    // App replaces the session on click. The optimistic state survives its new key.
+    rerender(<TracePanel {...props} key="stopped" killRequested traces={[]} />);
+    expect(row()).toHaveTextContent("Down");
+    const failed = offlineRecovery.filter((t) => t.sequence <= 2);
+    rerender(<TracePanel {...props} key="stopped" killRequested traces={failed} />);
+    act(() => vi.advanceTimersByTime(1499));
+    expect(row()).toHaveTextContent("Down");
+    act(() => vi.advanceTimersByTime(1));
+    expect(row()).toHaveTextContent("Template cover: captions from templates");
+    act(() => vi.advanceTimersByTime(3000));
+    expect(row()).toHaveTextContent("Template cover: captions from templates");
+    expect(screen.getByRole("button", { name: /Stop Tactics/ })).toBeDisabled();
+    const restored = offlineRecovery.filter((t) => t.sequence <= 3);
+    rerender(<TracePanel {...props} key="stopped" killRequested traces={[
+      ...restored, ...restored.map((t) => ({ ...t, view: "casual" })),
+    ]} />);
+    expect(row()).toHaveTextContent("Restored from checkpoint");
+    // Incoming routine work and trace eviction must not erase queued lifecycle steps.
+    rerender(<TracePanel {...props} key="stopped" killRequested traces={offlineRecovery.filter((t) => t.sequence === 4)} />);
+    act(() => vi.advanceTimersByTime(1499));
+    expect(row()).toHaveTextContent("Restored from checkpoint");
+    act(() => vi.advanceTimersByTime(1));
+    expect(row()).toHaveTextContent("Caught up");
+    expect(row().querySelector(".recovering")).not.toBeNull();
+    act(() => vi.advanceTimersByTime(1499));
+    expect(row()).toHaveTextContent("Caught up");
+    act(() => vi.advanceTimersByTime(1));
+    expect(row()).toHaveTextContent("Used a template caption");
+    expect(row().querySelector(".recovering")).toBeNull();
+    expect(screen.getByRole("button", { name: /Stop Tactics/ })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: /Stop Tactics/ }));
+    expect(row()).toHaveTextContent("Down");
+    expect(props.onKill).toHaveBeenCalledTimes(2);
     unmount();
     expect(vi.getTimerCount()).toBe(0);
   });
@@ -653,12 +710,36 @@ describe("broadcast cues", () => {
     vi.useFakeTimers();
     const traces = [trace({ agent: "compliance", detail: "Compliance checked 3 numbers", latency_ms: 0.1 })];
     const { container, rerender } = render(<TracePanel traces={traces} onKill={() => {}} disabled={false} />);
-    expect(screen.getByText("Compliance checked 3 numbers")).toBeInTheDocument();
+    expect(screen.getByText("Checked 3 numbers")).toBeInTheDocument();
     expect(container.querySelector(".agent-grid > div:nth-child(5)")).toHaveClass("agent-active");
     act(() => vi.advanceTimersByTime(1500));
     expect(container.querySelector(".agent-active")).toBeNull();
     rerender(<TracePanel traces={[...traces]} onKill={() => {}} disabled={false} />);
     expect(container.querySelector(".agent-active")).toBeNull();
+  });
+  it("tints only changed action lines for the latest cue, at most three at once", () => {
+    vi.useFakeTimers();
+    const crew = ["director", "stats", "tactics", "storyline", "compliance", "graphics", "audience", "what_if"];
+    const original = crew.map((agent) => trace({ agent, detail: `${agent} completed work` }));
+    const { container, rerender, unmount } = render(<TracePanel traces={original} onKill={() => {}} disabled={false} />);
+    expect(container.querySelectorAll(".agent-active")).toHaveLength(3);
+    act(() => vi.advanceTimersByTime(1500));
+    const repeated = original.map((t) => ({ ...t, sequence: 2, latency_ms: 50 }));
+    rerender(<TracePanel traces={[...original, ...repeated]} onKill={() => {}} disabled={false} />);
+    expect(container.querySelectorAll(".agent-active")).toHaveLength(0);
+    const changed = repeated.map((t) => ({
+      ...t, sequence: 3,
+      detail: t.agent === "compliance" ? "Compliance checked 20 numbers" : t.detail,
+    }));
+    rerender(<TracePanel traces={changed} onKill={() => {}} disabled={false} />);
+    expect(container.querySelectorAll(".agent-active")).toHaveLength(1);
+    expect(container.querySelector(".agent-active")).toHaveTextContent("Checked 20 numbers");
+    act(() => vi.advanceTimersByTime(750));
+    rerender(<TracePanel traces={changed.map((t) => ({ ...t, sequence: 4 }))} onKill={() => {}} disabled={false} />);
+    act(() => vi.advanceTimersByTime(750));
+    expect(container.querySelector(".agent-active")).toBeNull();
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
   });
   it("names the crew honestly and labels mock-model timings as mock", () => {
     const traces = [trace(), trace({ agent: "compliance", latency_ms: 0.4 })];
@@ -668,7 +749,7 @@ describe("broadcast cues", () => {
     expect(
       screen.getByText("2 AI agents + 6 rule-based steps"),
     ).toBeInTheDocument();
-    expect(screen.getByText("Tactics drafted a caption · 12 ms")).toBeInTheDocument();
+    expect(screen.getByText("Drafted a caption · 12 ms")).toBeInTheDocument();
     rerender(
       <TracePanel
         traces={traces}
@@ -678,10 +759,10 @@ describe("broadcast cues", () => {
       />,
     );
     expect(
-      screen.getByText("Tactics drafted a caption · offline mock model"),
+      screen.getByText("Offline mock model"),
     ).toBeInTheDocument();
-    expect(screen.queryByText("Tactics drafted a caption · 12 ms")).not.toBeInTheDocument();
-    expect(screen.getByText("Compliance drafted a caption")).toBeInTheDocument();
+    expect(screen.queryByText("Drafted a caption · 12 ms")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Drafted a caption")[1]).toBeInTheDocument();
     expect(screen.queryByText(/0.4 ms/)).not.toBeInTheDocument();
   });
   it("waits for enough events before showing possession and field tilt", () => {

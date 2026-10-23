@@ -37,8 +37,8 @@ try {
     .first()
     .waitFor({ timeout: 60000 });
   await page
-    .locator(".agent-grid")
-    .getByText(/offline mock model/)
+    .locator(".rail-heading")
+    .getByText(/Offline mock model/)
     .first()
     .waitFor({ timeout: 60000 });
   await page.waitForFunction(

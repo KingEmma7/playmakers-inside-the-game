@@ -1,0 +1,82 @@
+[
+  {
+    "detail": "Tactics used a template caption",
+    "schema_version": "1.0.0",
+    "agent": "tactics",
+    "action": "templated",
+    "latency_ms": 0.01750899991748156,
+    "status": "ok",
+    "sequence": 1,
+    "view": "analyst"
+  },
+  {
+    "detail": null,
+    "schema_version": "1.0.0",
+    "agent": "tactics",
+    "action": "agent_down",
+    "latency_ms": 0.0,
+    "status": "error",
+    "sequence": 2,
+    "view": "analyst"
+  },
+  {
+    "detail": null,
+    "schema_version": "1.0.0",
+    "agent": "tactics",
+    "action": "fallback_on",
+    "latency_ms": 0.02259699977003038,
+    "status": "fallback",
+    "sequence": 2,
+    "view": "analyst"
+  },
+  {
+    "detail": null,
+    "schema_version": "1.0.0",
+    "agent": "tactics",
+    "action": "insight",
+    "latency_ms": 0.04237400025886018,
+    "status": "rejected",
+    "sequence": 2,
+    "view": "analyst"
+  },
+  {
+    "detail": null,
+    "schema_version": "1.0.0",
+    "agent": "tactics",
+    "action": "restarted_from_checkpoint",
+    "latency_ms": 26.913867999610375,
+    "status": "ok",
+    "sequence": 3,
+    "view": "analyst"
+  },
+  {
+    "detail": null,
+    "schema_version": "1.0.0",
+    "agent": "tactics",
+    "action": "caught_up",
+    "latency_ms": 26.964020999912464,
+    "status": "ok",
+    "sequence": 3,
+    "view": "analyst"
+  },
+  {
+    "detail": "Tactics used a template caption",
+    "schema_version": "1.0.0",
+    "agent": "tactics",
+    "action": "templated",
+    "latency_ms": 26.98636099921714,
+    "status": "ok",
+    "sequence": 3,
+    "view": "analyst"
+  },
+  {
+    "detail": "Tactics used a template caption",
+    "schema_version": "1.0.0",
+    "agent": "tactics",
+    "action": "templated",
+    "latency_ms": 0.0056680000852793455,
+    "status": "ok",
+    "sequence": 4,
+    "view": "analyst"
+  }
+]

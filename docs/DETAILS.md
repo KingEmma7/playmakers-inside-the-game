@@ -179,7 +179,7 @@ Cues may carry an optional `provenance` object (agent, source, Compliance verdic
 rejection reasons, metrics used and the events behind each metric). At the final whistle the
 stream adds one `recap` cue per viewer profile (priority 90, 30 s, payload `headline`,
 `detail`, `home_goals`, `away_goals` and `moments`). `GET /model/config` returns
-`{"live": true|false}` so the Agents panel can show "offline mock model" instead of
+`{"live": true|false}` so the Agents header can show "Offline mock model" once and hide
 millisecond timings for Tactics, Storyline and What-If when no live model is configured.
 `GET /speech/config` reports whether
 Azure AI Speech is configured; `GET /speech/synthesize?text=…&language=en|es|fr` (header
@@ -325,7 +325,7 @@ The slower stream determines the shared event clock.
 - **Stop Tactics agent** restarts both deterministic sessions with failure at the current minute.
   The API fast-forwards the prefix (`replay_from_ms`) before returning to the selected pace.
   Look for `agent down → fallback on → restarted from checkpoint → caught up` in both feeds.
-  One injected failure per replay; changing seed/speed resets the button.
+  The button re-enables after the displayed catch-up step; each stop rebuilds the session with one injected failure.
 - Score/clock, storyline/tactical lower thirds, momentum, pass difficulty, xG shots,
   favourite tags and What-If probability cards respond to actual events/cues.
 

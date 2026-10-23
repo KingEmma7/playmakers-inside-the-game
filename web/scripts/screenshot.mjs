@@ -33,7 +33,7 @@ try {
     .waitFor({ timeout: 60000 });
   await page
     .getByRole("region", { name: "FAN view" })
-    .getByText("Follow the action as the match unfolds.")
+    .getByText(/From events.*Verified/)
     .first()
     .waitFor({ timeout: 60000 });
   await page

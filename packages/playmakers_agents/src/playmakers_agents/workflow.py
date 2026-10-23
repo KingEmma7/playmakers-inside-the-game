@@ -47,7 +47,7 @@ from playmakers_agents.contracts import (
     ViewerProfile,
 )
 from playmakers_agents.model_clients import create_playmakers_chat_client, is_live_client
-from playmakers_agents.personalize import personalize
+from playmakers_agents.personalize import is_significant, personalize, significant_phrase
 from playmakers_agents.players import player_name
 from playmakers_agents.recap import (
     TEAM_NAMES,
@@ -564,6 +564,38 @@ class ComplianceExecutor(Executor):
         reviews: list[CueProvenance] = []
         fallback = False
         for packet in packets:
+            event = packet.stats.event
+            if is_significant(event):
+                events = self.store.get_or_create(event.match_id).events
+                home, away = score(events)
+                moment = significant_phrase(event, "en", home, away)
+                goals = [e for e in events if isinstance(e, GoalEvent)]
+                packet.stats.metrics.update(
+                    home_goals=home, away_goals=away, minute=event.clock_ms // 60_000 + 1
+                )
+                for key in ("home_goals", "away_goals", "minute"):
+                    packet.stats.metric_evidence[key] = (
+                        [event.event_id]
+                        if key == "minute"
+                        else [
+                            g.event_id
+                            for g in goals
+                            if g.scoring_team_id.endswith("_HOME") == (key == "home_goals")
+                        ]
+                    )
+                packet.stats.evidence_event_ids = list(
+                    dict.fromkeys([*packet.stats.evidence_event_ids, *(g.event_id for g in goals)])
+                )
+                packet.insight = Insight(
+                    insight_id=f"{event.event_id}:{packet.kind}",
+                    clock_ms=event.clock_ms,
+                    kind=packet.kind,
+                    headline=moment[0],
+                    detail=moment[1],
+                    metrics=dict(packet.stats.metrics),
+                    evidence_event_ids=list(packet.stats.evidence_event_ids),
+                )
+                packet.templated = True
             decision = self.validate(packet)
             attempts = 1
             reasons = list(decision.reasons)
@@ -684,7 +716,13 @@ class GraphicsExecutor(Executor):
                     "template": "template_fallback"
                     if insight.insight_id.endswith(":template")
                     else insight.kind,
+                    "priority": 85 if is_significant(packet.stats.event) else 0,
                     "payload": {
+                        **(
+                            {"moment": packet.stats.event.event_type, "hold_ms": 60_000}
+                            if is_significant(packet.stats.event)
+                            else {}
+                        ),
                         "headline": insight.headline,
                         "detail": insight.detail,
                         "metrics": insight.metrics,
@@ -708,6 +746,7 @@ class AudienceExecutor(Executor):
         super().__init__(id="audience")
         self.profiles, self.store, self.client = profiles, store, client
         self.timeout = timeout
+        self.previous_lines: dict[int, tuple[str, str]] = {}
 
     @handler
     async def handle(
@@ -717,7 +756,40 @@ class AudienceExecutor(Executor):
         for index, profile in enumerate(self.profiles):
             for cue in packet.cues:
                 event = self.store.get_or_create(packet.match_id).events[-1]
-                shaped = await personalize(cue, profile, event, self.client, index, self.timeout)
+                prior_id, prior_line = self.previous_lines.get(index, ("", ""))
+                # Both writers describe the same event with the same fan caption.
+                previous = prior_line if prior_id != event.event_id else ""
+                shaped = await personalize(
+                    cue, profile, event, self.client, index, self.timeout, previous
+                )
+                if profile.persona == "casual":
+                    if prior_id == event.event_id:
+                        shaped.payload["headline"] = prior_line
+                    else:
+                        self.previous_lines[index] = (event.event_id, shaped.payload["headline"])
+                # Verify the localized prose too, using the already approved metric evidence.
+                if shaped.provenance and shaped.provenance.compliance == "verified":
+                    metrics = shaped.payload.get("metrics", {})
+                    stats = StatsPacket(
+                        event=event,
+                        metrics=metrics,
+                        evidence_event_ids=shaped.evidence_event_ids,
+                        metric_evidence=shaped.provenance.metric_evidence,
+                    )
+                    insight = Insight(
+                        insight_id=shaped.cue_id,
+                        kind=shaped.provenance.agent,
+                        clock_ms=shaped.clock_ms,
+                        headline=shaped.payload["headline"],
+                        detail=shaped.payload["detail"],
+                        metrics=metrics,
+                        evidence_event_ids=shaped.evidence_event_ids,
+                    )
+                    decision = ComplianceExecutor(self.store, []).validate(
+                        InsightPacket(stats=stats, insight=insight, kind=insight.kind)
+                    )
+                    if not decision.ok:
+                        raise ValueError(f"Unverified audience caption: {decision.reasons}")
                 self.store.add_overlay_cue(packet.match_id, shaped)
                 await ctx.yield_output(shaped)
         await trace(ctx, self.id, "fan_out", started)

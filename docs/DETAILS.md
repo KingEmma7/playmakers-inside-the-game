@@ -447,3 +447,20 @@ clear in both views. At full time, each recap lists every supplied key moment in
 column with full names and internal scrolling. Recovery history initially filters to
 agent down, fallback on, checkpoint restart and caught up; Show all steps reveals the
 available trace. At desktop sizes, captions and history scroll inside the viewport.
+
+### Event captions and named alternatives
+
+Goals and red cards get event-derived names and minutes in both feeds, with English,
+Spanish and French fan copy. Goal follow-ups use the score from the stored event prefix.
+Compliance checks these templates and the localized audience captions, including the
+minute and score evidence. The web holds these headlines for 60 match seconds (six
+seconds at 10×); a newer goal or red card replaces the previous one immediately.
+Fan captions describe the cited event and actors, including saved shots, incomplete
+passes, possession changes and passes under pressure. Event IDs choose a stable phrase;
+the audience step avoids repeating the previous event's line. Following-player emphasis
+still uses actual involvement, without adding unverified touch counts.
+
+What-If cues carry the triggering player, minute, team and home-team probability
+perspective. The panel names the saved-shot, scored-chance or avoided-red-card alternative
+in English, Spanish or French, using the actual and counterfactual rollout probabilities.
+The latest simulation replaces the previous panel; the bars and Why? evidence stay available.

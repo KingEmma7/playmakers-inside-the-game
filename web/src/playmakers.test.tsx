@@ -7,6 +7,7 @@ import {
   type Trace,
 } from "./stream";
 import { CueCard, ViewPanel } from "./Overlay";
+import { whatIfQuestion } from "./whatifCopy";
 import { RecapCard } from "./Recap";
 import { ProvenancePanel } from "./Provenance";
 import TracePanel from "./TracePanel";
@@ -121,6 +122,135 @@ describe("broadcast cues", () => {
     expect(screen.getAllByText("Dominance")).toHaveLength(1);
     expect(screen.getAllByText("Dominio")).toHaveLength(1);
     expect(screen.getByText(/Okafor · favourite player/)).toBeInTheDocument();
+  });
+  it.each(["analyst", "casual"])(
+    "holds a goal through routine captions in the %s feed",
+    (persona) => {
+      const goal = cue({
+        cue_id: "goal",
+        clock_ms: 1000,
+        priority: 85,
+        payload: {
+          headline: "GOAL, Marin 2'",
+          detail: "Northbridge Rovers lead 1-0.",
+          moment: "goal",
+          hold_ms: 60000,
+        },
+      });
+      const routine = cue({
+        cue_id: "pass",
+        clock_ms: 58000,
+        payload: { headline: "Routine pass", detail: "A pass." },
+      });
+      const props = {
+        title: "Feed",
+        persona,
+        events: [],
+        safe: false,
+        running: true,
+        status: "live",
+      };
+      const { rerender } = render(
+        <ViewPanel {...props} clock={60999} cues={[goal, routine]} />,
+      );
+      expect(
+        screen.getByRole("heading", { name: "GOAL, Marin 2'" }),
+      ).toBeInTheDocument();
+      expect(screen.queryByText("Routine pass")).not.toBeInTheDocument();
+      rerender(<ViewPanel {...props} clock={61000} cues={[goal, routine]} />);
+      expect(
+        screen.getByRole("heading", { name: "Routine pass" }),
+      ).toBeInTheDocument();
+      const red = cue({
+        cue_id: "red",
+        clock_ms: 40000,
+        priority: 85,
+        payload: {
+          headline: "RED CARD, Keita 3'",
+          moment: "card",
+          hold_ms: 60000,
+        },
+      });
+      rerender(
+        <ViewPanel {...props} clock={58000} cues={[goal, routine, red]} />,
+      );
+      expect(
+        screen.getByRole("heading", { name: "RED CARD, Keita 3'" }),
+      ).toBeInTheDocument();
+    },
+  );
+  it.each([
+    [
+      "en",
+      "If Marin's 2' shot had been saved: Northbridge Rovers' win chance 41% instead of 65%.",
+    ],
+    [
+      "es",
+      "Si el disparo de Marin en el 2' hubiera sido detenido: probabilidad de victoria de Northbridge Rovers, 41% en vez de 65%.",
+    ],
+    [
+      "fr",
+      "Si le tir de Marin à la 2' avait été arrêté : chances de victoire de Northbridge Rovers, 41% au lieu de 65%.",
+    ],
+  ])("names the What-If moment, team and odds in %s", (language, expected) => {
+    expect(
+      whatIfQuestion(
+        cue({
+          language: language as OverlayCue["language"],
+          template: "what_if",
+          payload: {
+            scenario: "if the shot had been saved",
+            moment: { player_id: "match_38_H10", minute: 2 },
+            win_team_id: "match_38_HOME",
+            metrics: { win_prob_after: 0.65, win_prob_counterfactual: 0.41 },
+          },
+        }),
+      ),
+    ).toBe(expected);
+  });
+  it("updates the persistent What-If panel when a later simulation arrives", () => {
+    const first = cue({
+      cue_id: "first",
+      template: "what_if",
+      clock_ms: 1000,
+      payload: {
+        headline: "What if?",
+        scenario: "if the shot had been saved",
+        moment: { player_id: "match_38_H10", minute: 2 },
+        win_team_id: "match_38_HOME",
+        metrics: { win_prob_after: 0.65, win_prob_counterfactual: 0.41 },
+      },
+    });
+    const next = cue({
+      cue_id: "next",
+      template: "what_if",
+      clock_ms: 900000,
+      payload: {
+        headline: "What if?",
+        scenario: "if the chance had been scored",
+        moment: { player_id: "match_38_H09", minute: 16 },
+        win_team_id: "match_38_HOME",
+        metrics: { win_prob_after: 0.7, win_prob_counterfactual: 0.9 },
+      },
+    });
+    const props = {
+      title: "For you",
+      persona: "casual",
+      events: [],
+      safe: false,
+      running: true,
+      status: "live",
+      cues: [first, next],
+    };
+    const { rerender } = render(<ViewPanel {...props} clock={899999} />);
+    expect(screen.getByText(/If Marin's 2' shot/)).toBeInTheDocument();
+    rerender(<ViewPanel {...props} clock={1000000} />);
+    expect(screen.queryByText(/If Marin's/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /If Okafor's 16' chance had been scored.*90% instead of 70%/,
+      ),
+    ).toBeInTheDocument();
   });
   it("shows before/after win probabilities and delta", () => {
     render(
@@ -429,33 +559,62 @@ describe("broadcast cues", () => {
     rerender(<ViewPanel {...props} clock={0} cues={[]} />);
     expect(screen.queryByText("Retained result")).not.toBeInTheDocument();
   });
-  it.each(["analyst", "casual"] as const)("keeps all five recap goals and full player names for %s", (persona) => {
-    const onFocus = vi.fn();
-    const moments = [2, 15, 20, 62, 71].map((minute, i) => ({
-      clock_ms: (minute - 1) * 60000,
-      event_id: `goal-${i}`,
-      kind: "goal",
-      team_id: i < 3 ? "match_382_HOME" : "match_382_AWAY",
-      player_id: i === 1 ? "match_382_H09" : i < 3 ? "match_382_H07" : "match_382_A13",
-    }));
-    render(<RecapCard cue={cue({ persona, template: "recap", payload: { moments } })} onFocus={onFocus} onExplain={() => {}} />);
-    expect(screen.getAllByRole("listitem")).toHaveLength(5);
-    expect(screen.getByRole("button", { name: /15' Goal.*Okafor/ })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /71' Goal/ }));
-    expect(onFocus).toHaveBeenCalledWith("goal-4");
-  });
+  it.each(["analyst", "casual"] as const)(
+    "keeps all five recap goals and full player names for %s",
+    (persona) => {
+      const onFocus = vi.fn();
+      const moments = [2, 15, 20, 62, 71].map((minute, i) => ({
+        clock_ms: (minute - 1) * 60000,
+        event_id: `goal-${i}`,
+        kind: "goal",
+        team_id: i < 3 ? "match_382_HOME" : "match_382_AWAY",
+        player_id:
+          i === 1 ? "match_382_H09" : i < 3 ? "match_382_H07" : "match_382_A13",
+      }));
+      render(
+        <RecapCard
+          cue={cue({ persona, template: "recap", payload: { moments } })}
+          onFocus={onFocus}
+          onExplain={() => {}}
+        />,
+      );
+      expect(screen.getAllByRole("listitem")).toHaveLength(5);
+      expect(
+        screen.getByRole("button", { name: /15' Goal.*Okafor/ }),
+      ).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /71' Goal/ }));
+      expect(onFocus).toHaveBeenCalledWith("goal-4");
+    },
+  );
   it("starts recovery history with key events and can reveal other steps", () => {
-    const actions = ["agent_down", "fallback_on", "restarted_from_checkpoint", "caught_up"];
-    const { container } = render(<TracePanel traces={[
-      trace({ action: "handoff" }),
-      ...["analyst", "casual"].flatMap((view) => actions.map((action) => trace({ view, action }))),
-    ]} onKill={() => {}} disabled={false} />);
+    const actions = [
+      "agent_down",
+      "fallback_on",
+      "restarted_from_checkpoint",
+      "caught_up",
+    ];
+    const { container } = render(
+      <TracePanel
+        traces={[
+          trace({ action: "handoff" }),
+          ...["analyst", "casual"].flatMap((view) =>
+            actions.map((action) => trace({ view, action })),
+          ),
+        ]}
+        onKill={() => {}}
+        disabled={false}
+      />,
+    );
     expect(container.querySelectorAll(".trace-row")).toHaveLength(8);
     for (const view of ["A", "F"]) {
       for (const action of actions) {
-        expect([...container.querySelectorAll(".trace-row")].some((row) =>
-          row.textContent?.includes(action.replaceAll("_", " ")) && row.querySelector("b span")?.textContent === view,
-        )).toBe(true);
+        expect(
+          [...container.querySelectorAll(".trace-row")].some(
+            (row) =>
+              row.textContent?.includes(action.replaceAll("_", " ")) &&
+              row.querySelector("b span")?.textContent === view,
+          ),
+        ).toBe(true);
       }
     }
     fireEvent.click(screen.getByRole("button", { name: "Show all steps" }));
@@ -497,12 +656,21 @@ describe("broadcast cues", () => {
     const { rerender } = render(
       <TracePanel traces={traces} onKill={() => {}} disabled={false} />,
     );
-    expect(screen.getByText("2 AI agents + 6 rule-based steps")).toBeInTheDocument();
+    expect(
+      screen.getByText("2 AI agents + 6 rule-based steps"),
+    ).toBeInTheDocument();
     expect(screen.getByText("insight · 12.3 ms")).toBeInTheDocument();
     rerender(
-      <TracePanel traces={traces} onKill={() => {}} disabled={false} mockModel />,
+      <TracePanel
+        traces={traces}
+        onKill={() => {}}
+        disabled={false}
+        mockModel
+      />,
     );
-    expect(screen.getByText("insight · offline mock model")).toBeInTheDocument();
+    expect(
+      screen.getByText("insight · offline mock model"),
+    ).toBeInTheDocument();
     expect(screen.queryByText("insight · 12.3 ms")).not.toBeInTheDocument();
     expect(screen.getByText("insight · 0.4 ms")).toBeInTheDocument();
   });
@@ -539,8 +707,12 @@ describe("broadcast cues", () => {
       ...passes(10, "match_7_AWAY", 20),
     ].map((e, i) => ({ ...e, sequence: i }));
     rerender(<ViewPanel {...props} events={settled} event={settled.at(-1)} />);
-    expect(screen.getByLabelText("Match metrics")).toHaveTextContent("75%Possession");
-    expect(screen.getByLabelText("Match metrics")).toHaveTextContent("75%Field tilt");
+    expect(screen.getByLabelText("Match metrics")).toHaveTextContent(
+      "75%Possession",
+    );
+    expect(screen.getByLabelText("Match metrics")).toHaveTextContent(
+      "75%Field tilt",
+    );
   });
   it("keeps fallback visible after rejected output and across audience feeds", () => {
     render(

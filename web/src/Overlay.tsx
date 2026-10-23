@@ -22,7 +22,7 @@ const CARD_LABELS: Record<
   },
   es: {
     evidence: "Basado en los eventos",
-    verified: "",
+    verified: "· Verificado",
     winProbability: "Probabilidad de victoria",
     simulations: "simulaciones",
     dominance: "Dominio",
@@ -245,7 +245,18 @@ export function ViewPanel({
   };
   const active = activeCues(cues, clock);
   // One winner per slot; incoming cues replace lower-priority captions instead of covering the pitch.
+  const heldMoment = cues
+    .filter(
+      (c) =>
+        c.template !== "what_if" &&
+        (c.payload.moment === "goal" || c.payload.moment === "card") &&
+        c.clock_ms <= clock &&
+        clock < c.clock_ms + Number(c.payload.hold_ms ?? 60000),
+    )
+    .sort((a, b) => b.clock_ms - a.clock_ms)
+    .at(0);
   const primary =
+    heldMoment ??
     active.find((c) => c.template !== "what_if" && c.template !== "recap") ??
     cues
       .filter(
@@ -280,7 +291,7 @@ export function ViewPanel({
     .filter((e) => e && e.event_type !== "tracking_frame")
     .map(eventPoint)
     .filter((point): point is Point => point !== undefined);
-  const storyline = active.find(
+  const storyline = !heldMoment && active.find(
     (c) =>
       c.template === "storyline" &&
       c.cue_id !== primary?.cue_id &&

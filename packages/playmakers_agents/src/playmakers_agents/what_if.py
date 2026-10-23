@@ -205,6 +205,15 @@ class WhatIfAgent:
                 "scenario": scenario,
                 "metrics": metrics.model_dump(),
                 "perspective": "home",
+                "moment": {
+                    "event_type": event.event_type,
+                    "player_id": getattr(event, "scorer_player_id", None)
+                    or getattr(event, "shooter_player_id", None)
+                    or getattr(event, "carded_player_id", None),
+                    "minute": event.clock_ms // 60_000 + 1,
+                    "team_id": getattr(event, "scoring_team_id", None) or event.team_id,
+                },
+                "win_team_id": f"{event.match_id}_HOME",
             },
             provenance=CueProvenance(
                 agent="what_if",

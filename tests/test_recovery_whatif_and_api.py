@@ -112,8 +112,12 @@ async def test_profiles_differ_and_favorites_are_scoped() -> None:
         assert spanish.payload["metrics"] == {}
         assert "Favorito:" in spanish.payload["headline"]
         assert spanish.payload["player_cam"]["player_id"] == "a"
-        assert "próximo" in spanish.payload["headline"]
-        assert "attaque" in french.payload["headline"]
+        assert (
+            "pasa" in spanish.payload["headline"]
+            or "recibe" in spanish.payload["headline"]
+            or "balón" in spanish.payload["headline"]
+        )
+        assert any(word in french.payload["headline"] for word in ("passe", "reçoit", "ballon"))
         assert all("player_cam" not in cue.payload for cue in (analyst, french))
 
 
@@ -171,6 +175,13 @@ async def test_whatif_determinism_triggers_and_probability_evidence() -> None:
         assert metrics["delta"] == metrics["win_prob_after"] - metrics["win_prob_before"]
         assert metrics["counterfactual"]["win"] == metrics["before"]["win"]
         assert metrics["win_prob_counterfactual"] == metrics["counterfactual"]["win"]
+        assert cue.payload["moment"] == {
+            "event_type": "goal",
+            "player_id": events[index].scorer_player_id,
+            "minute": events[index].clock_ms // 60000 + 1,
+            "team_id": events[index].scoring_team_id,
+        }
+        assert cue.payload["win_team_id"] == "match_7_HOME"
         assert cue.provenance.agent == "what_if"
         assert cue.provenance.compliance == "not_reviewed"
         assert cue.provenance.metrics["rollouts"] == 20

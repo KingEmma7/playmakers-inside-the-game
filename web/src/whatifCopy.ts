@@ -15,9 +15,6 @@ export function whatIfQuestion(cue: OverlayCue): string {
     return String(cue.payload.detail || "");
   const player = playerName(data.player_id);
   const minute = `${data.minute}'`;
-  const team = String(win_team_id).endsWith("_HOME")
-    ? "Northbridge Rovers"
-    : "Southport Athletic";
   const actual = Math.round(odds.win_prob_after * 100);
   const alternative = Math.round(odds.win_prob_counterfactual * 100);
   const phrases: Record<string, Record<string, string>> = {
@@ -41,8 +38,8 @@ export function whatIfQuestion(cue: OverlayCue): string {
   const opening = (phrases[language] ?? phrases.en)[String(scenario)];
   if (!opening) return String(cue.payload.detail || "");
   if (language === "es")
-    return `${opening}: probabilidad de victoria de ${team}, ${alternative}% en vez de ${actual}%.`;
+    return `${opening}: probabilidad de victoria ${alternative}% en vez de ${actual}%.`;
   if (language === "fr")
-    return `${opening} : chances de victoire de ${team}, ${alternative}% au lieu de ${actual}%.`;
-  return `${opening}: ${team}' win chance ${alternative}% instead of ${actual}%.`;
+    return `${opening} : chances de victoire ${alternative}% au lieu de ${actual}%.`;
+  return `${opening}: win chance ${alternative}% instead of ${actual}%.`;
 }

@@ -154,6 +154,7 @@ function Playmakers() {
     analyst: Stream;
     fan: Stream;
     sequence: number;
+    clock: number;
   }>();
   const replaying = Boolean(
     held && Math.min(
@@ -170,6 +171,7 @@ function Playmakers() {
   const sequence = running ? shared : Math.min(pausedSequence, shared);
   const event = displayedAnalyst.events.find((e) => e.sequence === sequence);
   const clock = event?.clock_ms ?? 0;
+  const restoring = Boolean(held && clock <= held.clock);
   useVoice({
     enabled: voice && running && !replaying,
     cues: fan.cues,
@@ -344,6 +346,11 @@ function Playmakers() {
               <small>
                 {event?.period === 2 ? "Second half" : "First half"}
               </small>
+              {restoring && (
+                <small className="clock-restoring" role="status">
+                  Restoring from checkpoint…
+                </small>
+              )}
             </div>
             <strong>
               {
@@ -361,9 +368,8 @@ function Playmakers() {
           {showOnboarding && (
             <div className="onboarding" role="note">
               <span>
-                8 AI and rule-based agents produce this fictional match live: one
-                analyst feed, one fan feed, every claim checked against match
-                events. Try Stop Tactics to see recovery.
+                8 AI and rule-based agents narrate this fictional match. Two feeds,
+                claims checked against events. Try Stop Tactics to see recovery.
               </span>
               <button
                 type="button"
@@ -414,7 +420,7 @@ function Playmakers() {
               disabled={!event || !running || replaying}
               onKill={() => {
                 const minute = Math.floor(clock / 60000);
-                setHeld({ analyst: displayedAnalyst, fan: displayedFan, sequence });
+                setHeld({ analyst: displayedAnalyst, fan: displayedFan, sequence, clock });
                 setReplayFrom(clock);
                 setKill(`tactics@${minute}`);
               }}

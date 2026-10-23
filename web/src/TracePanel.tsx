@@ -11,6 +11,10 @@ const recoveryLabels: Record<string, string> = {
 const recoveryOrder = Object.keys(recoveryLabels);
 const agentName = (agent: string) => agent === "what_if" ? "What-If" : agent[0].toUpperCase() + agent.slice(1);
 const actionLine = (t: Trace) => {
+  if (t.agent === "tactics" || t.agent === "storyline") {
+    if (t.action === "templated") return "Routine play: rule-written caption";
+    if (t.action === "insight" && t.status === "ok") return "Wrote the caption";
+  }
   const line = t.detail ?? ({
     computed: "Computed match metrics",
     insight: "Drafted a caption",

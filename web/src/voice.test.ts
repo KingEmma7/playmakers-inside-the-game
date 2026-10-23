@@ -113,15 +113,15 @@ describe("voice commentary", () => {
   it.each([
     [
       "en",
-      "If Okafor's 1' shot had been saved: Northbridge Rovers' win chance 41% instead of 65%.",
+      "If Okafor's 1' shot had been saved: win chance 41% instead of 65%.",
     ],
     [
       "es",
-      "Si el disparo de Okafor en el 1' hubiera sido detenido: probabilidad de victoria de Northbridge Rovers, 41% en vez de 65%.",
+      "Si el disparo de Okafor en el 1' hubiera sido detenido: probabilidad de victoria 41% en vez de 65%.",
     ],
     [
       "fr",
-      "Si le tir de Okafor à la 1' avait été arrêté : chances de victoire de Northbridge Rovers, 41% au lieu de 65%.",
+      "Si le tir de Okafor à la 1' avait été arrêté : chances de victoire 41% au lieu de 65%.",
     ],
   ] as const)("reads the panel's named What-If line in %s", (language, expected) => {
     const goal = events[0];

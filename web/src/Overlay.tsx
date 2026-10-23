@@ -417,8 +417,8 @@ export function ViewPanel({
       <div className="pitch-legend" aria-label="Pitch marks">
         <span><svg viewBox="0 0 24 16" aria-hidden="true"><path d="M2 8h20" /></svg>Pass</span>
         <span><svg viewBox="0 0 24 16" aria-hidden="true"><path d="M2 8h20" strokeDasharray="3 3" /></svg>Incomplete pass</span>
-        <span><svg viewBox="0 0 24 16" aria-hidden="true"><circle cx="12" cy="8" r="6" strokeDasharray="2 2" /></svg>Cited event</span>
-        <span><svg className="latest-event" viewBox="0 0 24 16" aria-hidden="true"><circle cx="12" cy="8" r="6" strokeDasharray="2 2" /></svg>Latest cited</span>
+        <span><svg viewBox="0 0 24 16" aria-hidden="true"><circle cx="12" cy="8" r="6" strokeDasharray="2 2" /></svg>Referenced event</span>
+        <span><svg className="latest-event" viewBox="0 0 24 16" aria-hidden="true"><circle cx="12" cy="8" r="6" strokeDasharray="2 2" /></svg>Latest referenced</span>
       </div>
       <div className={`view-body ${explained || recap ? "explaining" : ""}`}>
         {!explained && recap && (

@@ -188,17 +188,17 @@ describe("broadcast cues", () => {
   it.each([
     [
       "en",
-      "If Marin's 2' shot had been saved: Northbridge Rovers' win chance 41% instead of 65%.",
+      "If Marin's 2' shot had been saved: win chance 41% instead of 65%.",
     ],
     [
       "es",
-      "Si el disparo de Marin en el 2' hubiera sido detenido: probabilidad de victoria de Northbridge Rovers, 41% en vez de 65%.",
+      "Si el disparo de Marin en el 2' hubiera sido detenido: probabilidad de victoria 41% en vez de 65%.",
     ],
     [
       "fr",
-      "Si le tir de Marin à la 2' avait été arrêté : chances de victoire de Northbridge Rovers, 41% au lieu de 65%.",
+      "Si le tir de Marin à la 2' avait été arrêté : chances de victoire 41% au lieu de 65%.",
     ],
-  ])("names the What-If moment, team and odds in %s", (language, expected) => {
+  ])("names the What-If moment and odds in %s", (language, expected) => {
     expect(
       whatIfQuestion(
         cue({
@@ -697,7 +697,7 @@ describe("broadcast cues", () => {
     act(() => vi.advanceTimersByTime(1499));
     expect(row()).toHaveTextContent("Caught up");
     act(() => vi.advanceTimersByTime(1));
-    expect(row()).toHaveTextContent("Used a template caption");
+    expect(row()).toHaveTextContent("Routine play: rule-written caption");
     expect(row().querySelector(".recovering")).toBeNull();
     expect(screen.getByRole("button", { name: /Stop Tactics/ })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: /Stop Tactics/ }));
@@ -705,6 +705,16 @@ describe("broadcast cues", () => {
     expect(props.onKill).toHaveBeenCalledTimes(2);
     unmount();
     expect(vi.getTimerCount()).toBe(0);
+  });
+  it.each(["tactics", "storyline"])("distinguishes routine writing from model writing for %s", (agent) => {
+    const { container, rerender } = render(
+      <TracePanel traces={[trace({ agent, action: "templated", detail: `${agent} used a template caption` })]} onKill={() => {}} disabled={false} mockModel />,
+    );
+    expect(screen.getByText("Routine play: rule-written caption")).toBeInTheDocument();
+    expect(container.querySelector(".recovering")).toBeNull();
+    rerender(<TracePanel traces={[trace({ agent, action: "insight", detail: `${agent} drafted a caption` })]} onKill={() => {}} disabled={false} mockModel />);
+    expect(screen.getByText("Wrote the caption")).toBeInTheDocument();
+    expect(screen.queryByText("Routine play: rule-written caption")).not.toBeInTheDocument();
   });
   it("briefly tints agents that produced a trace and renders its actual detail", () => {
     vi.useFakeTimers();
@@ -749,7 +759,7 @@ describe("broadcast cues", () => {
     expect(
       screen.getByText("2 AI agents + 6 rule-based steps"),
     ).toBeInTheDocument();
-    expect(screen.getByText("Drafted a caption · 12 ms")).toBeInTheDocument();
+    expect(screen.getByText("Wrote the caption · 12 ms")).toBeInTheDocument();
     rerender(
       <TracePanel
         traces={traces}
@@ -761,8 +771,8 @@ describe("broadcast cues", () => {
     expect(
       screen.getByText("Offline mock model"),
     ).toBeInTheDocument();
-    expect(screen.queryByText("Drafted a caption · 12 ms")).not.toBeInTheDocument();
-    expect(screen.getAllByText("Drafted a caption")[1]).toBeInTheDocument();
+    expect(screen.queryByText("Wrote the caption · 12 ms")).not.toBeInTheDocument();
+    expect(screen.getByText("Wrote the caption")).toBeInTheDocument();
     expect(screen.queryByText(/0.4 ms/)).not.toBeInTheDocument();
   });
   it("waits for enough events before showing possession and field tilt", () => {

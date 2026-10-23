@@ -27,6 +27,20 @@ try {
   assert.equal(await page.title(), "Playmakers — Inside the synthetic game");
   await page.getByRole("img", { name: "Playmakers", exact: true }).waitFor();
   await page.getByLabel("REPLAY SPEED").selectOption("50");
+  await page.waitForFunction(
+    () =>
+      document.querySelector(".casual .lower-thirds h3")?.textContent?.startsWith("GOAL") &&
+      Boolean(document.querySelector(".casual .whatif")),
+    undefined,
+    { timeout: 60000 },
+  );
+  await page.getByRole("button", { name: "Pause", exact: true }).click();
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 1920, height: 1080 }]) {
+    await page.setViewportSize(viewport);
+    await checkLayout();
+    await page.screenshot({ path: shot(`goal-whatif-${viewport.width}.png`) });
+  }
+  await page.getByRole("button", { name: "Start", exact: true }).click();
   await page
     .getByRole("region", { name: "ANALYST view" })
     .getByRole("heading", { name: "Passing under pressure" })
@@ -70,6 +84,15 @@ try {
       true,
       "no horizontal overflow or vertical clipping",
     );
+    const overflowingPanels = await page.locator(".view-body:not(:has(.recap)):not(.explaining)").evaluateAll(
+      (panels) => panels.flatMap((panel) =>
+        panel.scrollHeight > panel.clientHeight + 1 ||
+        panel.scrollWidth > panel.clientWidth + 1
+          ? [panel.closest(".view").getAttribute("aria-label")]
+          : [],
+      ),
+    );
+    assert.deepEqual(overflowingPanels, [], "normal feed panels fit without internal scrolling");
   }
   await checkLayout();
   await page.setViewportSize({ width: 1440, height: 900 });

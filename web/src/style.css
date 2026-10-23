@@ -748,7 +748,7 @@ header {
   appearance: none;
 }
 .control input {
-  width: 16px;
+  width: 5ch;
   appearance: textfield;
 }
 .control input::-webkit-inner-spin-button {
@@ -1132,7 +1132,7 @@ header {
 }
 .recap-moments {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 2px 12px;
   margin: 8px 0 0;
   padding: 0;
@@ -1148,9 +1148,10 @@ header {
   text-align: left;
   color: var(--ink);
   cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  overflow: visible;
+  text-overflow: clip;
 }
 .recap-moments button[aria-pressed="true"] {
   background: var(--track);
@@ -1206,4 +1207,102 @@ header {
   font-size: var(--text-xs);
   color: var(--secondary);
   pointer-events: none;
+}
+
+/* Keep the match and recovery history within the broadcast viewport. */
+.onboarding {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: calc(100% - 64px);
+  max-width: 1392px;
+  margin: 0 auto var(--space-2);
+  color: var(--secondary);
+  font-size: var(--text-xs);
+}
+.onboarding button {
+  border: 0;
+  background: none;
+  padding: 0 var(--space-1);
+  color: var(--muted);
+  font-size: var(--text-md);
+  line-height: 20px;
+  cursor: pointer;
+}
+.pitch-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px var(--space-2);
+  margin-top: var(--space-1);
+  font-size: 11px;
+  color: var(--muted);
+}
+.pitch-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.pitch-legend svg {
+  width: 20px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+.pitch-legend .latest-event {
+  color: var(--red);
+}
+.history-toggle {
+  margin: var(--space-2) 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--home);
+  font: inherit;
+  cursor: pointer;
+}
+@media (min-width: 901px) {
+  .app-shell:has(.playmakers-layout) {
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+  .app-shell > header,
+  .hero,
+  .onboarding,
+  .timeline {
+    flex-shrink: 0;
+  }
+  .playmakers-layout {
+    flex: 1;
+    min-height: 0;
+  }
+  .split-view,
+  .program-area {
+    min-height: 0;
+  }
+  .view {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .view-heading,
+  .broadcast,
+  .pitch-legend {
+    flex-shrink: 0;
+  }
+  .view-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .trace-panel {
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .trace-list {
+    max-height: 180px;
+    overflow-y: auto;
+  }
 }

@@ -436,3 +436,14 @@ user. Local file checkpoints are temporary, so the API must run as a single repl
 
 CI now installs Chromium and runs `npm run screenshot` against the real local API
 and Vite. Failures fail the job; screenshots and API/web logs are uploaded as artifacts.
+
+## Reading the match view
+
+The replay introduction describes the crew and can be dismissed for the browser session.
+Both pitches label real pass paths, incomplete passes and cited event locations; the red
+ring is the latest cited location. Inferred passing-option lines are omitted. The fan
+pitch dims other players to spotlight the selected Following player, while the ball stays
+clear in both views. At full time, each recap lists every supplied key moment in one
+column with full names and internal scrolling. Recovery history initially filters to
+agent down, fallback on, checkpoint restart and caught up; Show all steps reveals the
+available trace. At desktop sizes, captions and history scroll inside the viewport.

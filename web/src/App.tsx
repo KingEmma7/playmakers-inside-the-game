@@ -73,6 +73,9 @@ export default function App() {
 }
 function Playmakers() {
   const [seed, setSeed] = useState(382);
+  const [showOnboarding, setShowOnboarding] = useState(
+    () => sessionStorage.getItem("playmakers-onboarding-dismissed") !== "true",
+  );
   const [speed, setSpeed] = useState(10);
   const [language, setLanguage] = useState<FanLanguage>("en");
   const [liveModel, setLiveModel] = useState(false);
@@ -339,6 +342,25 @@ function Playmakers() {
             <Crest away />
             <span>Southport Athletic</span>
           </div>
+          {showOnboarding && (
+            <div className="onboarding" role="note">
+              <span>
+                8 AI and rule-based agents produce this fictional match live: one
+                analyst feed, one fan feed, every claim checked against match
+                events. Try Stop Tactics to see recovery.
+              </span>
+              <button
+                type="button"
+                aria-label="Dismiss introduction"
+                onClick={() => {
+                  sessionStorage.setItem("playmakers-onboarding-dismissed", "true");
+                  setShowOnboarding(false);
+                }}
+              >
+                ×
+              </button>
+            </div>
+          )}
           <main className="playmakers-layout">
             <div className="program-area">
               <div className="split-view">

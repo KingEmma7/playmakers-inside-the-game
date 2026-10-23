@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { clockLabel, agentStatus, type Trace } from "./stream";
 // Tactics and Storyline write with a language model (What-If narrates with one); the rest are rules.
 const MODEL_AGENTS = new Set(["tactics", "storyline", "what_if"]);
@@ -24,6 +25,7 @@ export default function TracePanel({
   recoveryClock?: number;
   mockModel?: boolean;
 }) {
+  const [showAll, setShowAll] = useState(false);
   const latest = new Map<string, Trace>();
   const byView = new Map<string, Trace>();
   for (const trace of traces) {
@@ -49,8 +51,8 @@ export default function TracePanel({
   const recovery = latest.get("tactics");
   const recoveryStatus = recovery ? agentStatus(recovery) : "waiting";
   const history = traces.filter(
-    (t, index) =>
-      index >= traces.length - 70 ||
+    (t) =>
+      showAll ||
       [
         "agent_down",
         "fallback_on",
@@ -132,9 +134,19 @@ export default function TracePanel({
       </small>
       <details>
         <summary>Handoffs and recovery history</summary>
+        <button
+          type="button"
+          className="history-toggle"
+          aria-pressed={showAll}
+          onClick={() => setShowAll((value) => !value)}
+        >
+          {showAll ? "Show key events" : "Show all steps"}
+        </button>
         <div className="trace-list" role="log" aria-label="Agent handoffs">
-          {traces.length === 0 && (
-            <p className="empty">Awaiting the first handoff…</p>
+          {history.length === 0 && (
+            <p className="empty">
+              {showAll ? "Awaiting the first handoff…" : "No recovery events yet."}
+            </p>
           )}
           {history
             .slice()

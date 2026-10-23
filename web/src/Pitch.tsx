@@ -136,7 +136,6 @@ export default function Pitch({
   favourite?: string;
   involvement?: string;
   trail?: Point[];
-  connect?: boolean;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const model = useRef<PitchModel>(null);
@@ -193,19 +192,6 @@ export default function Pitch({
         ctx.stroke();
         ctx.setLineDash([]);
       }
-      // Passing options: faint lanes from the player on the ball to nearby teammates.
-      const carrier = m.holder ? m.players.get(m.holder) : undefined;
-      if (carrier) {
-        ctx.globalAlpha = 0.16;
-        ctx.strokeStyle = INK;
-        ctx.lineWidth = 1.5;
-        for (const p of m.options()) {
-          ctx.beginPath();
-          ctx.moveTo(px(carrier.x), py(carrier.y));
-          ctx.lineTo(px(p.x), py(p.y));
-          ctx.stroke();
-        }
-      }
       ctx.globalAlpha = 1;
 
       // Evidence for Why?, the recap and What-If: numbered rings at the real event positions.
@@ -237,7 +223,8 @@ export default function Pitch({
         const x = px(p.x);
         const y = py(p.y);
         const onBall = p.id === m.holder;
-        ctx.globalAlpha = (live ? 1 : 0.35) * p.alpha;
+        ctx.globalAlpha =
+          (live ? 1 : 0.35) * p.alpha * (favourite && favourite !== p.id ? 0.35 : 1);
         if (favourite === p.id && live) {
           ctx.strokeStyle = FOLLOW;
           ctx.lineWidth = 3;
@@ -285,9 +272,9 @@ export default function Pitch({
         ctx.globalAlpha = m.ballAlpha;
         ctx.fillStyle = "#FFFFFF";
         ctx.strokeStyle = INK;
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 3.5;
         ctx.beginPath();
-        ctx.arc(bx, by - lift, 9.5, 0, Math.PI * 2);
+        ctx.arc(bx, by - lift, 12, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
         ctx.fillStyle = INK;

@@ -388,7 +388,6 @@ export function ViewPanel({
           favourite={persona === "casual" ? favourite : undefined}
           involvement={involvementLabel(visibleEvents, favourite, language)}
           trail={trail}
-          connect={!recap || Boolean(explained)}
         />
         <div className="vignette" />
         {!event && (
@@ -403,6 +402,12 @@ export function ViewPanel({
             <span>90% broadcast safe</span>
           </div>
         )}
+      </div>
+      <div className="pitch-legend" aria-label="Pitch marks">
+        <span><svg viewBox="0 0 24 16" aria-hidden="true"><path d="M2 8h20" /></svg>Pass</span>
+        <span><svg viewBox="0 0 24 16" aria-hidden="true"><path d="M2 8h20" strokeDasharray="3 3" /></svg>Incomplete pass</span>
+        <span><svg viewBox="0 0 24 16" aria-hidden="true"><circle cx="12" cy="8" r="6" strokeDasharray="2 2" /></svg>Cited event</span>
+        <span><svg className="latest-event" viewBox="0 0 24 16" aria-hidden="true"><circle cx="12" cy="8" r="6" strokeDasharray="2 2" /></svg>Latest cited</span>
       </div>
       <div className={`view-body ${explained || recap ? "explaining" : ""}`}>
         {!explained && recap && (

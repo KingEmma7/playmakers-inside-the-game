@@ -7,6 +7,7 @@ import {
   type Trace,
 } from "./stream";
 import { CueCard, ViewPanel } from "./Overlay";
+import { RecapCard } from "./Recap";
 import { ProvenancePanel } from "./Provenance";
 import TracePanel from "./TracePanel";
 import { parseStreamMessage } from "./parse";
@@ -427,6 +428,40 @@ describe("broadcast cues", () => {
     expect(screen.queryByText("Future result")).not.toBeInTheDocument();
     rerender(<ViewPanel {...props} clock={0} cues={[]} />);
     expect(screen.queryByText("Retained result")).not.toBeInTheDocument();
+  });
+  it.each(["analyst", "casual"] as const)("keeps all five recap goals and full player names for %s", (persona) => {
+    const onFocus = vi.fn();
+    const moments = [2, 15, 20, 62, 71].map((minute, i) => ({
+      clock_ms: (minute - 1) * 60000,
+      event_id: `goal-${i}`,
+      kind: "goal",
+      team_id: i < 3 ? "match_382_HOME" : "match_382_AWAY",
+      player_id: i === 1 ? "match_382_H09" : i < 3 ? "match_382_H07" : "match_382_A13",
+    }));
+    render(<RecapCard cue={cue({ persona, template: "recap", payload: { moments } })} onFocus={onFocus} onExplain={() => {}} />);
+    expect(screen.getAllByRole("listitem")).toHaveLength(5);
+    expect(screen.getByRole("button", { name: /15' Goal.*Okafor/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /71' Goal/ }));
+    expect(onFocus).toHaveBeenCalledWith("goal-4");
+  });
+  it("starts recovery history with key events and can reveal other steps", () => {
+    const actions = ["agent_down", "fallback_on", "restarted_from_checkpoint", "caught_up"];
+    const { container } = render(<TracePanel traces={[
+      trace({ action: "handoff" }),
+      ...["analyst", "casual"].flatMap((view) => actions.map((action) => trace({ view, action }))),
+    ]} onKill={() => {}} disabled={false} />);
+    expect(container.querySelectorAll(".trace-row")).toHaveLength(8);
+    for (const view of ["A", "F"]) {
+      for (const action of actions) {
+        expect([...container.querySelectorAll(".trace-row")].some((row) =>
+          row.textContent?.includes(action.replaceAll("_", " ")) && row.querySelector("b span")?.textContent === view,
+        )).toBe(true);
+      }
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Show all steps" }));
+    expect(container.querySelectorAll(".trace-row")).toHaveLength(9);
+    fireEvent.click(screen.getByRole("button", { name: "Show key events" }));
+    expect(container.querySelectorAll(".trace-row")).toHaveLength(8);
   });
   it("updates trace, latency and recovery status, and dispatches kill", () => {
     const kill = vi.fn();

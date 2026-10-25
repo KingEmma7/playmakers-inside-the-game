@@ -234,10 +234,6 @@ export class CommentaryQueue {
   setSpeed(speed: number) { this.speed = speed; this.prune(); }
   enqueue(line: CommentaryLine) {
     this.prune();
-    if (line.priority === "routine" && this.speed >= 50) {
-      this.stats.dropped++;
-      return;
-    }
     const now = this.now();
     for (const [text, at] of this.recentText) {
       if (now - at >= 10_000) this.recentText.delete(text);
@@ -273,7 +269,7 @@ export class CommentaryQueue {
   private prune() {
     this.pending = this.pending.filter((line) => {
       const drop = line.priority === "routine" &&
-        (this.speed >= 50 || this.now() - line.at > this.staleMs);
+        this.now() - line.at > this.staleMs;
       if (drop) this.stats.dropped += line.count;
       return !drop;
     });
@@ -281,7 +277,13 @@ export class CommentaryQueue {
   private nextBatch(): Pending | undefined {
     const key = this.pending.findIndex((line) => line.priority === "key");
     if (key >= 0) return this.pending.splice(key, 1)[0];
-    if (this.speaker.name !== "azure") return this.pending.shift();
+    if (this.speaker.name !== "azure" || !this.speaker.prepare) {
+      if (this.speed < 25) return this.pending.shift();
+      const freshest = this.pending.pop();
+      this.stats.dropped += this.pending.reduce((sum, line) => sum + line.count, 0);
+      this.pending = [];
+      return freshest;
+    }
     // Take up to three freshest captions, in event order. Do not read the FIFO backlog.
     const selected: Pending[] = [];
     let chars = 0;
@@ -306,7 +308,7 @@ export class CommentaryQueue {
   }
   private tickPrepared() {
     if (this.ready && (this.ready.line.priority === "routine" &&
-      (this.speed >= 50 || this.now() - this.ready.line.at > this.staleMs ||
+      (this.now() - this.ready.line.at > this.staleMs ||
         this.pending.some(line => line.priority === "key")))) {
       this.stats.dropped += this.ready.line.count;
       this.ready.clip.dispose();
@@ -365,7 +367,7 @@ export class CommentaryQueue {
     const key = this.pending.findIndex((l) => l.priority === "key");
     if (key < 0 && this.speaker.name === "azure" &&
       this.now() - this.lastRoutineAt < (this.speaker.routineIntervalMs ?? 3400)) return;
-    const line = this.pending.splice(key < 0 ? 0 : key, 1)[0];
+    const line = this.nextBatch();
     if (!line) return;
     if (line.priority === "routine" && this.speaker.name === "azure") this.lastRoutineAt = this.now();
     this.busy = true;

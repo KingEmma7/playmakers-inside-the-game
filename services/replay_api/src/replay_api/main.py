@@ -136,6 +136,29 @@ async def replay_ws(
         await ws.close()
 
 
+class ReplayPace:
+    """Mutable pacing for one session; wake an in-flight delay when speed changes."""
+
+    def __init__(self, speed: float) -> None:
+        self.speed = speed
+        self.changed = asyncio.Event()
+
+    def set_speed(self, speed: float) -> None:
+        self.speed = speed
+        self.changed.set()
+
+    async def wait(self, match_seconds: float) -> None:
+        while match_seconds > 0 and self.speed > 0:
+            speed = self.speed
+            self.changed.clear()
+            started = asyncio.get_running_loop().time()
+            try:
+                await asyncio.wait_for(self.changed.wait(), match_seconds / speed)
+            except TimeoutError:
+                return
+            match_seconds -= (asyncio.get_running_loop().time() - started) * speed
+
+
 async def playmakers_messages(
     seed: int,
     speed: float,
@@ -146,6 +169,7 @@ async def playmakers_messages(
     whatif_pool: ProcessPoolExecutor | None = None,
     profiles: list[ViewerProfile] | None = None,
     budget: LiveMatchBudget | None = None,
+    pace: ReplayPace | None = None,
 ) -> AsyncGenerator[dict[str, Any], None]:
     budget = budget or live_budget
     live = live_model_configured()
@@ -162,6 +186,7 @@ async def playmakers_messages(
             whatif_pool,
             profiles,
             offline_reason,
+            pace,
         ):
             yield message
     finally:
@@ -179,6 +204,7 @@ async def _director_messages(
     whatif_pool: ProcessPoolExecutor | None,
     profiles: list[ViewerProfile] | None,
     offline_reason: str | None,
+    pace: ReplayPace | None = None,
 ) -> AsyncGenerator[dict[str, Any], None]:
     events = await asyncio.to_thread(simulate_match, MatchConfig(seed=seed))
     async with Director(
@@ -199,8 +225,16 @@ async def _director_messages(
             )
             async for event in replay_events(events[:split], speed=0):
                 yield event
-            async for event in replay_events(events[split:], speed=speed):
-                yield event
+            if pace is None:
+                async for event in replay_events(events[split:], speed=speed):
+                    yield event
+            else:
+                previous = None
+                for event in events[split:]:
+                    if previous is not None:
+                        await pace.wait(max(0, event.clock_ms - previous) / 1000)
+                    previous = event.clock_ms
+                    yield event
 
         async for event in paced_events():
             async with aclosing(_event_messages(director, event)) as messages:
@@ -251,6 +285,7 @@ class MatchSession:
     """One producer, bounded-by-match history, and independent subscriber cursors."""
 
     def __init__(self, messages: AsyncGenerator[dict[str, Any], None]) -> None:
+        self.pace: ReplayPace | None = None
         self.messages = messages
         self.history: list[dict[str, Any]] = []
         self.changed = asyncio.Condition()
@@ -273,7 +308,9 @@ class MatchSession:
                 self.done = True
                 self.changed.notify_all()
 
-    async def subscribe(self, profile: ViewerProfile) -> AsyncGenerator[dict[str, Any], None]:
+    async def subscribe(
+        self, profile: ViewerProfile, all_languages: bool = False
+    ) -> AsyncGenerator[dict[str, Any], None]:
         cursor = 0
         while True:
             async with self.changed:
@@ -286,7 +323,7 @@ class MatchSession:
             for message in batch:
                 if message["type"] != "cue" or (
                     message["persona"] == profile.persona
-                    and message["language"] == profile.language
+                    and (all_languages or message["language"] == profile.language)
                 ):
                     yield message
             if done:
@@ -309,11 +346,13 @@ async def shared_messages(
     replay_from_ms: int,
     profiles: list[ViewerProfile],
     profile: ViewerProfile,
+    session_id: str | None = None,
+    all_languages: bool = False,
 ) -> AsyncGenerator[AsyncGenerator[dict[str, Any], None], None]:
     key = (
         id(application),
         seed,
-        speed,
+        session_id if session_id else speed,
         kill,
         whatif_rollouts,
         replay_from_ms,
@@ -321,6 +360,7 @@ async def shared_messages(
     )
     session = _sessions.get(key)
     if session is None:
+        pace = ReplayPace(speed) if session_id else None
         session = MatchSession(
             playmakers_messages(
                 seed,
@@ -331,12 +371,14 @@ async def shared_messages(
                 replay_from_ms,
                 whatif_pool=_whatif_pool(application),
                 profiles=profiles,
+                pace=pace,
             )
         )
+        session.pace = pace
         _sessions[key] = session
     session.subscribers += 1
     try:
-        async with aclosing(session.subscribe(profile)) as messages:
+        async with aclosing(session.subscribe(profile, all_languages)) as messages:
             yield messages
     finally:
         session.subscribers -= 1
@@ -348,10 +390,25 @@ async def shared_messages(
                 await asyncio.gather(session.task, return_exceptions=True)
 
 
+@app.post("/playmakers/pace")
+async def set_replay_pace(
+    request: Request,
+    session_id: Annotated[str, Query(min_length=1, max_length=200)],
+    speed: Annotated[float, Query(gt=0, le=100)],
+) -> dict[str, float]:
+    for key, session in _sessions.items():
+        if key[0] == id(request.app) and key[2] == session_id and session.pace:
+            session.pace.set_speed(speed)
+            return {"speed": speed}
+    raise HTTPException(404, "Match session is no longer connected")
+
+
 @app.get("/playmakers/sse")
 async def playmakers_sse(
     request: Request,
     viewer_profiles: str | None = None,
+    all_languages: bool = False,
+    session_id: Annotated[str | None, Query(min_length=1, max_length=200)] = None,
     replay_from_ms: Annotated[int, Query(ge=0, le=5_400_000)] = 0,
     seed: Annotated[int, Query(ge=0, le=10_000)] = 7,
     speed: Annotated[float, Query(ge=0, le=100)] = 50,
@@ -403,7 +460,16 @@ async def playmakers_sse(
 
     async def stream() -> AsyncGenerator[str, None]:
         async with shared_messages(
-            request.app, seed, speed, kill, whatif_rollouts, replay_from_ms, profiles, profile
+            request.app,
+            seed,
+            speed,
+            kill,
+            whatif_rollouts,
+            replay_from_ms,
+            profiles,
+            profile,
+            session_id,
+            all_languages,
         ) as messages:
             async for message in messages:
                 yield "data: " + json.dumps(message, separators=(",", ":")) + "\n\n"

@@ -78,6 +78,7 @@ function Playmakers() {
     () => sessionStorage.getItem("playmakers-onboarding-dismissed") !== "true",
   );
   const [speed, setSpeed] = useState(10);
+  const [clientId] = useState(() => crypto.randomUUID());
   const [language, setLanguage] = useState<FanLanguage>("en");
   const [liveModel, setLiveModel] = useState(false);
   useEffect(() => {
@@ -126,11 +127,13 @@ function Playmakers() {
   }, []);
   const viewer_profiles = JSON.stringify([
     { persona: "analyst", language: "en" },
-    { persona: "casual", language, favorite_player_id: favourite ? `match_${seed}_${favourite}` : null },
+    ...FAN_LANGUAGES.map((language) => ({ persona: "casual", language, favorite_player_id: favourite ? `match_${seed}_${favourite}` : null })),
   ]);
+  const sessionId = `${clientId}-${seed}-${kill ?? "normal"}-${replayFrom}-${favourite}`;
   const analyst = usePlaymakersStream({
     seed,
-    speed,
+    speed: 10,
+    session_id: sessionId,
     persona: "analyst",
     language: "en",
     kill,
@@ -140,15 +143,25 @@ function Playmakers() {
   });
   const fan = usePlaymakersStream({
     seed,
-    speed,
+    speed: 10,
+    session_id: sessionId,
     persona: "casual",
-    language,
+    language: "en",
+    all_languages: true,
     favourite_player_id: favourite ? `match_${seed}_${favourite}` : undefined,
     kill,
     replay_from_ms: replayFrom,
     whatif_rollouts: 200,
     viewer_profiles,
   });
+  useEffect(() => {
+    if (analyst.status !== "live") return;
+    const controller = new AbortController();
+    void fetch(`${apiBaseUrl()}/playmakers/pace?${new URLSearchParams({ session_id: sessionId, speed: String(speed) })}`, {
+      method: "POST", signal: controller.signal,
+    }).catch(() => {});
+    return () => controller.abort();
+  }, [speed, sessionId, analyst.status]);
   // Failure injection rebuilds a deterministic prefix in a new shared session.
   // Keep the current event, pitch and cues until both feeds reach that prefix.
   const [held, setHeld] = useState<{
@@ -186,7 +199,7 @@ function Playmakers() {
     language,
     speed,
     traces,
-    session: `${seed}-${speed}-${favourite}`,
+    session: `${seed}-${favourite}`,
     kill,
   });
   function restart() {
@@ -250,7 +263,6 @@ function Playmakers() {
                 value={speed}
                 onChange={(e) => {
                   setSpeed(Number(e.target.value));
-                  restart();
                 }}
               >
                 {[1, 10, 50].map((n) => (
@@ -406,7 +418,7 @@ function Playmakers() {
                   status={analyst.status}
                 />
                 <ViewPanel
-                  key={`${seed}-${language}`}
+                  key={seed}
                   seed={seed}
                   citedIds={citations?.session === `${seed}-${language}` ? citations.ids : undefined}
                   onCitations={(ids) => setCitations({ session: `${seed}-${language}`, ids })}
@@ -414,7 +426,9 @@ function Playmakers() {
                   persona="casual"
                   event={displayedFan.events.find((e) => e.sequence === sequence)}
                   events={displayedFan.events}
-                  cues={displayedFan.cues}
+                  cues={displayedFan.cues.some((c) => c.language === language)
+                    ? displayedFan.cues.filter((c) => c.language === language)
+                    : displayedFan.cues}
                   clock={clock}
                   safe={safe}
                   running={running && !replaying}
@@ -426,7 +440,7 @@ function Playmakers() {
             </div>
             <TracePanel
               traces={traces}
-              key={`${seed}-${speed}-${kill ?? "normal"}-${replayFrom}-${language}`}
+              key={`${seed}-${kill ?? "normal"}-${replayFrom}`}
               killRequested={Boolean(kill)}
               mockModel={!liveModel || Boolean(analyst.offline || fan.offline)}
               disabled={!event || !running || replaying}

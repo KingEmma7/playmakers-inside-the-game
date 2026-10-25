@@ -86,9 +86,11 @@ it("measures continuous seed-382 Azure commentary", async () => {
   expect(report.chars).toBeLessThan(60000);
 }, 20000);
 
-it("quantifies the intentional key-only policy at 50x", async () => {
-  const report = await measure(BaselineCommentaryQueue, 50, "baseline-50x");
-  expect(report.max).toBeGreaterThan(10);
+it.each([25, 50])("keeps fresh play-by-play continuous at %sx", async (speed) => {
+  const report = await measure(CommentaryQueue, speed, `continuous-${speed}x`);
+  expect(report.max).toBeLessThanOrEqual(3.5);
+  expect(report.speaking).toBeGreaterThan(95);
+  expect(report.requests / report.seconds * 60).toBeLessThanOrEqual(18);
 }, 20000);
 
 it("measures a transient busy response without switching away from Azure", async () => {

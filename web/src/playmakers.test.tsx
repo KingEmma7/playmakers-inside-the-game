@@ -1,4 +1,4 @@
-import { act, render, screen, fireEvent } from "@testing-library/react";
+import { act, render, renderHook, screen, fireEvent } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   activeCues,
@@ -941,4 +941,31 @@ it("records when the API fell back to the offline crew", () => {
     source.send({ type: "status", model: "offline", reason: "busy" });
   });
   expect(screen.getByText("offline:busy")).toBeInTheDocument();
+});
+
+
+it("receives all fan languages in one stream with recap, What-If and trace history", () => {
+  vi.useFakeTimers();
+  vi.stubGlobal("EventSource", MockSource);
+  const { result, rerender } = renderHook(() => usePlaymakersStream({
+    seed: 7, speed: 10, session_id: "same-match", persona: "casual", language: "en", all_languages: true,
+  }));
+  const first = MockSource.instances[0];
+  expect(first.url).toContain("all_languages=true");
+  act(() => {
+    first.send(wireEvent({ sequence: 42, clock_ms: 123000 }));
+    for (const language of ["en", "es", "fr"] as const) {
+      first.send({ type: "cue", ...cue({ cue_id: `recap-${language}`, template: "recap", language }) });
+      first.send({ type: "cue", ...cue({ cue_id: `whatif-${language}`, template: "what_if", language }) });
+    }
+    first.send({ type: "trace", ...trace() });
+    vi.advanceTimersByTime(75);
+  });
+  const before = result.current;
+  rerender();
+  expect(MockSource.instances).toHaveLength(1);
+  expect(result.current).toBe(before);
+  expect(result.current.events.at(-1)?.clock_ms).toBe(123000);
+  expect(result.current.cues).toHaveLength(6);
+  expect(result.current.traces).toHaveLength(1);
 });

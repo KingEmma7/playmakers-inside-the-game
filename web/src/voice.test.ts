@@ -227,23 +227,25 @@ describe("full-match commentary queue", () => {
     expect(f.queue.stats).toMatchObject({ spoken: 2, dropped: 0 });
   });
   it("reports spoken vs dropped for a seed-like stream at 10x and 50x", async () => {
-    for (const speed of [10, 50]) {
+    for (const speed of [10, 25, 50]) {
       const f = fixture(); f.queue.setSpeed(speed);
       for (let i = 0; i < 60; i++) {
         f.advance(30000 / speed);
         f.queue.enqueue(line(`event${i}`, i % 10 === 0));
         f.queue.tick(); await f.finish();
       }
-      const expected = speed === 10 ? { spoken: 60, dropped: 0 } : { spoken: 6, dropped: 54 };
+      const expected = { spoken: 60, dropped: 0 };
       console.info(`${speed}x commentary`, f.queue.stats.spoken, "spoken", f.queue.stats.dropped, "dropped");
       expect(f.queue.stats).toMatchObject(expected);
       expect(f.played.filter((text) => Number(text.slice(5)) % 10 === 0)).toHaveLength(6);
     }
   });
-  it("discards queued routine captions when speed changes to 50x", () => {
+  it("keeps fresh routine captions and key priority when speed changes to 50x", async () => {
     const f = fixture(); f.queue.enqueue(line("routine")); f.queue.enqueue(line("key", true));
     f.queue.setSpeed(50); f.queue.tick();
-    expect(f.played).toEqual(["key"]); expect(f.queue.stats.dropped).toBe(1);
+    expect(f.played).toEqual(["key"]); expect(f.queue.stats.dropped).toBe(0);
+    await f.finish();
+    expect(f.played).toEqual(["key", "routine"]);
   });
   it.each([503, 502])("falls back for the entire session after HTTP %s", async (status) => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("unavailable", { status }));
@@ -521,4 +523,19 @@ it("prepares real Azure audio without playing it and releases prefetched clips o
   next.dispose();
   expect(revoke).toHaveBeenCalledTimes(2);
   expect(fallback.speak).not.toHaveBeenCalled();
+});
+
+
+it("keeps active speech and deduplication when speed changes", () => {
+  const f = fixture();
+  const base: Parameters<typeof useVoice>[0] = {
+    enabled: true, cues: [cue({ cue_id: "active", language: "en" })], events,
+    clock: 1000, speaker: f.speaker, language: "en", speed: 10,
+    traces: [], session: "same-match",
+  };
+  const { rerender } = renderHook((props) => useVoice(props), { initialProps: base });
+  expect(f.speaker.speak).toHaveBeenCalledOnce();
+  rerender({ ...base, speed: 50 });
+  expect(f.speaker.cancel).not.toHaveBeenCalled();
+  expect(f.speaker.speak).toHaveBeenCalledOnce();
 });

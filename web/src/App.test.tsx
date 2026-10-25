@@ -60,3 +60,29 @@ it("holds the shared clock, score and captions while failure replay catches up",
   expect(container.querySelector(".shared-clock")).toHaveTextContent("03:32");
   expect(screen.queryByText("Restoring from checkpoint…")).not.toBeInTheDocument();
 });
+
+
+it("changes pacing without changing stream identity, match clock or captions", () => {
+  const fetcher = vi.fn().mockResolvedValue({ json: async () => ({ live: false }) });
+  vi.stubGlobal("fetch", fetcher);
+  const current = {
+    generation: "match", status: "live", traces: [],
+    events: [{ schema_version: "1.0.0", event_type: "period_start", event_id: "e10",
+      match_id: "match_382", sequence: 10, clock_ms: 211000, period: 1, labels: [] }] as import("./stream").MatchEvent[],
+    cues: [{ cue_id: "current", clock_ms: 211000, template: "tactics", evidence_event_ids: ["e10"],
+      payload: { headline: "Current play", detail: "The match continues." } }] as import("./stream").OverlayCue[],
+  };
+  vi.mocked(usePlaymakersStream).mockReturnValue(current);
+  const { container } = render(<App />);
+  const original = vi.mocked(usePlaymakersStream).mock.calls.slice(-2).map(([p]) => p);
+  fireEvent.change(screen.getByLabelText("REPLAY SPEED"), { target: { value: "50" } });
+  expect(vi.mocked(usePlaymakersStream).mock.calls.slice(-2).map(([p]) => p)).toEqual(original);
+  expect(container.querySelector(".shared-clock")).toHaveTextContent("03:31");
+  expect(screen.getAllByText("Current play")).toHaveLength(2);
+  expect(fetcher.mock.calls.some(([url, options]) => String(url).includes("speed=50") && options?.method === "POST")).toBe(true);
+  fireEvent.change(screen.getByLabelText("FAN LANGUAGE"), { target: { value: "es" } });
+  const changed = vi.mocked(usePlaymakersStream).mock.calls.slice(-2).map(([p]) => p);
+  expect(changed[0]).toEqual(original[0]);
+  expect(changed[1]).toEqual(original[1]);
+  expect(container.querySelector(".shared-clock")).toHaveTextContent("03:31");
+});

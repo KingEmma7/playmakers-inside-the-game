@@ -252,3 +252,33 @@ def test_goal_rules_link_preceding_completed_pass(events, language, expected):
         prefix[-3] = assist.model_copy(update=changes)
         answer = ask.rules("why did Marin score?", ask.evidence(prefix, "Marin"), language)
         assert assist.event_id not in answer.cited_event_ids
+
+
+def test_model_citations_cap_prioritizes_relevant_events_in_model_order(monkeypatch, events):
+    goals = [e for e in events if e.event_type == "goal"]
+    shots = [e for e in events if e.event_type == "shot"]
+    passes = [e for e in events if e.event_type == "pass"]
+    seen = []
+    # A directly referenced pass outranks key moments; ties retain model order.
+    ids = [passes[0].event_id, shots[1].event_id, goals[0].event_id, shots[0].event_id]
+    ids += [e.event_id for e in passes[1:13]]
+    ids += [shots[1].event_id, "invented", "future-event"]
+    stub(
+        monkeypatch,
+        {
+            "answer": "A shot was recorded.",
+            "cited_event_ids": ids,
+            "answerable": True,
+        },
+        seen,
+    )
+    data = post(events, question=f"Explain {passes[3].event_id}", upto=events[-1].event_id).json()
+    assert data["source"] == "model"
+    assert data["cited_event_ids"] == [passes[3].event_id, shots[1].event_id, goals[0].event_id]
+    assert "at most 3" in " ".join(seen)
+
+
+def test_rule_citations_are_capped(events):
+    data = post(events, "possession?", upto=events[-1].event_id).json()
+    assert data["source"] == "rules"
+    assert 0 < len(data["cited_event_ids"]) <= 3

@@ -333,9 +333,9 @@ set it in `web/.env.local` for another API origin. Set `CORS_ORIGINS` on the API
 with bounded backoff and deduplicates the deterministic replay after reconnection.
 The slower stream determines the shared event clock.
 
-- Choose seed and speed (1×, 10×, 50×); changing either restarts both feeds.
+- Choose seed and speed (1×, 10×, 50×). Only a seed change restarts the match. Speed updates the existing producer through `POST /playmakers/pace`; it wakes the current pacing delay without rebuilding the Director or clearing either feed, recap, What-If, trace or commentary.
 - Fan controls select English (the default), Spanish or French and a fictional roster number. Changing the fan
-  profile replays that feed until it synchronises with the analyst.
+  language selects among variants already arriving on the fan stream, preserving the clock and history. Changing the favourite player rebuilds the viewer configuration.
 - Pause freezes the displayed program; network feeds continue buffering. Start returns to live.
 - Toggle safe-area guides. Cue timing uses the match clock, duration, priority and one winner per slot.
 - **Stop Tactics agent** restarts both deterministic sessions with failure at the current minute.
@@ -425,10 +425,10 @@ With API on :8000 and Vite on :5173, `cd web && npm run screenshot` captures the
 Tactics recovery and About in `web/shots/`, and checks both 1440×900 and 1920×1080 for clipping.
 
 
-Shared SSE sessions use `(seed, speed, kill, whatif_rollouts, replay_from_ms)` plus
+Shared SSE sessions use `(seed, session_id or speed, kill, whatif_rollouts, replay_from_ms)` plus
 an explicit viewer configuration. Both web requests send the same `viewer_profiles`
 JSON array (Pydantic `ViewerProfile` fields, including `favorite_player_id`), and
-select their own `persona`/`language`. Different viewer configurations are isolated.
+select their own `persona`/`language`. The web supplies an unguessable session ID per match configuration and configures English analyst plus all three fan languages. Its fan subscription uses `all_languages=true`, then selects the displayed language locally. Both controls preserve the existing producer and acquire no additional `LiveMatchBudget` slot. Generating all fan language variants can add translation work in live mode. Different viewer configurations are isolated.
 Without the array, the API includes all six persona/language combinations; requests
 with the same configuration share a producer. Cues are filtered per subscriber;
 events and lifecycle traces are broadcast to both. Late subscribers read the
@@ -492,7 +492,7 @@ Speech keeps the displayed captions intact while removing favourite labels and s
 expanding minute marks and percentages, and turning goal headlines into commentator copy
 in English, Spanish and French. The queue suppresses repeated cue ids for the session
 and identical spoken text for ten seconds (including pending and active speech).
-Ask the crew lists its cited event numbers beneath the answer and shares the existing
+Ask the crew caps citations server-side at three valid events, prioritising directly referenced events, then shots/goals, with model order preserved within each tier. Its prompt also requests at most three. It lists its cited event numbers beneath the answer and shares the existing
 pitch evidence rings across both views. Rule-based goal answers include the minute and
 cite a preceding completed pass to the scorer when the recorded sequence supports it.
 
@@ -518,7 +518,7 @@ of the current clip. A single longer caption stays intact. Pending key moments
 replace prefetched routine audio. Busy responses from either server limiter retry
 on Azure after one token interval, rebuilding routine batches from fresh arrivals.
 Only hard failures or the daily cap select browser speech; browser speech has no
-request pacing. At 50×, routine speech remains intentionally disabled.
+request pacing. At 25× and 50×, routine commentary uses the same freshest-caption batching as 10×, dropping old backlog and keeping key lines first. Speed changes preserve active speech and queue deduplication. Browser speech also takes the freshest pending routine at 25× and above.
 
 The process-wide 18/minute Azure bucket and default 40/minute per-client limiter
 remain unchanged. The 60,000-character daily cap remains unchanged: 7,643 characters per cold-cache 10× match permits seven complete matches/day;
@@ -541,8 +541,7 @@ the median utterance to 4.23 seconds and prefetch overlaps synthesis with playba
 The unthrottled 10× baseline has zero bucket refusals and no long blackout; it does
 **not** establish the cause of the reported live-site silence. Injecting a busy
 response demonstrates the old drop-on-busy failure mechanism, not evidence that
-Azure actually throttled the reported session. The separate 50× policy test has a
-34.14-second maximum gap (same recorded arrivals scaled by five): routine lines
-are deliberately suppressed. Browser fallback at 10× has 100% speech coverage in
+Azure actually throttled the reported session. The frozen pre-fix 50× policy has a
+34.14-second maximum gap (same recorded arrivals scaled by five), because it suppresses routine lines. Current timeline tests cover continuous speech at both 25× and 50×. On the same offline recording, the current queue speaks for 98.26% of the 25× timeline (1.94-second maximum gap, 54 requests) and 98.65% at 50× (1.15-second maximum gap, 24 requests), with zero simulated bucket refusals. Browser fallback at 10× has 100% speech coverage in
 the duration model. Cloud audio, networking and actual browser playback are not
 measured by this offline harness.

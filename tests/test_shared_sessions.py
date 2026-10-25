@@ -271,3 +271,85 @@ async def test_closing_event_stream_cancels_pending_rollouts(
         await entered.wait()
         await messages.aclose()
         assert cancelled.is_set()
+
+
+@pytest.mark.asyncio
+async def test_pace_and_language_keep_one_live_budget_slot(monkeypatch: pytest.MonkeyPatch) -> None:
+    from replay_api.limits import LiveMatchBudget
+
+    budget = LiveMatchBudget(2, 15)
+    monkeypatch.setattr(api, "live_budget", budget)
+    monkeypatch.setattr(api, "live_model_configured", lambda: True)
+    release = asyncio.Event()
+    starts = 0
+
+    async def director(*args):
+        nonlocal starts
+        starts += 1
+        yield {"type": "event", "sequence": 1}
+        await release.wait()
+        yield {"type": "event", "sequence": 2}
+
+    monkeypatch.setattr(api, "_director_messages", director)
+    profiles = [ViewerProfile(), ViewerProfile(persona="casual", language="es")]
+
+    def subscribe(profile, speed=10):
+        return api.shared_messages(
+            api.app, 7, speed, None, 1, 0, profiles, profile, session_id="test-session"
+        )
+
+    async with subscribe(profiles[0]) as analyst:
+        assert (await anext(analyst))["sequence"] == 1
+        session = next(iter(api._sessions.values()))
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=api.app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/playmakers/pace", params={"session_id": "test-session", "speed": 50}
+            )
+            assert response.status_code == 200
+            assert session.pace is not None and session.pace.speed == 50
+        async with subscribe(profiles[1], speed=50) as spanish:
+            assert (await anext(spanish))["sequence"] == 1
+            assert next(iter(api._sessions.values())) is session
+            release.set()
+            assert (await anext(analyst))["sequence"] == 2
+            assert (await anext(spanish))["sequence"] == 2
+        assert starts == 1
+        assert budget.started_today == 1
+    assert budget.active == 0
+    assert not api._sessions
+
+
+@pytest.mark.asyncio
+async def test_pace_change_wakes_current_delay() -> None:
+    pace = api.ReplayPace(1)
+    waiting = asyncio.create_task(pace.wait(60))
+    await asyncio.sleep(0)
+    pace.set_speed(0)
+    await asyncio.wait_for(waiting, 0.1)
+
+
+def test_pace_requires_valid_connected_session() -> None:
+    with TestClient(api.app) as client:
+        assert client.post("/playmakers/pace?session_id=missing&speed=50").status_code == 404
+        assert client.post("/playmakers/pace?session_id=missing&speed=101").status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_all_language_subscription_filters_persona() -> None:
+    async def messages():
+        yield {"type": "event", "sequence": 1}
+        for persona in ("analyst", "casual"):
+            for language in ("en", "es", "fr"):
+                yield {"type": "cue", "persona": persona, "language": language}
+
+    session = api.MatchSession(messages())
+    profile = ViewerProfile(persona="casual")
+    received = [m async for m in session.subscribe(profile, all_languages=True)]
+    assert received[0]["type"] == "event"
+    assert [m["language"] for m in received[1:]] == ["en", "es", "fr"]
+    assert all(m["persona"] == "casual" for m in received[1:])
+    english = [m async for m in session.subscribe(profile)]
+    assert len(english) == 2 and english[1]["language"] == "en"
+    await session.task

@@ -11,6 +11,8 @@ declare global {
 export type { MatchEvent, OverlayCue, AgentTraceEvent };
 export type Trace = AgentTraceEvent & { sequence: number; view: string };
 export type Params = {
+  session_id?: string;
+  all_languages?: boolean;
   viewer_profiles?: string;
   seed: number;
   speed: number;

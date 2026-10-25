@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+from playmakers_stats.threat import GoalThreat
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -52,6 +53,7 @@ class OverlayCue(PlaymakersContractsBaseModel):
     persona: Literal["analyst", "casual"] | None = None
     language: Literal["en", "es", "fr"] | None = None
     provenance: CueProvenance | None = None
+    goal_threat: list[GoalThreat] = Field(default_factory=list)
 
 
 class ComplianceDecision(PlaymakersContractsBaseModel):

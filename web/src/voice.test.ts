@@ -75,37 +75,11 @@ describe("voice commentary", () => {
       "¡Gol de Okafor para Northbridge Rovers! Qué definición. La grada se pone en pie.",
     );
   });
-  it.each([
-    [
-      "en",
-      "If Okafor's shot in the 1st minute had been saved: win chance 41 percent instead of 65 percent.",
-    ],
-    [
-      "es",
-      "Si el disparo de Okafor en el minuto 1 hubiera sido detenido: probabilidad de victoria 41 por ciento en vez de 65 por ciento.",
-    ],
-    [
-      "fr",
-      "Si le tir de Okafor à la 1re minute avait été arrêté : chances de victoire 41 pour cent au lieu de 65 pour cent.",
-    ],
-  ] as const)("reads the panel's named What-If line in %s", (language, expected) => {
-    const goal = events[0];
-    if (goal.event_type !== "goal") throw new Error("expected goal fixture");
-    expect(
-      spokenLine(
-        cue({
-          template: "what_if",
-          language,
-          payload: {
-            scenario: "if the shot had been saved",
-            moment: { player_id: goal.scorer_player_id, minute: 1 },
-            win_team_id: goal.scoring_team_id,
-            metrics: { win_prob_after: 0.65, win_prob_counterfactual: 0.41 },
-          },
-        }),
-        events,
-      ),
-    ).toBe(expected);
+  it.each(["en", "es", "fr"] as const)("never speaks What-If odds in %s", (language) => {
+    expect(spokenLine(cue({ template: "what_if", language }), events)).toBe("");
+    expect(spokenLine(cue({ template: "goal_threat", language,
+      payload: { headline: "Pressure is building. A goal could be coming.", detail: "" } }), events))
+      .toBe("Pressure is building. A goal could be coming.");
   });
   it("uses the browser voice for the chosen locale", async () => {
     const spoken: { text: string; lang: string }[] = [];

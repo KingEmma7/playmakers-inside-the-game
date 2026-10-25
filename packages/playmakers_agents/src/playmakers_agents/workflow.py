@@ -26,6 +26,7 @@ from agent_framework import (
 from playmakers_schema import models as event_models
 from playmakers_schema.models import GoalEvent, MatchEvent
 from playmakers_stats.engine import StatsEngine
+from playmakers_stats.threat import ThreatAnnouncements
 from playmakers_stats.types import (
     ControlChaosResult,
     MomentumResult,
@@ -875,6 +876,7 @@ class Director:
             self._temporary_checkpoints = tempfile.TemporaryDirectory(prefix="playmakers-")
             checkpoint_path = self._temporary_checkpoints.name
         self.engines: dict[str, StatsEngine] = {}
+        self.threat_announcements: dict[str, ThreatAnnouncements] = {}
         self.what_if = WhatIfAgent(
             self.client,
             whatif_rollouts,
@@ -1144,12 +1146,86 @@ class Director:
                     ),
                 )
             cues = [row for row in outputs if isinstance(row, OverlayCue)]
+            threats = [
+                self.engines[event.match_id].goal_threat(
+                    team_id=event.match_id + "_" + side, match_clock_ms=event.clock_ms
+                )
+                for side in ("HOME", "AWAY")
+            ]
+            announcements = self.threat_announcements.setdefault(
+                event.match_id, ThreatAnnouncements()
+            )
+            for threat in threats:
+                if not announcements.update(threat, event.clock_ms):
+                    continue
+                for index, profile in enumerate(self.profiles):
+                    name = team_name(threat.team_id)
+                    headline = {
+                        "en": f"{name} are building pressure. A goal could be coming.",
+                        "es": f"{name} aumenta la presión. Podría llegar un gol.",
+                        "fr": f"{name} accentue la pression. Un but pourrait arriver.",
+                    }[profile.language]
+                    evidence_ids = list(dict.fromkeys([event.event_id, *threat.evidence.event_ids]))
+                    cue = OverlayCue(
+                        cue_id=f"{event.event_id}:goal_threat:{threat.team_id}:{index}",
+                        clock_ms=event.clock_ms,
+                        template="goal_threat",
+                        priority=80,
+                        payload={
+                            "headline": headline,
+                            "detail": "",
+                            "moment": "goal_threat",
+                            "hold_ms": 30_000,
+                        },
+                        evidence_event_ids=evidence_ids,
+                        persona=profile.persona,
+                        language=profile.language,
+                        provenance=CueProvenance(
+                            agent="graphics",
+                            source="template",
+                            compliance="verified",
+                            reasons=["Deterministic prefix-only goal-threat threshold crossing"],
+                            metrics={"goal_threat_probability": threat.probability},
+                            metric_evidence={"goal_threat_probability": threat.evidence.event_ids},
+                        ),
+                    )
+                    metrics = {"goal_threat_probability": threat.probability}
+                    decision = self.compliance.validate(
+                        InsightPacket(
+                            stats=StatsPacket(
+                                event=event,
+                                metrics=metrics,
+                                evidence_event_ids=evidence_ids,
+                                metric_evidence={
+                                    "goal_threat_probability": threat.evidence.event_ids
+                                },
+                            ),
+                            insight=Insight(
+                                insight_id=cue.cue_id,
+                                clock_ms=event.clock_ms,
+                                kind="storyline",
+                                headline=headline,
+                                detail="",
+                                metrics=metrics,
+                                evidence_event_ids=evidence_ids,
+                            ),
+                            kind="storyline",
+                        )
+                    )
+                    if not decision.ok:
+                        raise ValueError(f"Unverified goal threat: {decision.reasons}")
+                    cues.append(cue)
+                    self.store.add_overlay_cue(event.match_id, cue)
+            for cue in cues:
+                cue.goal_threat = threats
             if publish:
                 await publish(cues.copy(), self.last_traces.copy())
             started = perf_counter()
             extra = await self.what_if.evaluate(self.store.get_or_create(event.match_id).events)
             if extra:
                 for index, profile in enumerate(self.profiles):
+                    if profile.persona != "analyst":
+                        continue
                     shaped = await personalize(
                         extra, profile, event, self.client, index, self.timeouts["translation"]
                     )

@@ -1442,3 +1442,20 @@ header {
 @media (min-width: 901px) and (max-height: 950px) {
   .casual .broadcast canvas { max-height: 190px; }
 }
+
+.goal-threat { font-size: var(--text-xs); color: var(--ink); }
+.goal-threat p { margin: 3px 0; }
+.goal-threat-probability { color: var(--muted); }
+/* Keep the analyst simulation and both quiet threat readings visible. */
+@media (min-width: 901px) {
+  .analyst .broadcast canvas { max-height: 270px; object-fit: contain; }
+  .analyst .lower-thirds { margin-top: 8px; gap: 6px; }
+  .analyst .cue + .cue { padding-top: 6px; }
+  .analyst .evidence { margin-top: 4px; }
+  .analyst .cue.whatif p { margin-bottom: 4px; line-height: 1.35; }
+  .analyst .momentum { margin-top: 4px; }
+  .analyst .dominance-bars { margin: 0; }
+}
+@media (min-width: 901px) and (max-height: 950px) {
+  .analyst .broadcast canvas { max-height: 170px; }
+}

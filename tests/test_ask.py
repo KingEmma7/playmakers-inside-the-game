@@ -282,3 +282,15 @@ def test_rule_citations_are_capped(events):
     data = post(events, "possession?", upto=events[-1].event_id).json()
     assert data["source"] == "rules"
     assert 0 < len(data["cited_event_ids"]) <= 3
+
+
+@pytest.mark.parametrize("language", ["en", "es", "fr"])
+def test_goal_threat_answer_is_rules_and_prefix_only(monkeypatch, events, language):
+    monkeypatch.setattr(
+        ask, "live_model_configured", lambda: pytest.fail("Threat answer must use rules")
+    )
+    data = post(events, "who's most likely to score next?", language).json()
+    assert data["answerable"] and data["source"] == "rules"
+    assert 0 < len(data["cited_event_ids"]) <= 3
+    assert set(data["cited_event_ids"]) <= {e.event_id for e in events[:101]}
+    assert "Northbridge" in data["answer"] and "Southport" in data["answer"]

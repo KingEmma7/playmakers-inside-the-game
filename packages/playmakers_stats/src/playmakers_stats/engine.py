@@ -7,6 +7,7 @@ from typing import Any
 
 from playmakers_schema.models import MatchEvent
 
+from playmakers_stats.threat import GoalThreat, ThreatTracker
 from playmakers_stats.types import (
     ControlChaosResult,
     Evidence,
@@ -40,12 +41,14 @@ class StatsEngine:
         self._events: deque[_EventRow] = deque(maxlen=max_events)
         self._match_id: str | None = None
         self._last_sequence = -1
+        self.threat_tracker = ThreatTracker()
 
     def ingest(self, event: MatchEvent) -> None:
         if self._match_id not in (None, event.match_id):
             raise ValueError("StatsEngine handles one match")
         if event.sequence <= self._last_sequence:
             raise ValueError("Events must have strictly increasing sequence")
+        self.threat_tracker.ingest(event)
         self._match_id = event.match_id
         self._last_sequence = event.sequence
         self._events.append(
@@ -231,3 +234,6 @@ class StatsEngine:
             else 0.0,
             evidence=Evidence(event_ids=[e.event_id for e in passes]),
         )
+
+    def goal_threat(self, *, team_id: str, match_clock_ms: int) -> GoalThreat:
+        return self.threat_tracker.predict(team_id, match_clock_ms)

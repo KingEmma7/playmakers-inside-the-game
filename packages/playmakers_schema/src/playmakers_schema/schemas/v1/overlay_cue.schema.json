@@ -95,6 +95,69 @@
       ],
       "title": "CueProvenance",
       "type": "object"
+    },
+    "Evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "event_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Event Ids",
+          "type": "array"
+        }
+      },
+      "title": "Evidence",
+      "type": "object"
+    },
+    "GoalThreat": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence": {
+          "$ref": "#/$defs/Evidence"
+        },
+        "features": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Features",
+          "type": "object"
+        },
+        "horizon_ms": {
+          "const": 300000,
+          "default": 300000,
+          "title": "Horizon Ms",
+          "type": "integer"
+        },
+        "level": {
+          "enum": [
+            "Low",
+            "Medium",
+            "High"
+          ],
+          "title": "Level",
+          "type": "string"
+        },
+        "probability": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Probability",
+          "type": "number"
+        },
+        "team_id": {
+          "title": "Team Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "team_id",
+        "probability",
+        "level",
+        "features",
+        "evidence"
+      ],
+      "title": "GoalThreat",
+      "type": "object"
     }
   },
   "$id": "https://playmakers.local/schemas/overlay_cue/1.0.0.json",
@@ -123,6 +186,13 @@
       },
       "minItems": 1,
       "title": "Evidence Event Ids",
+      "type": "array"
+    },
+    "goal_threat": {
+      "items": {
+        "$ref": "#/$defs/GoalThreat"
+      },
+      "title": "Goal Threat",
       "type": "array"
     },
     "language": {

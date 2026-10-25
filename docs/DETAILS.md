@@ -416,7 +416,7 @@ stays visible for at least 400 ms, then fades out over 180 ms. Reconnection uses
 the same timing; reduced motion disables the spinner animation and fade.
 
 Choose a seed, speed, language and fictional favourite player in the header; press **D** to
-show broadcast safe areas. The For you card retains the latest What-If result until a newer
+show broadcast safe areas. The analyst panel retains the latest What-If result until a newer
 simulation arrives. Pitch player motion is a seeded formation visualisation. Analyst possession
 is team-tagged event share, PPDA is opposition passes per home defensive action, and field tilt
 is home share of final-third pass entries; these are synthetic event proxies.
@@ -545,3 +545,20 @@ Azure actually throttled the reported session. The frozen pre-fix 50× policy ha
 34.14-second maximum gap (same recorded arrivals scaled by five), because it suppresses routine lines. Current timeline tests cover continuous speech at both 25× and 50×. On the same offline recording, the current queue speaks for 98.26% of the 25× timeline (1.94-second maximum gap, 54 requests) and 98.65% at 50× (1.15-second maximum gap, 24 requests), with zero simulated bucket refusals. Browser fallback at 10× has 100% speech coverage in
 the duration model. Cloud audio, networking and actual browser playback are not
 measured by this offline harness.
+
+## Predictive goal threat
+
+Stats maintains a bounded five-minute event window per match and computes both teams’
+next-five-minute scoring probabilities on each event. A fitted deterministic logistic
+model uses decayed attacking actions and existing shot xG; goals reset the window.
+`goal_threat` is also a Stats MCP tool with cited event IDs. Typed cue fields and the
+exported JSON schema carry both estimates to the analyst’s quiet two-line reading.
+High entries produce checked English, Spanish and French fan/commentary lines, rearming
+below Medium with a three-minute cooldown per team. What-If remains in the analyst
+panel with its simulations and Why? evidence; its win chances are excluded from fan
+cues and speech. Both recap paths and commentary batching remain in place.
+
+See [GOAL-THREAT.md](GOAL-THREAT.md) for the reproducible tuning/held-out split,
+coefficients, calibration, limitations and seed-382 rises (including false alarms).
+The existing commentary scheduling figures above describe the pre-threat recording;
+they are not new measurements of this feed.

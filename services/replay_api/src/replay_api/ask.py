@@ -67,7 +67,21 @@ def evidence(events: list[MatchEvent], question: str) -> list[Fact]:
     engine = StatsEngine()
     for event in events:
         engine.ingest(event)
-    facts: list[Fact] = []
+    threats = [
+        engine.goal_threat(
+            team_id=events[0].match_id + "_" + side, match_clock_ms=events[-1].clock_ms
+        )
+        for side in ("HOME", "AWAY")
+    ]
+    threats.sort(key=lambda t: -t.probability)
+    facts: list[Fact] = [
+        Fact(
+            "threat",
+            f"{team_name(t.team_id)}: goal threat {t.level}, {t.probability:.1%} chance of scoring within five match minutes (synthetic estimate, not a guarantee).",
+            t.evidence.event_ids[-3:] or [events[-1].event_id],
+        )
+        for t in threats
+    ]
     goals = [e for e in events if e.event_type == "goal"]
     home = sum(e.scoring_team_id.endswith("_HOME") for e in goals)
     facts.append(
@@ -198,6 +212,7 @@ def evidence(events: list[MatchEvent], question: str) -> list[Fact]:
         key=lambda f: (
             not (f.player and f.player.casefold() in q),
             {
+                "threat": -1,
                 "goals": 0,
                 "shots": 1,
                 "cards": 2,
@@ -217,7 +232,19 @@ def refused(language: Language) -> AskResponse:
     )
 
 
+def threat_question(question: str) -> bool:
+    return bool(
+        re.search(
+            r"goal.?threat|likely to score next|next (?:team|goal scorer)|menace|amenaza|marquer.*prochain|marcar.*próximo",
+            question,
+            re.I,
+        )
+    )
+
+
 def off_match(question: str) -> bool:
+    if threat_question(question):
+        question = re.sub(r"next goal|prochain|próximo", "", question, flags=re.I)
     return bool(
         re.search(
             r"bet|odds|apuesta|pari\b|premier|real madrid|barcelona|tomorrow|future|predict|\bwill\b|next goal|prochain|próximo|va gagner|ganará|weather|ignore|system prompt",
@@ -233,6 +260,10 @@ def rules(question: str, facts: list[Fact], language: Language) -> AskResponse:
         (
             k
             for pattern, k in [
+                (
+                    r"goal.?threat|likely to score next|next (?:team|goal scorer)|menace|amenaza|marquer.*prochain|marcar.*próximo",
+                    "threat",
+                ),
                 (r"scor|goal|gol|marqu", "goals"),
                 (r"press|presion", "press"),
                 (r"shot|xg|tir", "shots"),
@@ -256,6 +287,11 @@ def rules(question: str, facts: list[Fact], language: Language) -> AskResponse:
     answer = " ".join(f.text for f in chosen)
     translations = {
         "es": {
+            "goal threat": "amenaza de gol",
+            "High": "Alta",
+            "Medium": "Media",
+            "Low": "Baja",
+            "chance of scoring within five match minutes (synthetic estimate, not a guarantee)": "de probabilidad de marcar en cinco minutos de partido (estimación sintética, sin garantía)",
             "Score: home": "Marcador: local",
             "away": "visitante",
             "scored": "marcó",
@@ -281,6 +317,11 @@ def rules(question: str, facts: list[Fact], language: Language) -> AskResponse:
             "red card": "tarjeta roja",
         },
         "fr": {
+            "goal threat": "menace de but",
+            "High": "Élevée",
+            "Medium": "Moyenne",
+            "Low": "Faible",
+            "chance of scoring within five match minutes (synthetic estimate, not a guarantee)": "de probabilité de marquer dans les cinq minutes de match (estimation synthétique, sans garantie)",
             "Score: home": "Score : domicile",
             "away": "extérieur",
             "scored": "a marqué",
@@ -349,7 +390,7 @@ async def ask(body: AskRequest, request: Request) -> AskResponse:
         return refused(body.language)
     facts = await asyncio.to_thread(evidence, events, body.question)
     fallback = rules(body.question, facts, body.language)
-    if not live_model_configured():
+    if threat_question(body.question) or not live_model_configured():
         return fallback
     if not budget.acquire():
         fallback.note = "Daily model question limit reached; using a rule-based answer."

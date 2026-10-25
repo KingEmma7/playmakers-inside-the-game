@@ -33,6 +33,7 @@ async def test_real_streamable_http_tools(mounted: bool) -> None:
                     "xg",
                     "momentum",
                     "control_vs_chaos",
+                    "goal_threat",
                 }
                 event = passing().model_dump(mode="json")
                 result = await session.call_tool(
@@ -56,6 +57,14 @@ async def test_real_streamable_http_tools(mounted: bool) -> None:
                 )
                 assert not result.isError
                 assert result.structuredContent["turnover_rate"] == 0
+                result = await session.call_tool(
+                    "goal_threat",
+                    {"match_id": "test", "team_id": "TEST_HOME", "match_clock_ms": 1000},
+                )
+                assert not result.isError
+                assert result.structuredContent["evidence"]["event_ids"] == ["e1"]
+                assert 0 < result.structuredContent["probability"] < 1
+                assert result.structuredContent["horizon_ms"] == 300_000
                 result = await session.call_tool("xg", {"match_id": "test", "event_id": "e1"})
                 assert result.isError
 

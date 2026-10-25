@@ -7,6 +7,12 @@ export type DurationMs = number;
  * @minItems 1
  */
 export type EvidenceEventIds = [string, ...string[]];
+export type EventIds = string[];
+export type HorizonMs = 300000;
+export type Level = "Low" | "Medium" | "High";
+export type Probability = number;
+export type TeamId = string;
+export type GoalThreat = GoalThreat1[];
 export type Language = ("en" | "es" | "fr") | null;
 export type Layer = "lower_third" | "score_bug" | "full_screen";
 export type Persona = ("analyst" | "casual") | null;
@@ -27,6 +33,7 @@ export interface OverlayCue {
   cue_id: CueId;
   duration_ms?: DurationMs;
   evidence_event_ids: EvidenceEventIds;
+  goal_threat?: GoalThreat;
   language?: Language;
   layer?: Layer;
   payload: Payload;
@@ -36,6 +43,20 @@ export interface OverlayCue {
   safe_area?: SafeArea;
   schema_version?: SchemaVersion;
   template: Template;
+}
+export interface GoalThreat1 {
+  evidence: Evidence;
+  features: Features;
+  horizon_ms?: HorizonMs;
+  level: Level;
+  probability: Probability;
+  team_id: TeamId;
+}
+export interface Evidence {
+  event_ids?: EventIds;
+}
+export interface Features {
+  [k: string]: number;
 }
 export interface Payload {
   [k: string]: unknown;

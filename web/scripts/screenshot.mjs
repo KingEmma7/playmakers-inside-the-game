@@ -30,7 +30,7 @@ try {
   await page.waitForFunction(
     () =>
       document.querySelector(".casual .lower-thirds h3")?.textContent?.startsWith("GOAL") &&
-      Boolean(document.querySelector(".casual .whatif")),
+      Boolean(document.querySelector(".analyst .whatif")),
     undefined,
     { timeout: 60000 },
   );
@@ -71,7 +71,7 @@ try {
     undefined,
     { timeout: 240000 },
   );
-  await page.locator(".casual .whatif").waitFor({ timeout: 240000 });
+  await page.locator(".analyst .whatif").waitFor({ timeout: 240000 });
   await page.getByRole("button", { name: "Pause", exact: true }).waitFor();
   await page.screenshot({
     path: shot("e2e-screenshot.png"),
@@ -111,7 +111,7 @@ try {
       return (
         Boolean(
           document.querySelector(".agent-grid > div:nth-child(3) .recovering"),
-        ) && Boolean(document.querySelector(".casual .whatif"))
+        ) && Boolean(document.querySelector(".analyst .whatif"))
       );
     },
     undefined,

@@ -269,8 +269,10 @@ export function ViewPanel({
     )
     .sort((a, b) => b.clock_ms - a.clock_ms)
     .at(0);
+  const heldThreat = cues.filter((c) => c.template === "goal_threat" &&
+    c.clock_ms <= clock && clock < c.clock_ms + Number(c.payload.hold_ms ?? 30000)).at(-1);
   const primary =
-    heldMoment ??
+    heldMoment ?? heldThreat ??
     active.find((c) => c.template !== "what_if" && c.template !== "recap") ??
     cues
       .filter(
@@ -281,7 +283,7 @@ export function ViewPanel({
       )
       .sort((a, b) => b.clock_ms - a.clock_ms)[0];
   const whatif = cues
-    .filter((c) => c.template === "what_if" && c.clock_ms <= clock)
+    .filter((c) => persona === "analyst" && c.template === "what_if" && c.clock_ms <= clock)
     .sort((a, b) => b.clock_ms - a.clock_ms)[0];
   const recap = cues
     .filter((c) => c.template === "recap" && c.clock_ms <= clock)
@@ -360,6 +362,7 @@ export function ViewPanel({
     (territory.filter((e) => e.team_id?.endsWith("_HOME")).length /
       (territory.length || 1)) *
     100;
+  const threats = cues.filter((c) => c.clock_ms <= clock && c.goal_threat?.length).at(-1)?.goal_threat ?? [];
   const metrics = record(primary?.payload.metrics);
   const momentum = Number(metrics.home_momentum ?? 0);
   return (
@@ -483,6 +486,14 @@ export function ViewPanel({
               </div>
             </div>
           )}
+          {persona === "analyst" && threats.length > 0 && (
+            <div className="goal-threat" aria-label="Goal threat">
+              {threats.map((threat) => <p key={threat.team_id}>
+                Goal threat: {threat.level}, {threat.team_id.endsWith("_HOME") ? "Northbridge" : "Southport"}
+                <span className="goal-threat-probability"> · {(threat.probability * 100).toFixed(1)}% in next 5 min</span>
+              </p>)}
+            </div>
+          )}
           <div className="lower-thirds">
             {primary && (
               <CueCard
@@ -492,7 +503,7 @@ export function ViewPanel({
                 onExplain={explain(primary)}
               />
             )}
-            {persona === "casual" && whatif && (
+            {persona === "analyst" && whatif && (
               <CueCard
                 key={whatif.cue_id}
                 referenced={whatif.evidence_event_ids.some((id) => askIds?.includes(id))}

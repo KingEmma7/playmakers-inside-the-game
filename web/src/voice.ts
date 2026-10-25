@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import { recapText } from "./recapText";
 import type { MatchEvent, OverlayCue, Trace } from "./stream";
-import { whatIfQuestion } from "./whatifCopy";
 
 export type Language = "en" | "es" | "fr";
 export type Emphasis = "normal" | "goal" | "big";
@@ -153,7 +152,8 @@ const eventIdOf = (cue: OverlayCue) =>
 export function priorityMoment(
   cue: OverlayCue,
   events: MatchEvent[],
-): "recap" | "what_if" | "goal" | "red_card" | undefined {
+): "recap" | "what_if" | "goal_threat" | "goal" | "red_card" | undefined {
+  if (cue.template === "goal_threat") return "goal_threat";
   if (cue.template === "recap") return "recap";
   if (cue.template === "what_if") return "what_if";
   const eventId = eventIdOf(cue);
@@ -189,9 +189,9 @@ function commentaryText(text: string, language: Language): string {
 }
 
 export function spokenLine(cue: OverlayCue, events: MatchEvent[]): string {
+  if (cue.template === "what_if") return "";
   const moment = priorityMoment(cue, events);
   const text = moment === "recap" ? recapText(cue).split("\n").join(" ") :
-    moment === "what_if" ? whatIfQuestion(cue) :
     `${String(cue.payload.headline ?? "")} ${String(cue.payload.detail ?? "")}`.trim();
   return commentaryText(text, cue.language ?? "en");
 }

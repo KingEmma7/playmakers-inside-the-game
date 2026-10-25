@@ -294,3 +294,16 @@ def test_goal_threat_answer_is_rules_and_prefix_only(monkeypatch, events, langua
     assert 0 < len(data["cited_event_ids"]) <= 3
     assert set(data["cited_event_ids"]) <= {e.event_id for e in events[:101]}
     assert "Northbridge" in data["answer"] and "Southport" in data["answer"]
+
+
+@pytest.mark.parametrize(
+    "language, phrase",
+    [
+        ("en", "within two match minutes"),
+        ("es", "en dos minutos de partido"),
+        ("fr", "dans les deux minutes de match"),
+    ],
+)
+def test_goal_threat_answer_uses_selected_horizon(events, language, phrase):
+    data = post(events, "who's most likely to score next?", language).json()
+    assert phrase in data["answer"]

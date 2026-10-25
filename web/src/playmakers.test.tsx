@@ -218,10 +218,11 @@ describe("broadcast cues", () => {
     const props = { title: "Analyst", persona: "analyst", events: [], safe: false,
       running: true, status: "live", clock: 1000 };
     const threatCue = cue({ goal_threat: [{team_id: "match_7_HOME", probability: .08,
-      level: "High", horizon_ms: 300000, features: {}, evidence: {event_ids: ["e1"]}}] });
+      level: "High", horizon_ms: 120000, features: {}, evidence: {event_ids: ["e1"]}}] });
     const whatif = cue({ cue_id: "whatif", template: "what_if", payload: {headline: "Alternative result"} });
     const { rerender } = render(<ViewPanel {...props} cues={[threatCue, whatif]} />);
     expect(screen.getByLabelText("Goal threat")).toHaveTextContent("Goal threat: High, Northbridge");
+    expect(screen.getByLabelText("Goal threat")).toHaveTextContent("8.0% in next 2 min");
     expect(screen.getByText("Alternative result")).toBeInTheDocument();
     rerender(<ViewPanel {...props} persona="casual" cues={[threatCue, whatif]} />);
     expect(screen.queryByLabelText("Goal threat")).not.toBeInTheDocument();

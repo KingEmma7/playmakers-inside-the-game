@@ -1161,9 +1161,9 @@ class Director:
                 for index, profile in enumerate(self.profiles):
                     name = team_name(threat.team_id)
                     headline = {
-                        "en": f"{name} are building pressure. A goal could be coming.",
-                        "es": f"{name} aumenta la presión. Podría llegar un gol.",
-                        "fr": f"{name} accentue la pression. Un but pourrait arriver.",
+                        "en": f"{name} are building pressure. A goal could be coming in the next few minutes.",
+                        "es": f"{name} aumenta la presión. Podría llegar un gol en los próximos minutos.",
+                        "fr": f"{name} accentue la pression. Un but pourrait arriver dans les prochaines minutes.",
                     }[profile.language]
                     evidence_ids = list(dict.fromkeys([event.event_id, *threat.evidence.event_ids]))
                     cue = OverlayCue(

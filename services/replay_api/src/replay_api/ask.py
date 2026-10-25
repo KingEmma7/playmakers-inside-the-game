@@ -77,7 +77,7 @@ def evidence(events: list[MatchEvent], question: str) -> list[Fact]:
     facts: list[Fact] = [
         Fact(
             "threat",
-            f"{team_name(t.team_id)}: goal threat {t.level}, {t.probability:.1%} chance of scoring within five match minutes (synthetic estimate, not a guarantee).",
+            f"{team_name(t.team_id)}: goal threat {t.level}, {t.probability:.1%} chance of scoring within two match minutes (synthetic estimate, not a guarantee).",
             t.evidence.event_ids[-3:] or [events[-1].event_id],
         )
         for t in threats
@@ -291,7 +291,7 @@ def rules(question: str, facts: list[Fact], language: Language) -> AskResponse:
             "High": "Alta",
             "Medium": "Media",
             "Low": "Baja",
-            "chance of scoring within five match minutes (synthetic estimate, not a guarantee)": "de probabilidad de marcar en cinco minutos de partido (estimación sintética, sin garantía)",
+            "chance of scoring within two match minutes (synthetic estimate, not a guarantee)": "de probabilidad de marcar en dos minutos de partido (estimación sintética, sin garantía)",
             "Score: home": "Marcador: local",
             "away": "visitante",
             "scored": "marcó",
@@ -321,7 +321,7 @@ def rules(question: str, facts: list[Fact], language: Language) -> AskResponse:
             "High": "Élevée",
             "Medium": "Moyenne",
             "Low": "Faible",
-            "chance of scoring within five match minutes (synthetic estimate, not a guarantee)": "de probabilité de marquer dans les cinq minutes de match (estimation synthétique, sans garantie)",
+            "chance of scoring within two match minutes (synthetic estimate, not a guarantee)": "de probabilité de marquer dans les deux minutes de match (estimation synthétique, sans garantie)",
             "Score: home": "Score : domicile",
             "away": "extérieur",
             "scored": "a marqué",

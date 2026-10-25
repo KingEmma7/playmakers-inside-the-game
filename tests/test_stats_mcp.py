@@ -64,7 +64,7 @@ async def test_real_streamable_http_tools(mounted: bool) -> None:
                 assert not result.isError
                 assert result.structuredContent["evidence"]["event_ids"] == ["e1"]
                 assert 0 < result.structuredContent["probability"] < 1
-                assert result.structuredContent["horizon_ms"] == 300_000
+                assert result.structuredContent["horizon_ms"] == 120_000
                 result = await session.call_tool("xg", {"match_id": "test", "event_id": "e1"})
                 assert result.isError
 

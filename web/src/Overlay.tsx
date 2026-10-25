@@ -490,7 +490,7 @@ export function ViewPanel({
             <div className="goal-threat" aria-label="Goal threat">
               {threats.map((threat) => <p key={threat.team_id}>
                 Goal threat: {threat.level}, {threat.team_id.endsWith("_HOME") ? "Northbridge" : "Southport"}
-                <span className="goal-threat-probability"> · {(threat.probability * 100).toFixed(1)}% in next 5 min</span>
+                <span className="goal-threat-probability"> · {(threat.probability * 100).toFixed(1)}% in next {(threat.horizon_ms ?? 120_000) / 60_000} min</span>
               </p>)}
             </div>
           )}

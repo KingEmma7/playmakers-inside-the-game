@@ -8,7 +8,7 @@ export type DurationMs = number;
  */
 export type EvidenceEventIds = [string, ...string[]];
 export type EventIds = string[];
-export type HorizonMs = 300000;
+export type HorizonMs = 120000;
 export type Level = "Low" | "Medium" | "High";
 export type Probability = number;
 export type TeamId = string;

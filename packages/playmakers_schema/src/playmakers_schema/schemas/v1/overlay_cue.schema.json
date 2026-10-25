@@ -124,8 +124,8 @@
           "type": "object"
         },
         "horizon_ms": {
-          "const": 300000,
-          "default": 300000,
+          "const": 120000,
+          "default": 120000,
           "title": "Horizon Ms",
           "type": "integer"
         },

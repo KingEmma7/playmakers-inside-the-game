@@ -549,12 +549,14 @@ measured by this offline harness.
 ## Predictive goal threat
 
 Stats maintains a bounded five-minute event window per match and computes both teams’
-next-five-minute scoring probabilities on each event. A fitted deterministic logistic
-model uses decayed attacking actions and existing shot xG; goals reset the window.
+next-two-minute scoring probabilities on each event. A fitted deterministic logistic
+model uses current possession, ball geometry, attacking-third spells, recent locations
+and decayed attacking actions and existing shot xG; goals reset the window.
 `goal_threat` is also a Stats MCP tool with cited event IDs. Typed cue fields and the
 exported JSON schema carry both estimates to the analyst’s quiet two-line reading.
 High entries produce checked English, Spanish and French fan/commentary lines, rearming
-below Medium with a three-minute cooldown per team. What-If remains in the analyst
+below Medium with a ten-minute cooldown per team; High starts at the tuning 99th
+percentile. What-If remains in the analyst
 panel with its simulations and Why? evidence; its win chances are excluded from fan
 cues and speech. Both recap paths and commentary batching remain in place.
 

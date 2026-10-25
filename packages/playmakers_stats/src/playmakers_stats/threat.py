@@ -1,9 +1,9 @@
-"""Prefix-only next-five-minute scoring probability, fitted to synthetic PitchSim."""
+"""Prefix-only scoring probability, fitted to synthetic PitchSim."""
 
 from __future__ import annotations
 
 from collections import deque
-from math import exp
+from math import exp, hypot
 from typing import Literal
 
 from playmakers_schema.models import MatchEvent
@@ -12,29 +12,39 @@ from pydantic import BaseModel, ConfigDict, Field
 from playmakers_stats.types import Evidence
 
 WINDOW_MS = 300_000
+HORIZON_MS = 120_000
+COOLDOWN_MS = 600_000
 FEATURE_NAMES = (
+    "possession",
+    "territory",
+    "possession_territory",
+    "goal_proximity",
+    "central_box",
+    "attacking_third",
+    "third_spell",
+    "last_five_territory",
+    "third_seconds",
     "entries",
-    "box_actions",
     "shots",
     "xg",
-    "third_share",
-    "high_wins",
-    "third_completions",
-    "territory",
 )
 # Replaced reproducibly by scripts/calibrate_threat.py --fit.
 COEFFICIENTS = (
-    -2.9210297355,
-    0.2933119107,
-    0.1954572702,
-    0.2024326988,
-    -0.5208620475,
-    0.1424340832,
-    -0.3269378625,
-    0.0943204256,
-    0.2960794962,
+    -4.0493423422,
+    0.1550327826,
+    0.7691634777,
+    0.1744049859,
+    1.36556686,
+    0.887465536,
+    -0.0785956736,
+    0.2483636707,
+    -0.3611696465,
+    0.2011619544,
+    -0.1135153728,
+    -0.0968485985,
+    0.1517067988,
 )
-BAND_THRESHOLDS = (0.06537326686186828, 0.07398210085765804)
+BAND_THRESHOLDS = (0.023521929166955977, 0.06746503590763081)
 
 
 class GoalThreat(BaseModel):
@@ -42,23 +52,34 @@ class GoalThreat(BaseModel):
     team_id: str
     probability: float = Field(ge=0, le=1)
     level: Literal["Low", "Medium", "High"]
-    horizon_ms: Literal[300000] = 300_000
+    horizon_ms: Literal[120000] = HORIZON_MS
     features: dict[str, float]
     evidence: Evidence
 
 
 class ThreatTracker:
-    """Bounded rolling event features; never reads labels, future events or shot outcomes.
+    """Observed possession and geometry plus bounded history; no future/outcome reads.
 
-    PitchSim home attacks increasing x throughout both halves. A goal resets both
-    teams; its associated shot is removed too. No scoring event is a predictor.
+    Home attacks increasing x in both halves. Shots end the observed spell for
+    every outcome; the next possession event supplies the actual restart position.
+    Goals reset history, removing the associated shot as well.
     """
 
     def __init__(self) -> None:
-        self.rows: deque[tuple[int, str, str, tuple[float, ...]]] = deque()
+        # clock, evidence ID, possession team, physical x/y, shot xG, third entry,
+        # seconds spent in that team's attacking third before this observation.
+        self.rows: deque[tuple[int, str, str, float, float, float, float, float]] = deque()
         self.clock_ms = 0
         self.last_sequence = -1
         self.match_id: str | None = None
+        self.owner: str | None = None
+        self.ball = (52.5, 34.0)
+        self.state_clock = 0
+        self.third_since: int | None = None
+
+    @staticmethod
+    def territory(team: str, x: float) -> float:
+        return x if team.endswith("_HOME") else 105 - x
 
     def ingest(self, event: MatchEvent) -> None:
         if self.match_id not in (None, event.match_id) or event.sequence <= self.last_sequence:
@@ -69,78 +90,94 @@ class ThreatTracker:
             self.rows.popleft()
         if event.event_type in ("goal", "period_start"):
             self.rows.clear()
+            self.owner, self.third_since = None, None
+            self.ball = (52.5, 34.0)
+            self.state_clock = event.clock_ms
             return
-        team = event.team_id
-        if event.event_type == "possession_change":
-            team = event.to_team_id
-        if not team:
+        kind = event.event_type
+        if kind not in ("kickoff", "pass", "carry", "shot", "possession_change", "tackle"):
             return
+        if kind == "tackle" and not event.won_ball:
+            return
+        team = event.to_team_id if kind == "possession_change" else event.team_id
         pos = (
             getattr(event, "end_position", None)
             or getattr(event, "position", None)
             or getattr(event, "ball_position", None)
+            or getattr(event, "start_position", None)
         )
-        if pos is None or event.event_type not in (
-            "pass",
-            "carry",
-            "shot",
-            "tackle",
-            "possession_change",
-        ):
+        if not team or pos is None:
             return
-        x = pos.x if team.endswith("_HOME") else 105 - pos.x
-        start = getattr(event, "start_position", pos)
-        sx = start.x if team.endswith("_HOME") else 105 - start.x
-        completed = event.event_type == "carry" or (event.event_type == "pass" and event.completed)
-        third = float(completed and x >= 70)
-        values = (
-            float(completed and sx < 70 <= x),
-            float(completed and x >= 88.5 and 13.84 <= pos.y <= 54.16),
-            float(event.event_type == "shot"),
-            float(event.xg) if event.event_type == "shot" else 0.0,
-            third,
-            float(
-                x > 52.5
-                and (
-                    (event.event_type == "tackle" and event.won_ball)
-                    or (
-                        event.event_type == "possession_change"
-                        and event.reason not in ("goal", "foul")
-                    )
-                )
-            ),
-            float(event.event_type == "pass" and event.completed and x >= 70),
-            x / 105,
+        old_owner = self.owner
+        old_third = self.owner and self.territory(self.owner, self.ball[0]) >= 70
+        duration = min(60.0, (event.clock_ms - self.state_clock) / 1000) if old_third else 0.0
+        # Attribute elapsed time to the old owner, separately from this new observation.
+        if duration and self.rows:
+            last = self.rows[-1]
+            self.rows[-1] = (*last[:7], last[7] + duration)
+        x = self.territory(team, pos.x)
+        entry = float(x >= 70 and (self.owner != team or not old_third))
+        self.rows.append(
+            (
+                event.clock_ms,
+                event.event_id,
+                team,
+                pos.x,
+                pos.y,
+                float(event.xg) if kind == "shot" else 0.0,
+                entry,
+                0.0,
+            )
         )
-        self.rows.append((event.clock_ms, event.event_id, team, values))
+        self.state_clock = event.clock_ms
+        self.ball = (pos.x, pos.y)
+        self.owner = None if kind == "shot" or (kind == "pass" and not event.completed) else team
+        if self.owner and x >= 70:
+            if self.third_since is None or not old_third or old_owner != team:
+                self.third_since = event.clock_ms
+        else:
+            self.third_since = None
 
     def predict(self, team_id: str, match_clock_ms: int | None = None) -> GoalThreat:
         now = self.clock_ms if match_clock_ms is None else match_clock_ms
         if now < self.clock_ms:
             raise ValueError("Historical queries require replaying the event prefix")
-        sums = [0.0] * len(FEATURE_NAMES)
-        total_third = 0.0
-        ids: list[str] = []
-        latest = 0.5
-        for clock, eid, team, values in self.rows:
-            if not now - WINDOW_MS <= clock <= now:
-                continue
-            weight = exp(-(now - clock) / 180_000)
-            total_third += values[4] * weight
-            if team == team_id or values[4]:
-                ids.append(eid)
+        rows = [row for row in self.rows if now - WINDOW_MS <= row[0] <= now]
+        own = float(self.owner == team_id)
+        x = self.territory(team_id, self.ball[0])
+        lateral = abs(self.ball[1] - 34)
+        sums = [0.0] * 4
+        for clock, _, team, _, _, xg, entry, seconds in rows:
             if team == team_id:
-                for i, value in enumerate(values):
-                    sums[i] += value * weight
-                latest = values[-1] * weight + 0.5 * (1 - weight)
-        sums[4] /= max(1.0, total_third)
-        sums[-1] = latest
-        # Counts scaled to keep fitting well conditioned; all transformations fixed.
-        scales = (5, 5, 2, 1, 1, 5, 10, 1)
-        features = {
-            name: value / scale
-            for name, value, scale in zip(FEATURE_NAMES, sums, scales, strict=True)
-        }
+                weight = exp(-(now - clock) / 60_000)
+                sums[0] += seconds * weight / 60
+                sums[1] += entry * weight / 3
+                sums[2] += float(xg > 0) * weight
+                sums[3] += xg * weight
+        if own and self.third_since is not None:
+            sums[0] += min(60_000, now - self.state_clock) / 60_000
+        recent = rows[-5:]
+        features = dict(
+            zip(
+                FEATURE_NAMES,
+                (
+                    own,
+                    x / 105,
+                    own * x / 105,
+                    own * exp(-hypot(105 - x, lateral) / 25),
+                    own * float(x > 88.5 and lateral < 11),
+                    own * float(x >= 70),
+                    own * min(3.0, (now - self.third_since) / 60_000)
+                    if self.third_since is not None
+                    else 0.0,
+                    sum(self.territory(team_id, row[3]) / 105 for row in recent) / len(recent)
+                    if recent
+                    else 0.5,
+                    *sums,
+                ),
+                strict=True,
+            )
+        )
         z = COEFFICIENTS[0] + sum(
             c * v for c, v in zip(COEFFICIENTS[1:], features.values(), strict=True)
         )
@@ -153,12 +190,12 @@ class ThreatTracker:
             probability=p,
             level=level,
             features=features,
-            evidence=Evidence(event_ids=ids),
+            evidence=Evidence(event_ids=[row[1] for row in rows]),
         )
 
 
 class ThreatAnnouncements:
-    """Enter High once, rearm below Medium; three match minute cooldown per team."""
+    """Enter High once, rearm below Medium; ten match minute cooldown per team."""
 
     def __init__(self) -> None:
         self.high: set[str] = set()
@@ -170,8 +207,11 @@ class ThreatAnnouncements:
             self.high.discard(team)
         if threat.level != "High" or team in self.high:
             return False
-        self.high.add(team)
-        if not threat.evidence.event_ids or clock_ms - self.last.get(team, -WINDOW_MS) < 180_000:
+        if (
+            not threat.evidence.event_ids
+            or clock_ms - self.last.get(team, -COOLDOWN_MS) < COOLDOWN_MS
+        ):
             return False
+        self.high.add(team)
         self.last[team] = clock_ms
         return True

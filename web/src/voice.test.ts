@@ -53,7 +53,10 @@ const cue = (overrides: Partial<OverlayCue>): OverlayCue => ({
   language: "es",
   ...overrides,
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 describe("voice commentary", () => {
   it("builds the fan line in the selected language", () => {
@@ -373,20 +376,40 @@ describe("Azure rate pressure", () => {
   });
 
   it("uses browser for the session after the daily cap and removes pacing", async () => {
+    vi.useFakeTimers();
     const fetchMock = vi.fn().mockResolvedValue(new Response(
       JSON.stringify({ detail: "Daily speech character cap reached; use browser commentary" }),
       { status: 429 },
     ));
     vi.stubGlobal("fetch", fetchMock);
+    let finish: (() => void) | undefined;
     const fallback: Speaker = {
-      name: "browser", speak: vi.fn().mockResolvedValue(undefined), cancel: vi.fn(),
+      name: "browser",
+      speak: vi.fn(() => new Promise<void>((resolve) => { finish = resolve; })),
+      cancel: vi.fn(),
     };
     const speaker = new AzureSpeaker("http://api", fallback);
+    // Keep the queue clock fixed: the next routine must start without Azure pacing.
     const queue = new CommentaryQueue(speaker, () => 0);
-    queue.enqueue(line("one")); queue.enqueue(line("two")); queue.tick(); await flush();
+    queue.enqueue(line("one")); queue.enqueue(line("two")); queue.tick();
+    // Drain async response parsing and promise continuations without counting microtasks.
+    await vi.advanceTimersByTimeAsync(0);
     expect(speaker.name).toBe("browser");
-    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fallback.speak).toHaveBeenCalledExactlyOnceWith("one", "en", "normal");
+    expect(queue.stats.spoken).toBe(0);
+    expect(queue.length).toBe(1);
+
+    finish?.();
+    await vi.advanceTimersByTimeAsync(0);
     expect(fallback.speak).toHaveBeenCalledTimes(2);
+    expect(fallback.speak).toHaveBeenLastCalledWith("two", "en", "normal");
+    expect(queue.stats.spoken).toBe(1);
+    expect(queue.length).toBe(0);
+
+    finish?.();
+    await vi.advanceTimersByTimeAsync(0);
     expect(queue.stats.spoken).toBe(2);
+    expect(queue.stats.log).toEqual(["one", "two"]);
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 });

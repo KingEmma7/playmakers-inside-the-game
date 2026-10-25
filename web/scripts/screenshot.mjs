@@ -35,6 +35,10 @@ try {
     { timeout: 60000 },
   );
   await page.getByRole("button", { name: "Pause", exact: true }).click();
+  await page.getByLabel("Ask the crew", { exact: true }).fill("shots and xG?");
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
+  await page.locator(".ask-answer").waitFor();
+  assert.match(await page.locator(".ask-answer").innerText(), /Based on [1-9]\d* events/);
   for (const viewport of [{ width: 1440, height: 900 }, { width: 1920, height: 1080 }]) {
     await page.setViewportSize(viewport);
     await checkLayout();

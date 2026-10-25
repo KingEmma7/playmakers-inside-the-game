@@ -58,6 +58,26 @@ class LiveMatchBudget:
         self.active = max(0, self.active - 1)
 
 
+class AskBudget:
+    """Independent per-process model-call allowance, reset at midnight UTC."""
+
+    def __init__(self, daily: int, today: Callable[[], date] = utc_today) -> None:
+        self.daily, self.today = daily, today
+        self.day, self.used = today(), 0
+
+    @classmethod
+    def from_env(cls) -> AskBudget:
+        return cls(_env_int("PLAYMAKERS_DAILY_ASK_MODEL_CALLS", 60))
+
+    def acquire(self) -> bool:
+        if (day := self.today()) != self.day:
+            self.day, self.used = day, 0
+        if self.used >= self.daily:
+            return False
+        self.used += 1
+        return True
+
+
 class RateLimiter:
     """Sliding-window limit per client plus an overall ceiling across all clients."""
 

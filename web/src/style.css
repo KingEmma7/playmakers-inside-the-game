@@ -1377,3 +1377,24 @@ header {
 .trace-panel .kill {
   margin-top: var(--space-2);
 }
+
+.ask-crew { border-top: 1px solid var(--rule); padding: 10px 0 4px; }
+.ask-crew label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.ask-controls { display: flex; gap: 6px; }
+.ask-controls input { flex: 1; min-width: 0; width: 100%; }
+.ask-crew p { margin: 8px 0 4px; font-size: 13px; }
+.ask-answer small { display: block; color: var(--muted); font-size: 11px; }
+.ask-answer { overflow-wrap: anywhere; }
+
+.cue.referenced-event { border-left: 2px dashed var(--home); padding-left: 8px; }
+
+/* Reserve room for the question and its short answer beside the match feed. */
+@media (min-width: 901px) {
+  .casual .broadcast canvas { max-height: 270px; object-fit: contain; }
+  .ask-crew form { display: flex; align-items: center; gap: 8px; }
+  .ask-crew label { flex-shrink: 0; margin: 0; }
+  .ask-controls { flex: 1; min-width: 0; }
+}
+@media (min-width: 901px) and (max-height: 950px) {
+  .casual .broadcast canvas { max-height: 190px; }
+}

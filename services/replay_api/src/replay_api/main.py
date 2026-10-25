@@ -26,6 +26,7 @@ from pydantic import TypeAdapter
 from starlette.routing import Mount
 from stats_mcp.server import create_mcp
 
+from replay_api.ask import router as ask_router
 from replay_api.limits import LiveMatchBudget
 from replay_api.speech import router as speech_router
 
@@ -73,12 +74,13 @@ app.add_middleware(
         for s in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
         if s.strip()
     ],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
 
 app.include_router(speech_router)
+app.include_router(ask_router)
 
 
 @app.get("/healthz")

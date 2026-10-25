@@ -1,3 +1,4 @@
+import AskCrew from "./AskCrew";
 import { useState } from "react";
 import { involvementLabel, playerName } from "./players";
 
@@ -107,8 +108,10 @@ export function OddsSwing({
 export function CueCard({
   cue,
   onExplain,
+  referenced = false,
 }: {
   cue: OverlayCue;
+  referenced?: boolean;
   onExplain?: () => void;
 }) {
   const why =
@@ -129,7 +132,7 @@ export function CueCard({
       : undefined;
   return (
     <article
-      className={`cue ${whatif ? "whatif" : ""} ${cue.template === "template_fallback" ? "fallback" : ""}`}
+      className={`cue ${referenced ? "referenced-event" : ""} ${whatif ? "whatif" : ""} ${cue.template === "template_fallback" ? "fallback" : ""}`}
       style={{ zIndex: (cue.priority ?? 0) + 1 }}
       data-testid="cue-card"
     >
@@ -214,6 +217,7 @@ export function CueCard({
 }
 export function ViewPanel({
   title,
+  seed = 382,
   persona,
   event,
   events,
@@ -226,6 +230,7 @@ export function ViewPanel({
   language = "en",
 }: {
   title: string;
+  seed?: number;
   persona: string;
   event?: MatchEvent;
   events: MatchEvent[];
@@ -238,8 +243,10 @@ export function ViewPanel({
   language?: string;
 }) {
   const [explained, setExplained] = useState<OverlayCue>();
+  const [askIds, setAskIds] = useState<string[]>();
   const [focus, setFocus] = useState<string>();
   const explain = (cue: OverlayCue) => () => {
+    setAskIds(undefined);
     setExplained(cue);
     setFocus(undefined);
   };
@@ -272,7 +279,7 @@ export function ViewPanel({
   const recap = cues
     .filter((c) => c.template === "recap" && c.clock_ms <= clock)
     .at(-1);
-  const highlighted = focus
+  const highlighted = askIds ?? (focus
     ? [focus]
     : explained
       ? explained.evidence_event_ids
@@ -280,7 +287,7 @@ export function ViewPanel({
         ? recapMoments(recap.payload).map((m) => m.event_id)
         : whatif && clock - whatif.clock_ms <= WHATIF_HIGHLIGHT_MS
           ? whatif.evidence_event_ids
-          : [];
+          : []);
   const trail = highlighted
     .map((id) => events.find((e) => e.event_id === id))
     .map((e) =>
@@ -479,6 +486,7 @@ export function ViewPanel({
           {primary && (
             <CueCard
               key={primary.template}
+              referenced={primary.evidence_event_ids.some((id) => askIds?.includes(id))}
               cue={primary}
               onExplain={explain(primary)}
             />
@@ -486,6 +494,7 @@ export function ViewPanel({
           {persona === "casual" && whatif && (
             <CueCard
               key={whatif.cue_id}
+              referenced={whatif.evidence_event_ids.some((id) => askIds?.includes(id))}
               cue={whatif}
               onExplain={explain(whatif)}
             />
@@ -552,6 +561,11 @@ export function ViewPanel({
             </svg>
           </div>
         }
+        {persona === "casual" && <AskCrew
+          key={`${seed}-${language}`}
+          seed={seed} uptoEventId={event?.event_id} language={language}
+          onCitations={(ids) => { setAskIds(ids); setExplained(undefined); setFocus(undefined); }}
+        />}
       </div>
     </section>
   );

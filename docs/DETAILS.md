@@ -68,6 +68,7 @@ Configuration (see [.env.example](../.env.example); export variables in your she
 
 - Azure OpenAI: `AZURE_OPENAI_ENDPOINT` + `AZURE_OPENAI_DEPLOYMENT`.
 - Foundry: `AZURE_AI_PROJECT_ENDPOINT` + `AZURE_AI_MODEL_DEPLOYMENT`.
+- `PLAYMAKERS_DAILY_ASK_MODEL_CALLS` caps question model calls per UTC day per API process (default 60); questions use rules after the cap, independently of the live-match budget.
 - `STATS_MCP_URL` selects another endpoint, such as the standalone server (`http://127.0.0.1:8765/mcp`).
 - `AZURE_CLIENT_ID` selects a user-assigned managed identity.
 - `PLAYMAKERS_AGENT_TIMEOUT_S`, `PLAYMAKERS_TRANSLATION_TIMEOUT_S`, `PLAYMAKERS_WHATIF_TIMEOUT_S` (live defaults 8, 3, 3 seconds).

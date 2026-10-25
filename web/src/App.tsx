@@ -403,6 +403,8 @@ function Playmakers() {
                   status={analyst.status}
                 />
                 <ViewPanel
+                  key={`${seed}-${language}`}
+                  seed={seed}
                   title="For you"
                   persona="casual"
                   event={displayedFan.events.find((e) => e.sequence === sequence)}

@@ -1,4 +1,5 @@
 import AskCrew from "./AskCrew";
+import LoadingState from "./LoadingState";
 import { useState } from "react";
 import { involvementLabel, playerName } from "./players";
 
@@ -405,173 +406,169 @@ export function ViewPanel({
         </div>
         <span className="connection">{status}</span>
       </div>
-      <div className="broadcast">
-        <Pitch
-          events={visibleEvents}
-          running={running}
-          favourite={persona === "casual" ? favourite : undefined}
-          involvement={involvementLabel(visibleEvents, favourite, language)}
-          trail={trail}
-        />
-        <div className="vignette" />
-        {!event && (
-          <span className="pitch-status" role="status">
-            {status === "reconnecting"
-              ? "Reconnecting…"
-              : "Connecting to the crew…"}
-          </span>
-        )}
-        {safe && (
-          <div className="safe-guides">
-            <span>90% broadcast safe</span>
-          </div>
-        )}
-      </div>
-      <div className="pitch-legend" aria-label="Pitch marks">
-        <span><svg viewBox="0 0 24 16" aria-hidden="true"><path d="M2 8h20" /></svg>Pass</span>
-        <span><svg viewBox="0 0 24 16" aria-hidden="true"><path d="M2 8h20" strokeDasharray="3 3" /></svg>Incomplete pass</span>
-        <span><svg viewBox="0 0 24 16" aria-hidden="true"><circle cx="12" cy="8" r="6" strokeDasharray="2 2" /></svg>Referenced event</span>
-        <span><svg className="latest-event" viewBox="0 0 24 16" aria-hidden="true"><circle cx="12" cy="8" r="6" strokeDasharray="2 2" /></svg>Latest referenced</span>
-      </div>
-      <div className={`view-body ${explained || recap ? "explaining" : ""}`}>
-        {!explained && recap && (
-          <RecapCard
-            cue={recap}
-            focus={focus}
-            onFocus={setFocus}
-            onExplain={explain(recap)}
+      <div className="match-content">
+        <div className="broadcast">
+          <Pitch
+            events={visibleEvents}
+            running={running}
+            favourite={persona === "casual" ? favourite : undefined}
+            involvement={involvementLabel(visibleEvents, favourite, language)}
+            trail={trail}
           />
-        )}
-        {explained && (
-          <ProvenancePanel
-            cue={explained}
-            events={events}
-            focus={focus}
-            onFocus={setFocus}
-            onClose={() => {
-              setExplained(undefined);
-              setFocus(undefined);
-            }}
-          />
-        )}
-        {persona === "analyst" && (
-          <div className="stat-row" aria-label="Match metrics">
-            <div>
-              <b>{homeXg.toFixed(2)}</b>
-              <span>xG · {awayXg.toFixed(2)}</span>
+          <div className="vignette" />
+          {safe && (
+            <div className="safe-guides">
+              <span>90% broadcast safe</span>
             </div>
-            <div>
-              <b>
-                {possession.length < MIN_POSSESSION_EVENTS
-                  ? "—"
-                  : `${homePossession.toFixed(0)}%`}
-              </b>
-              <span>Possession</span>
-            </div>
-            <div>
-              <b>
-                {defensiveActions
-                  ? ((passes.length - homePasses) / defensiveActions).toFixed(1)
-                  : "—"}
-              </b>
-              <span title="Opposition passes per home defensive action">
-                PPDA · home
-              </span>
-            </div>
-            <div>
-              <b>
-                {territory.length < MIN_TILT_PASSES
-                  ? "—"
-                  : `${fieldTilt.toFixed(0)}%`}
-              </b>
-              <span>Field tilt · final third</span>
-            </div>
-          </div>
-        )}
-        <div className="lower-thirds">
-          {primary && (
-            <CueCard
-              key={primary.template}
-              referenced={primary.evidence_event_ids.some((id) => askIds?.includes(id))}
-              cue={primary}
-              onExplain={explain(primary)}
-            />
-          )}
-          {persona === "casual" && whatif && (
-            <CueCard
-              key={whatif.cue_id}
-              referenced={whatif.evidence_event_ids.some((id) => askIds?.includes(id))}
-              cue={whatif}
-              onExplain={explain(whatif)}
-            />
-          )}
-          {!whatif && storyline && (
-            <details className="storyline-detail">
-              <summary>
-                {String(storyline.payload.headline || "Storyline")}
-              </summary>
-              <CueCard
-                key={storyline.template}
-                cue={storyline}
-                onExplain={explain(storyline)}
-              />
-            </details>
           )}
         </div>
-        {
-          <div className="momentum">
-            <div>
-              <span>
-                {labelsFor(persona === "casual" ? language : "en").dominance}
-              </span>
-              <b>
-                {momentum > 0
-                  ? "NBR"
-                  : momentum < 0
-                    ? "SPA"
-                    : labelsFor(persona === "casual" ? language : "en").even}
-              </b>
+        <div className="pitch-legend" aria-label="Pitch marks">
+          <span><svg viewBox="0 0 24 16" aria-hidden="true"><path d="M2 8h20" /></svg>Pass</span>
+          <span><svg viewBox="0 0 24 16" aria-hidden="true"><path d="M2 8h20" strokeDasharray="3 3" /></svg>Incomplete pass</span>
+          <span><svg viewBox="0 0 24 16" aria-hidden="true"><circle cx="12" cy="8" r="6" strokeDasharray="2 2" /></svg>Referenced event</span>
+          <span><svg className="latest-event" viewBox="0 0 24 16" aria-hidden="true"><circle cx="12" cy="8" r="6" strokeDasharray="2 2" /></svg>Latest referenced</span>
+        </div>
+        <div className={`view-body ${explained || recap ? "explaining" : ""}`}>
+          {!explained && recap && (
+            <RecapCard
+              cue={recap}
+              focus={focus}
+              onFocus={setFocus}
+              onExplain={explain(recap)}
+            />
+          )}
+          {explained && (
+            <ProvenancePanel
+              cue={explained}
+              events={events}
+              focus={focus}
+              onFocus={setFocus}
+              onClose={() => {
+                setExplained(undefined);
+                setFocus(undefined);
+              }}
+            />
+          )}
+          {persona === "analyst" && (
+            <div className="stat-row" aria-label="Match metrics">
+              <div>
+                <b>{homeXg.toFixed(2)}</b>
+                <span>xG · {awayXg.toFixed(2)}</span>
+              </div>
+              <div>
+                <b>
+                  {possession.length < MIN_POSSESSION_EVENTS
+                    ? "—"
+                    : `${homePossession.toFixed(0)}%`}
+                </b>
+                <span>Possession</span>
+              </div>
+              <div>
+                <b>
+                  {defensiveActions
+                    ? ((passes.length - homePasses) / defensiveActions).toFixed(1)
+                    : "—"}
+                </b>
+                <span title="Opposition passes per home defensive action">
+                  PPDA · home
+                </span>
+              </div>
+              <div>
+                <b>
+                  {territory.length < MIN_TILT_PASSES
+                    ? "—"
+                    : `${fieldTilt.toFixed(0)}%`}
+                </b>
+                <span>Field tilt · final third</span>
+              </div>
             </div>
-            <svg
-              className="dominance-bars"
-              viewBox="0 0 320 32"
-              preserveAspectRatio="none"
-              role="img"
-              aria-label="Recent possession by team"
-            >
-              <line x1="0" y1="16" x2="320" y2="16" stroke="var(--rule)" />
-              {events
-                .filter(
-                  (e) => e.sequence <= (event?.sequence ?? -1) && e.team_id,
-                )
-                .slice(-32)
-                .map((e, i) => {
-                  const home = e.team_id?.endsWith("_HOME");
-                  const height =
-                    e.event_type === "shot" || e.event_type === "goal"
-                      ? 14
-                      : e.event_type === "pass"
-                        ? 8
-                        : 4;
-                  return (
-                    <rect
-                      key={e.event_id}
-                      x={i * 10}
-                      y={home ? 16 - height : 16}
-                      width="8"
-                      height={height}
-                      fill={home ? "var(--home)" : "var(--away)"}
-                    />
-                  );
-                })}
-            </svg>
+          )}
+          <div className="lower-thirds">
+            {primary && (
+              <CueCard
+                key={primary.template}
+                referenced={primary.evidence_event_ids.some((id) => askIds?.includes(id))}
+                cue={primary}
+                onExplain={explain(primary)}
+              />
+            )}
+            {persona === "casual" && whatif && (
+              <CueCard
+                key={whatif.cue_id}
+                referenced={whatif.evidence_event_ids.some((id) => askIds?.includes(id))}
+                cue={whatif}
+                onExplain={explain(whatif)}
+              />
+            )}
+            {!whatif && storyline && (
+              <details className="storyline-detail">
+                <summary>
+                  {String(storyline.payload.headline || "Storyline")}
+                </summary>
+                <CueCard
+                  key={storyline.template}
+                  cue={storyline}
+                  onExplain={explain(storyline)}
+                />
+              </details>
+            )}
           </div>
-        }
-        {persona === "casual" && <AskCrew
-          key={`${seed}-${language}`}
-          seed={seed} uptoEventId={event?.event_id} language={language}
-          onCitations={(ids) => { setAskIds(ids.length ? ids : undefined); setExplained(undefined); setFocus(undefined); }}
-        />}
+          {
+            <div className="momentum">
+              <div>
+                <span>
+                  {labelsFor(persona === "casual" ? language : "en").dominance}
+                </span>
+                <b>
+                  {momentum > 0
+                    ? "NBR"
+                    : momentum < 0
+                      ? "SPA"
+                      : labelsFor(persona === "casual" ? language : "en").even}
+                </b>
+              </div>
+              <svg
+                className="dominance-bars"
+                viewBox="0 0 320 32"
+                preserveAspectRatio="none"
+                role="img"
+                aria-label="Recent possession by team"
+              >
+                <line x1="0" y1="16" x2="320" y2="16" stroke="var(--rule)" />
+                {events
+                  .filter(
+                    (e) => e.sequence <= (event?.sequence ?? -1) && e.team_id,
+                  )
+                  .slice(-32)
+                  .map((e, i) => {
+                    const home = e.team_id?.endsWith("_HOME");
+                    const height =
+                      e.event_type === "shot" || e.event_type === "goal"
+                        ? 14
+                        : e.event_type === "pass"
+                          ? 8
+                          : 4;
+                    return (
+                      <rect
+                        key={e.event_id}
+                        x={i * 10}
+                        y={home ? 16 - height : 16}
+                        width="8"
+                        height={height}
+                        fill={home ? "var(--home)" : "var(--away)"}
+                      />
+                    );
+                  })}
+              </svg>
+            </div>
+          }
+          {persona === "casual" && <AskCrew
+            key={`${seed}-${language}`}
+            seed={seed} uptoEventId={event?.event_id} language={language}
+            onCitations={(ids) => { setAskIds(ids.length ? ids : undefined); setExplained(undefined); setFocus(undefined); }}
+          />}
+        </div>
+        <LoadingState waiting={!event} reconnecting={status === "reconnecting"} />
       </div>
     </section>
   );

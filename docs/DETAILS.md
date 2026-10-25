@@ -410,6 +410,11 @@ recorded changes take precedence so they are not applied twice.
 
 ### Calm replay controls
 
+While a panel has no match event, a translucent loading scrim covers its pitch and
+content below, leaving the header controls available. It appears after 250 ms,
+stays visible for at least 400 ms, then fades out over 180 ms. Reconnection uses
+the same timing; reduced motion disables the spinner animation and fade.
+
 Choose a seed, speed, language and fictional favourite player in the header; press **D** to
 show broadcast safe areas. The For you card retains the latest What-If result until a newer
 simulation arrives. Pitch player motion is a seeded formation visualisation. Analyst possession

@@ -1209,13 +1209,57 @@ header {
 .commentary-toggle b {
   font-weight: 600;
 }
-.pitch-status {
+.match-content {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.loading-scrim {
   position: absolute;
-  left: var(--space-3);
-  bottom: var(--space-2);
-  font-size: var(--text-xs);
-  color: var(--secondary);
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: rgb(255 255 255 / 80%);
+  opacity: 1;
+  transition: opacity 180ms ease-out;
+}
+.loading-scrim.is-fading {
+  opacity: 0;
   pointer-events: none;
+}
+.loading-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-6);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  color: var(--ink);
+  text-align: center;
+}
+.loading-spinner {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: var(--secondary);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 42 57;
+  animation: loading-spin 900ms linear infinite;
+}
+@keyframes loading-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .loading-spinner { animation: none; }
+  .loading-scrim { transition: none; }
 }
 
 /* Keep the match and recovery history within the broadcast viewport. */

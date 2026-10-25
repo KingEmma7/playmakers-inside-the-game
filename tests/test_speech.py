@@ -258,3 +258,34 @@ def test_azure_429_is_busy_and_not_cached(monkeypatch: pytest.MonkeyPatch) -> No
     assert response.status_code == 429
     assert response.json() == {"detail": "busy"}
     assert not speech.cache
+
+
+def test_default_client_limit_allows_paced_speech_and_busy_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configure(monkeypatch)
+    monkeypatch.delenv("PLAYMAKERS_SPEECH_PER_MINUTE", raising=False)
+    monkeypatch.delenv("PLAYMAKERS_SPEECH_TOTAL_PER_MINUTE", raising=False)
+    now = [0.0]
+    limiter = speech.RateLimiter.for_speech()
+    limiter.clock = lambda: now[0]
+    monkeypatch.setattr(speech, "limiter", limiter)
+    monkeypatch.setattr(speech, "azure_bucket", speech.AzureSpeechBucket(lambda: now[0]))
+    monkeypatch.setattr(speech, "entra_token", lambda: "tok")
+
+    async def stub(*args, **kwargs):
+        return b"mp3"
+
+    monkeypatch.setattr(speech, "synthesize", stub)
+    client = TestClient(app)
+    # Full nine-minute match, cold cache: no client throttling at 18/min.
+    for i in range(162):
+        now[0] = i * 3.4
+        assert client.post("/speech/tts", json={"text": f"Fresh play {i}."}).status_code == 200
+    assert limiter.per_client == 40
+    assert speech.azure_bucket.per_minute == 18
+    # A transient bucket refusal remains distinct from the character cap.
+    speech.azure_bucket.tokens = 0
+    assert client.post("/speech/tts", json={"text": "Retry me."}).json() == {"detail": "busy"}
+    now[0] += 3.4
+    assert client.post("/speech/tts", json={"text": "Retry me."}).status_code == 200

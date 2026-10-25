@@ -495,3 +495,54 @@ and identical spoken text for ten seconds (including pending and active speech).
 Ask the crew lists its cited event numbers beneath the answer and shares the existing
 pitch evidence rings across both views. Rule-based goal answers include the minute and
 cite a preceding completed pass to the scorer when the recorded sequence supports it.
+
+## Commentary scheduling measurement
+
+`cd web && npx vitest run src/commentary-timeline.test.ts` replays the captured
+seed-382 English fan feed through the real queue and a deterministic Azure-like
+speaker (400 ms synthesis, audio at 14.5 characters/second plus 300 ms, shared
+18/minute token bucket). Reports go to `artifacts/commentary/`. The frozen queue
+in `web/src/test-fixtures/voice-before.ts` preserves the pre-fix baseline. Gaps
+include startup and the tail through full time; audio after full time is clipped.
+The fixture uses actual local API wall offsets at 10×, including workflow overhead,
+with the default H09 favourite and no Azure credentials. It contains both writers'
+captions, including duplicates; the queue handles deduplication itself.
+
+To re-record, start the local API on port 8020, then run
+`cd web && node scripts/commentary-record.mjs --record` (about ten minutes).
+This overwrites the compact fixture. No cloud services are needed.
+
+Azure combines up to three fresh whole captions per request, aims for 48–68
+characters (about 3.6–5 seconds), and prefetches one batch during the last second
+of the current clip. A single longer caption stays intact. Pending key moments
+replace prefetched routine audio. Busy responses from either server limiter retry
+on Azure after one token interval, rebuilding routine batches from fresh arrivals.
+Only hard failures or the daily cap select browser speech; browser speech has no
+request pacing. At 50×, routine speech remains intentionally disabled.
+
+The process-wide 18/minute Azure bucket and default 40/minute per-client limiter
+remain unchanged. The 60,000-character daily cap remains unchanged: 7,643 characters per cold-cache 10× match permits seven complete matches/day;
+60 matches/month (two/day) use 458,580 characters, under the 500,000 F0
+monthly allowance. The daily cap alone does not enforce a monthly limit. Cache
+hits cost no characters; process restarts reset the in-memory budget.
+
+Measured over 3,310 cues and 571.794 seconds (kickoff to full time):
+
+| 10× Azure simulation | Max gap | p95 gap | Median gap | Speaking | Requests | Characters |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Before | 1.959 s | 1.640 s | 1.269 s | 69.00% | 157 | 5,057 |
+| After | 1.959 s | 1.169 s | 0.399 s | 97.98% | 138 | 7,643 |
+| Before, one injected busy response | 4.424 s | 1.658 s | 1.311 s | 68.54% | 157 | 5,023 |
+| After, one injected busy response | 2.906 s | 1.959 s | 0.399 s | 97.50% | 138 | 7,608 |
+
+The original scheduler leaves dead air because its median 2.16-second captions
+are fetched serially and routine starts are spaced by 3.4 seconds. Batching raises
+the median utterance to 4.23 seconds and prefetch overlaps synthesis with playback.
+The unthrottled 10× baseline has zero bucket refusals and no long blackout; it does
+**not** establish the cause of the reported live-site silence. Injecting a busy
+response demonstrates the old drop-on-busy failure mechanism, not evidence that
+Azure actually throttled the reported session. The separate 50× policy test has a
+34.14-second maximum gap (same recorded arrivals scaled by five): routine lines
+are deliberately suppressed. Browser fallback at 10× has 100% speech coverage in
+the duration model. Cloud audio, networking and actual browser playback are not
+measured by this offline harness.

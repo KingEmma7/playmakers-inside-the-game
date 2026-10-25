@@ -5,6 +5,7 @@ import type { MatchEvent, OverlayCue } from "./stream";
 import {
   AzureSpeaker,
   BrowserSpeaker,
+  SpeechBusy,
   CommentaryQueue,
   recoveryLine,
   useVoice,
@@ -244,7 +245,7 @@ describe("full-match commentary queue", () => {
     f.queue.setSpeed(50); f.queue.tick();
     expect(f.played).toEqual(["key"]); expect(f.queue.stats.dropped).toBe(1);
   });
-  it.each([429, 503, 502])("falls back for the entire session after HTTP %s", async (status) => {
+  it.each([503, 502])("falls back for the entire session after HTTP %s", async (status) => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("unavailable", { status }));
     vi.stubGlobal("fetch", fetchMock);
     const fallback: Speaker = { name: "browser", speak: vi.fn().mockResolvedValue(undefined), cancel: vi.fn() };
@@ -349,31 +350,30 @@ describe("Azure rate pressure", () => {
     expect(speaker.speak).toHaveBeenCalledTimes(4);
   });
 
-  it("drops busy routines, speaks busy key lines in browser, and keeps trying Azure", async () => {
-    let now = 0;
-    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(
-      new Response(JSON.stringify({ detail: "busy" }), { status: 429 }),
-    ));
-    vi.stubGlobal("fetch", fetchMock);
-    const fallback: Speaker = {
-      name: "browser", speak: vi.fn().mockResolvedValue(undefined), cancel: vi.fn(),
-    };
-    const speaker = new AzureSpeaker("http://api", fallback);
-    expect(speaker.routineIntervalMs).toBe(3400);
-    const queue = new CommentaryQueue(speaker, () => now);
-    queue.enqueue(line("routine")); queue.tick(); await flush();
-    expect(queue.stats).toMatchObject({ dropped: 1, spoken: 0 });
-    expect(fallback.speak).not.toHaveBeenCalled();
-    // Explicit priority also protects key lines with normal emphasis.
-    queue.enqueue({ ...line("key", true), emphasis: "normal" }); queue.tick(); await flush();
-    expect(fallback.speak).toHaveBeenCalledWith("key", "en", "normal");
-    expect(queue.stats).toMatchObject({ dropped: 1, spoken: 1 });
-    now = 3400;
-    queue.enqueue(line("next")); queue.tick(); await flush();
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(queue.stats).toMatchObject({ dropped: 2, spoken: 1 });
-    expect(speaker.name).toBe("azure");
-  });
+  it.each(["busy", "Too many speech requests; try again shortly"])(
+    "retries transient %s on Azure for routine and key lines", async (detail) => {
+      let now = 0;
+      const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(
+        new Response(JSON.stringify({ detail }), { status: 429 }),
+      ));
+      vi.stubGlobal("fetch", fetchMock);
+      const fallback: Speaker = {
+        name: "browser", speak: vi.fn().mockResolvedValue(undefined), cancel: vi.fn(),
+      };
+      const speaker = new AzureSpeaker("http://api", fallback);
+      const queue = new CommentaryQueue(speaker, () => now);
+      queue.enqueue(line("routine")); queue.tick(); await flush();
+      expect(queue.stats).toMatchObject({ dropped: 0, spoken: 0 });
+      expect(queue.length).toBe(1);
+      queue.enqueue({ ...line("key", true), emphasis: "normal" });
+      now = 3399; queue.tick(); await flush();
+      expect(fetchMock).toHaveBeenCalledOnce();
+      now = 3400; queue.tick(); await flush();
+      expect(JSON.parse(fetchMock.mock.calls[1][1].body).text).toBe("key");
+      expect(fallback.speak).not.toHaveBeenCalled();
+      expect(speaker.name).toBe("azure");
+      queue.clear();
+    });
 
   it("uses browser for the session after the daily cap and removes pacing", async () => {
     vi.useFakeTimers();
@@ -391,11 +391,12 @@ describe("Azure rate pressure", () => {
     const speaker = new AzureSpeaker("http://api", fallback);
     // Keep the queue clock fixed: the next routine must start without Azure pacing.
     const queue = new CommentaryQueue(speaker, () => 0);
-    queue.enqueue(line("one")); queue.enqueue(line("two")); queue.tick();
+    queue.enqueue(line("one")); queue.tick();
     // Drain async response parsing and promise continuations without counting microtasks.
     await vi.advanceTimersByTimeAsync(0);
     expect(speaker.name).toBe("browser");
-    expect(fallback.speak).toHaveBeenCalledExactlyOnceWith("one", "en", "normal");
+    queue.enqueue(line("two"));
+    expect(fallback.speak).toHaveBeenCalledExactlyOnceWith("one.", "en", "normal");
     expect(queue.stats.spoken).toBe(0);
     expect(queue.length).toBe(1);
 
@@ -409,7 +410,115 @@ describe("Azure rate pressure", () => {
     finish?.();
     await vi.advanceTimersByTimeAsync(0);
     expect(queue.stats.spoken).toBe(2);
-    expect(queue.stats.log).toEqual(["one", "two"]);
+    expect(queue.stats.log).toEqual(["one.", "two"]);
     expect(fetchMock).toHaveBeenCalledOnce();
   });
+});
+
+function preparedFixture() {
+  let now = 0;
+  const requests: string[] = [], played: string[] = [];
+  const releases: (() => void)[] = [];
+  const disposals: string[] = [];
+  const speaker: Speaker = {
+    name: "azure", routineIntervalMs: 3400,
+    speak: vi.fn(), cancel: vi.fn(),
+    prepare: vi.fn(async (text) => {
+      requests.push(text);
+      return { durationMs: 4500,
+        play: () => new Promise<void>(resolve => { played.push(text); releases.push(resolve); }),
+        dispose: () => { disposals.push(text); },
+      };
+    }),
+  };
+  const queue = new CommentaryQueue(speaker, () => now);
+  return { queue, speaker, requests, played, disposals,
+    at: async (ms: number) => { now = ms; queue.tick(); await flush(); },
+    finish: async () => { releases.shift()?.(); await flush(); },
+  };
+}
+
+describe("Azure batches and prefetch", () => {
+  it("joins at most three freshest whole captions in event order, dropping backlog", async () => {
+    const f = preparedFixture();
+    for (const text of ["Old backlog", "Still old", "Alba passes", "Kaito turns", "Marin runs"])
+      f.queue.enqueue({ ...line(text), text });
+    await f.at(0);
+    expect(f.requests).toEqual(["Alba passes. Kaito turns. Marin runs."]);
+    expect(f.queue.stats.dropped).toBe(2);
+    await f.finish();
+    expect(f.queue.stats.spoken).toBe(3);
+  });
+  it("fetches next audio while current plays and starts it immediately on completion", async () => {
+    const f = preparedFixture();
+    f.queue.enqueue(line("Opening play")); await f.at(0);
+    f.queue.enqueue(line("Next play")); await f.at(3499);
+    expect(f.requests).toHaveLength(1);
+    await f.at(3500);
+    expect(f.requests).toEqual(["Opening play.", "Next play."]);
+    expect(f.played).toEqual(["Opening play."]);
+    await f.at(4500); await f.finish();
+    expect(f.played).toEqual(["Opening play.", "Next play."]);
+    f.queue.clear();
+  });
+  it("discards stale prefetched routines and gives key moments priority", async () => {
+    const f = preparedFixture();
+    f.queue.enqueue(line("Opening")); await f.at(0);
+    f.queue.enqueue(line("Old routine")); await f.at(3500);
+    f.queue.enqueue(line("Goal!", true)); await f.at(3600);
+    expect(f.disposals).toContain("Old routine.");
+    await f.finish();
+    expect(f.played).toEqual(["Opening.", "Goal!"]);
+    f.queue.enqueue(line("Aging")); await f.at(7100);
+    await f.at(16000); await f.finish();
+    expect(f.played).not.toContain("Aging.");
+    f.queue.clear();
+  });
+  it("retries busy with fresh play instead of the rejected backlog", async () => {
+    const f = preparedFixture();
+    vi.mocked(f.speaker.prepare!).mockRejectedValueOnce(new SpeechBusy());
+    f.queue.enqueue(line("Old play")); await f.at(0);
+    expect(f.queue.stats.dropped).toBe(0);
+    await f.at(9000); f.queue.enqueue(line("Fresh play")); await f.at(9000);
+    expect(f.requests).toEqual(["Fresh play."]);
+    expect(f.played).toEqual(["Fresh play."]);
+    expect(f.queue.stats.dropped).toBe(1);
+    f.queue.clear();
+  });
+  it("disposes a late prefetch after cancellation without resurrecting playback", async () => {
+    const f = preparedFixture();
+    let release: ((clip: Awaited<ReturnType<NonNullable<Speaker["prepare"]>>>) => void) | undefined;
+    vi.mocked(f.speaker.prepare!).mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+    f.queue.enqueue(line("Opening")); f.queue.tick(); f.queue.clear();
+    const clip = { durationMs: 4000, play: vi.fn(), dispose: vi.fn() };
+    release?.(clip); await flush();
+    expect(clip.dispose).toHaveBeenCalledOnce();
+    expect(clip.play).not.toHaveBeenCalled();
+  });
+});
+
+it("prepares real Azure audio without playing it and releases prefetched clips on cancel", async () => {
+  const fallback: Speaker = { name: "browser", speak: vi.fn(), cancel: vi.fn() };
+  vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(new Response(new Blob(["mp3"])))));
+  const revoke = vi.fn(), play = vi.fn().mockResolvedValue(undefined), pause = vi.fn();
+  vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: () => "blob:prepared", revokeObjectURL: revoke }));
+  class Audio {
+    duration = 4;
+    play = play;
+    pause = pause;
+  }
+  vi.stubGlobal("Audio", Audio);
+  const speaker = new AzureSpeaker("http://api", fallback);
+  const first = await speaker.prepare("First play", "en");
+  const next = await speaker.prepare("Next play", "en");
+  expect(play).not.toHaveBeenCalled();
+  expect(first.durationMs).toBe(4000);
+  const playing = first.play();
+  expect(play).toHaveBeenCalledOnce();
+  speaker.cancel(); await playing;
+  expect(pause).toHaveBeenCalledTimes(2);
+  expect(revoke).toHaveBeenCalledTimes(2);
+  next.dispose();
+  expect(revoke).toHaveBeenCalledTimes(2);
+  expect(fallback.speak).not.toHaveBeenCalled();
 });

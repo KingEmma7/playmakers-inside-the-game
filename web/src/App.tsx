@@ -73,6 +73,7 @@ export default function App() {
 }
 function Playmakers() {
   const [seed, setSeed] = useState(382);
+  const [citations, setCitations] = useState<{ session: string; ids?: string[] }>();
   const [showOnboarding, setShowOnboarding] = useState(
     () => sessionStorage.getItem("playmakers-onboarding-dismissed") !== "true",
   );
@@ -392,6 +393,8 @@ function Playmakers() {
             <div className="program-area">
               <div className="split-view">
                 <ViewPanel
+                  citedIds={citations?.session === `${seed}-${language}` ? citations.ids : undefined}
+                  onCitations={(ids) => setCitations({ session: `${seed}-${language}`, ids })}
                   title="Analyst"
                   persona="analyst"
                   event={event}
@@ -405,6 +408,8 @@ function Playmakers() {
                 <ViewPanel
                   key={`${seed}-${language}`}
                   seed={seed}
+                  citedIds={citations?.session === `${seed}-${language}` ? citations.ids : undefined}
+                  onCitations={(ids) => setCitations({ session: `${seed}-${language}`, ids })}
                   title="For you"
                   persona="casual"
                   event={displayedFan.events.find((e) => e.sequence === sequence)}

@@ -113,12 +113,37 @@ export function priorityMoment(
   return undefined;
 }
 
+function minutePhrase(minute: string, language: Language): string {
+  if (language === "fr") return `à la ${minute}${minute === "1" ? "re" : "e"} minute`;
+  if (language === "es") return `en el minuto ${minute}`;
+  const n = Number(minute);
+  const suffix = n % 100 >= 11 && n % 100 <= 13 ? "th" :
+    ({ 1: "st", 2: "nd", 3: "rd" }[n % 10] ?? "th");
+  return `in the ${minute}${suffix} minute`;
+}
+
+/** Speech-only copy: keep the broadcast captions untouched. */
+function commentaryText(text: string, language: Language): string {
+  text = text.replace(/(?:Favourite|Favorito|Favori):\s*/gi, "").replace(/[★☆]/g, "").trim();
+  text = text.replace(/^(?:GOAL|BUT|GOL),\s*(.+?)\s+(\d+)[’'′]/i, (_, player: string, minute: string) => {
+    const opening = { en: `Goal! ${player} scores`, fr: `But ! ${player} marque`, es: `¡Gol! ${player} marca` }[language];
+    return `${opening} ${minutePhrase(minute, language)}.`;
+  });
+  if (language === "en") text = text.replace(/(\d+)[’'′] (shot|chance|red card)/g,
+    (_, minute: string, action: string) => `${action} ${minutePhrase(minute, language)}`);
+  text = text.replace(/(?:à la |en el )?(\d+)[’'′]/g,
+    (_, minute: string) => minutePhrase(minute, language));
+  const percent = { en: "percent", es: "por ciento", fr: "pour cent" }[language];
+  return text.replace(/%/g, ` ${percent}`).replace(/→/g, ", ")
+    .replace(/\s+/g, " ").trim();
+}
+
 export function spokenLine(cue: OverlayCue, events: MatchEvent[]): string {
   const moment = priorityMoment(cue, events);
-  if (moment === "recap")
-    return recapText(cue).split("\n").join(" ");
-  if (moment === "what_if") return whatIfQuestion(cue);
-  return `${String(cue.payload.headline ?? "")} ${String(cue.payload.detail ?? "")}`.trim();
+  const text = moment === "recap" ? recapText(cue).split("\n").join(" ") :
+    moment === "what_if" ? whatIfQuestion(cue) :
+    `${String(cue.payload.headline ?? "")} ${String(cue.payload.detail ?? "")}`.trim();
+  return commentaryText(text, cue.language ?? "en");
 }
 
 export type CommentaryLine = {
@@ -138,7 +163,10 @@ declare global {
 export class CommentaryQueue {
   readonly stats: CommentaryDebug = { spoken: 0, dropped: 0, log: [] };
   private pending: Pending[] = [];
+  private seenIds = new Set<string>();
+  private recentText = new Map<string, number>();
   private busy = false;
+  private activeTextKey?: string;
   private generation = 0;
   private speed = 10;
   constructor(
@@ -155,6 +183,19 @@ export class CommentaryQueue {
       this.stats.dropped++;
       return;
     }
+    const now = this.now();
+    for (const [text, at] of this.recentText) {
+      if (now - at >= 10_000) this.recentText.delete(text);
+    }
+    const textKey = `${line.language}:${line.text.trim().replace(/\s+/g, " ")}`;
+    if (this.seenIds.has(line.id) || this.recentText.has(textKey) || this.activeTextKey === textKey ||
+      this.pending.some((pending) => pending.language === line.language && pending.text === line.text)) {
+      this.seenIds.add(line.id);
+      this.stats.dropped++;
+      return;
+    }
+    this.seenIds.add(line.id);
+    this.recentText.set(textKey, now);
     if (this.pending.length >= this.maxLength) {
       const routine = this.pending.findIndex((l) => l.priority === "routine");
       if (routine >= 0) {
@@ -189,6 +230,7 @@ export class CommentaryQueue {
     const line = this.pending.splice(key < 0 ? 0 : key, 1)[0];
     if (!line) return;
     this.busy = true;
+    this.activeTextKey = `${line.language}:${line.text.trim().replace(/\s+/g, " ")}`;
     const generation = this.generation;
     void this.speaker.speak(line.text, line.language, line.emphasis).then(() => {
       if (generation !== this.generation) return;
@@ -197,6 +239,8 @@ export class CommentaryQueue {
       this.stats.log = this.stats.log.slice(-200);
     }).catch(() => {}).finally(() => {
       if (generation !== this.generation) return;
+      if (this.activeTextKey) this.recentText.set(this.activeTextKey, this.now());
+      this.activeTextKey = undefined;
       this.busy = false;
       this.tick();
     });
@@ -204,6 +248,9 @@ export class CommentaryQueue {
   clear() {
     this.generation++;
     this.pending = [];
+    this.seenIds.clear();
+    this.recentText.clear();
+    this.activeTextKey = undefined;
     this.busy = false;
     this.speaker.cancel();
   }

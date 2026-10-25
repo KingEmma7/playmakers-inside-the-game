@@ -228,6 +228,8 @@ export function ViewPanel({
   status,
   favourite = "H09",
   language = "en",
+  citedIds,
+  onCitations,
 }: {
   title: string;
   seed?: number;
@@ -241,9 +243,13 @@ export function ViewPanel({
   status: string;
   favourite?: string;
   language?: string;
+  citedIds?: string[];
+  onCitations?: (ids: string[] | undefined) => void;
 }) {
   const [explained, setExplained] = useState<OverlayCue>();
-  const [askIds, setAskIds] = useState<string[]>();
+  const [localAskIds, setLocalAskIds] = useState<string[]>();
+  const askIds = onCitations ? citedIds : localAskIds;
+  const setAskIds = onCitations ?? setLocalAskIds;
   const [focus, setFocus] = useState<string>();
   const explain = (cue: OverlayCue) => () => {
     setAskIds(undefined);
@@ -564,7 +570,7 @@ export function ViewPanel({
         {persona === "casual" && <AskCrew
           key={`${seed}-${language}`}
           seed={seed} uptoEventId={event?.event_id} language={language}
-          onCitations={(ids) => { setAskIds(ids); setExplained(undefined); setFocus(undefined); }}
+          onCitations={(ids) => { setAskIds(ids.length ? ids : undefined); setExplained(undefined); setFocus(undefined); }}
         />}
       </div>
     </section>

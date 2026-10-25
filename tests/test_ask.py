@@ -195,3 +195,60 @@ def test_cors_post_keeps_origin_allowlist():
     assert client.options("/ask", headers=headers).status_code == 200
     headers["Origin"] = "https://untrusted.invalid"
     assert client.options("/ask", headers=headers).status_code == 400
+
+
+def test_unassisted_seed_goal_includes_minute_without_invented_pass(events):
+    goal = next(e for e in events if e.event_type == "goal")
+    data = post(events, "why did Marin score?", upto=goal.event_id).json()
+    assert "Marin scored with a right foot shot (xG 0.30) in the 2nd minute." == data["answer"]
+    assert set(data["cited_event_ids"]) == {goal.event_id, goal.shot_event_id}
+
+
+@pytest.mark.parametrize(
+    ("language", "expected"),
+    [
+        (
+            "en",
+            "Okafor's pass found Marin, who scored with a right foot shot (xG 0.30) in the 2nd minute.",
+        ),
+        (
+            "fr",
+            "La passe de Okafor a trouvé Marin, qui a marqué sur une frappe du pied droit (xG 0.30) à la 2e minute.",
+        ),
+        (
+            "es",
+            "El pase de Okafor encontró a Marin, que marcó con un remate de pie derecho (xG 0.30) en el minuto 2.",
+        ),
+    ],
+)
+def test_goal_rules_link_preceding_completed_pass(events, language, expected):
+    goal_index = next(i for i, e in enumerate(events) if e.event_type == "goal")
+    prefix = list(events[: goal_index + 1])
+    goal = prefix[-1]
+    carry = prefix[-3]
+    template = next(e for e in events if e.event_type == "pass")
+    assist = template.model_copy(
+        update={
+            "event_id": carry.event_id,
+            "sequence": carry.sequence,
+            "clock_ms": carry.clock_ms,
+            "team_id": goal.scoring_team_id,
+            "from_player_id": "match_382_H09",
+            "to_player_id": goal.scorer_player_id,
+            "completed": True,
+        }
+    )
+    prefix[-3] = assist
+    answer = ask.rules("why did Marin score?", ask.evidence(prefix, "Marin"), language)
+    assert answer.answer == expected
+    assert set(answer.cited_event_ids) == {assist.event_id, goal.shot_event_id, goal.event_id}
+    # An incomplete or opposition pass, stale pass, or different recipient is no assist.
+    for changes in (
+        {"completed": False},
+        {"team_id": "match_382_AWAY"},
+        {"to_player_id": "match_382_H08"},
+        {"clock_ms": 1},
+    ):
+        prefix[-3] = assist.model_copy(update=changes)
+        answer = ask.rules("why did Marin score?", ask.evidence(prefix, "Marin"), language)
+        assert assist.event_id not in answer.cited_event_ids

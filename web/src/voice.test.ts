@@ -74,15 +74,15 @@ describe("voice commentary", () => {
   it.each([
     [
       "en",
-      "If Okafor's 1' shot had been saved: win chance 41% instead of 65%.",
+      "If Okafor's shot in the 1st minute had been saved: win chance 41 percent instead of 65 percent.",
     ],
     [
       "es",
-      "Si el disparo de Okafor en el 1' hubiera sido detenido: probabilidad de victoria 41% en vez de 65%.",
+      "Si el disparo de Okafor en el minuto 1 hubiera sido detenido: probabilidad de victoria 41 por ciento en vez de 65 por ciento.",
     ],
     [
       "fr",
-      "Si le tir de Okafor à la 1' avait été arrêté : chances de victoire 41% au lieu de 65%.",
+      "Si le tir de Okafor à la 1re minute avait été arrêté : chances de victoire 41 pour cent au lieu de 65 pour cent.",
     ],
   ] as const)("reads the panel's named What-If line in %s", (language, expected) => {
     const goal = events[0];
@@ -275,4 +275,47 @@ it("reads only the selected fan language, deduplicates recovery, and cancels on 
   rerender({ ...base, enabled: false, language: "fr" });
   expect(f.speaker.cancel).toHaveBeenCalledTimes(2);
   unmount();
+});
+
+
+describe("speech-only commentator copy", () => {
+  it.each([
+    ["en", "Favourite: ★ GOAL, Marin 2'", "Northbridge Rovers lead 1-0.", "Goal! Marin scores in the 2nd minute. Northbridge Rovers lead 1-0."],
+    ["fr", "Favori: ★ BUT, Marin 2'", "Northbridge Rovers mène 1-0.", "But ! Marin marque à la 2e minute. Northbridge Rovers mène 1-0."],
+    ["es", "Favorito: ★ GOL, Marin 2'", "Northbridge Rovers gana 1-0.", "¡Gol! Marin marca en el minuto 2. Northbridge Rovers gana 1-0."],
+  ] as const)("naturalizes goals in %s without mutating captions", (language, headline, detail, expected) => {
+    const caption = cue({ language, payload: { headline, detail } });
+    expect(spokenLine(caption, events)).toBe(expected);
+    expect(caption.payload).toEqual({ headline, detail });
+  });
+  it.each([[1, "1st"], [2, "2nd"], [3, "3rd"], [11, "11th"], [12, "12th"], [13, "13th"], [21, "21st"]])(
+    "speaks minute %s with the right ordinal", (minute, ordinal) => {
+      expect(spokenLine(cue({ language: "en", payload: { headline: `Chance ${minute}′` } }), []))
+        .toBe(`Chance in the ${ordinal} minute`);
+    });
+});
+
+it("deduplicates cue updates and identical text while pending, active and recently spoken", async () => {
+  const f = fixture();
+  const kickoff = { ...line("kickoff"), text: "Kickoff for Northbridge Rovers." };
+  f.queue.enqueue(kickoff);
+  f.queue.enqueue({ ...kickoff, text: "An updated kickoff." });
+  f.queue.enqueue({ ...kickoff, id: "other-writer" });
+  expect(f.queue.length).toBe(1);
+  f.queue.tick();
+  f.queue.enqueue({ ...kickoff, id: "active-duplicate" });
+  await f.finish();
+  f.advance(9000);
+  f.queue.enqueue({ ...kickoff, id: "recent-duplicate" });
+  f.queue.tick();
+  expect(f.played).toEqual([kickoff.text]);
+  f.advance(1001);
+  f.queue.enqueue({ ...kickoff, text: "Updated again." });
+  f.queue.enqueue({ ...kickoff, id: "later" });
+  f.queue.tick();
+  expect(f.played).toEqual([kickoff.text, kickoff.text]);
+  await f.finish();
+  f.queue.clear();
+  f.queue.enqueue(kickoff); f.queue.tick();
+  expect(f.played).toHaveLength(3);
 });

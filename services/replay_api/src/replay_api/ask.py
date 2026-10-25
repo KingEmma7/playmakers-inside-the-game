@@ -79,13 +79,46 @@ def evidence(events: list[MatchEvent], question: str) -> list[Fact]:
     for goal in goals:
         shot = next((e for e in events if e.event_id == goal.shot_event_id), None)
         name = player_name(goal.scorer_player_id)
+        minute = goal.clock_ms // 60_000 + 1
+        suffix = (
+            "th" if 11 <= minute % 100 <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(minute % 10, "th")
+        )
         detail = f"{name} scored"
         ids = [goal.event_id]
+        assist = None
         if shot and shot.event_type == "shot":
-            detail += f" from a {shot.body_part.replace('_', ' ')} shot (xG {engine.xg(event_id=shot.event_id).xg:.2f})"
+            # Only link the immediately preceding on-ball action, allowing the
+            # scorer's carries and tracking frames between the pass and shot.
+            for previous in reversed(events[: events.index(shot)]):
+                if previous.event_type == "tracking_frame":
+                    continue
+                if previous.event_type == "carry" and previous.player_id == goal.scorer_player_id:
+                    continue
+                if (
+                    previous.event_type == "pass"
+                    and previous.completed
+                    and previous.team_id == goal.scoring_team_id
+                    and previous.to_player_id == goal.scorer_player_id
+                    and 0 <= shot.clock_ms - previous.clock_ms <= 30_000
+                    and (
+                        not goal.assist_player_id
+                        or goal.assist_player_id == previous.from_player_id
+                    )
+                ):
+                    assist = previous
+                break
+            detail += f" with a {shot.body_part.replace('_', ' ')} shot (xG {engine.xg(event_id=shot.event_id).xg:.2f})"
             ids.append(shot.event_id)
-        if goal.assist_player_id:
+        if assist:
+            detail = detail.replace(
+                f"{name} scored",
+                f"{player_name(assist.from_player_id)}'s pass found {name}, who scored",
+                1,
+            )
+            ids.append(assist.event_id)
+        elif goal.assist_player_id:
             detail += f", assisted by {player_name(goal.assist_player_id)}"
+        detail += f" in the {minute}{suffix} minute"
         facts.append(Fact("goals", detail + ".", ids, name))
     passes: dict[str, list[MatchEvent]] = defaultdict(list)
     tackles: dict[str, list[MatchEvent]] = defaultdict(list)
@@ -229,6 +262,10 @@ def rules(question: str, facts: list[Fact], language: Language) -> AskResponse:
             "left foot": "pie izquierdo",
             "head": "cabeza",
             "from a": "con un",
+            "with a": "con un",
+            "with a right foot shot": "con un remate de pie derecho",
+            "with a left foot shot": "con un remate de pie izquierdo",
+            "with a head shot": "con un remate de cabeza",
             "shot": "tiro",
             "assisted by": "asistencia de",
             "shots": "tiros",
@@ -250,6 +287,10 @@ def rules(question: str, facts: list[Fact], language: Language) -> AskResponse:
             "left foot": "pied gauche",
             "head": "tête",
             "from a": "sur un",
+            "with a": "sur un",
+            "with a right foot shot": "sur une frappe du pied droit",
+            "with a left foot shot": "sur une frappe du pied gauche",
+            "with a head shot": "sur une tête",
             "shot": "tir",
             "assisted by": "passe de",
             "shots": "tirs",
@@ -268,6 +309,20 @@ def rules(question: str, facts: list[Fact], language: Language) -> AskResponse:
         translations.get(language, {}).items(), key=lambda p: -len(p[0])
     ):
         answer = answer.replace(original, translated)
+    if language == "es":
+        answer = re.sub(
+            r"(\S+)'s pass found (.+?), who", r"El pase de \1 encontró a \2, que", answer
+        )
+        answer = re.sub(r"in the (\d+)(?:st|nd|rd|th) minute", r"en el minuto \1", answer)
+    elif language == "fr":
+        answer = re.sub(
+            r"(\S+)'s pass found (.+?), who", r"La passe de \1 a trouvé \2, qui", answer
+        )
+        answer = re.sub(
+            r"in the (\d+)(?:st|nd|rd|th) minute",
+            lambda m: f"à la {m[1]}{'re' if m[1] == '1' else 'e'} minute",
+            answer,
+        )
     return AskResponse(
         answer=answer[:400],
         cited_event_ids=list(dict.fromkeys(i for f in chosen for i in f.ids))[:256],

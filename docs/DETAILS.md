@@ -476,3 +476,13 @@ What-If cues carry the triggering player, minute, team and home-team probability
 perspective. The panel names the saved-shot, scored-chance or avoided-red-card alternative
 in English, Spanish or French, using the actual and counterfactual rollout probabilities.
 The latest simulation replaces the previous panel; the bars and Why? evidence stay available.
+
+## Commentary and crew citations
+
+Speech keeps the displayed captions intact while removing favourite labels and stars,
+expanding minute marks and percentages, and turning goal headlines into commentator copy
+in English, Spanish and French. The queue suppresses repeated cue ids for the session
+and identical spoken text for ten seconds (including pending and active speech).
+Ask the crew lists its cited event numbers beneath the answer and shares the existing
+pitch evidence rings across both views. Rule-based goal answers include the minute and
+cite a preceding completed pass to the scorer when the recorded sequence supports it.

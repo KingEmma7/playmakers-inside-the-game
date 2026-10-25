@@ -66,8 +66,9 @@ export default function AskCrew({ seed, uptoEventId, language, onCitations }: {
       {error && <p role="alert">{error}</p>}
       {answer && <div className="ask-answer">
         <p>{answer.answer}</p>
-        <small title={answer.cited_event_ids.join(", ")}>
-          Based on {answer.cited_event_ids.length} events{answer.source === "rules" ? " · Rule-based answer" : ""}
+        <small className="evidence" title={answer.cited_event_ids.join(", ")}>
+          {answer.cited_event_ids.length > 0 && <>From events {answer.cited_event_ids.map((id) => String(Number(id.split(/[:_]/).at(-1)))).join(", ")}</>}
+          {answer.source === "rules" && <span>{answer.cited_event_ids.length > 0 ? " · " : ""}Rule-based answer</span>}
         </small>
         {answer.note && <small>{answer.note}</small>}
       </div>}

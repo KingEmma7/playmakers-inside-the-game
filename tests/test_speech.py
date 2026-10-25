@@ -20,9 +20,11 @@ def isolated_speech(monkeypatch: pytest.MonkeyPatch) -> None:
         "AZURE_SPEECH_RESOURCE_ID",
         "AZURE_SPEECH_ENDPOINT",
         "PLAYMAKERS_DAILY_SPEECH_CHARS",
+        "PLAYMAKERS_SPEECH_AZURE_PER_MINUTE",
     ):
         monkeypatch.delenv(name, raising=False)
     speech.cache.clear()
+    monkeypatch.setattr(speech, "azure_bucket", speech.AzureSpeechBucket())
     monkeypatch.setattr(speech, "budget", speech.SpeechBudget())
     monkeypatch.setattr(speech, "limiter", speech.RateLimiter(1000, 1000))
 
@@ -41,6 +43,7 @@ def test_speech_is_off_without_env_and_never_needs_a_key(monkeypatch: pytest.Mon
         "azure": False,
         "region": None,
         "remaining_daily_chars": 60000,
+        "azure_per_minute": 18,
     }
     response = client.get("/speech/synthesize", params={"text": "Goal"}, headers=HEADERS)
     assert response.status_code == 503
@@ -93,6 +96,7 @@ def test_route_returns_audio_with_a_stubbed_credential(monkeypatch: pytest.Monke
         "azure": True,
         "region": "westeurope",
         "remaining_daily_chars": 60000,
+        "azure_per_minute": 18,
     }
     response = client.get(
         "/speech/synthesize", params={"text": "Goal", "language": "fr"}, headers=HEADERS
@@ -196,3 +200,61 @@ def test_lru_cache_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
         assert client.post("/speech/tts", json={"text": text}).status_code == 200
     assert calls == ["one", "two", "three", "two"]
     assert len(speech.cache) == 2
+
+
+def test_azure_bucket_is_shared_cache_is_free_and_tokens_refill(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configure(monkeypatch)
+    monkeypatch.setenv("PLAYMAKERS_SPEECH_AZURE_PER_MINUTE", "2")
+    now = [0.0]
+    monkeypatch.setattr(speech, "azure_bucket", speech.AzureSpeechBucket(lambda: now[0]))
+    monkeypatch.setattr(speech, "entra_token", lambda: "tok")
+    calls: list[str] = []
+
+    async def stub(settings, text, *args, **kwargs):
+        calls.append(text)
+        return b"mp3"
+
+    monkeypatch.setattr(speech, "synthesize", stub)
+    client = TestClient(app)
+    for text in ("one", "two", "one"):
+        assert client.post("/speech/tts", json={"text": text}).status_code == 200
+    # A different viewer still shares the same Azure allowance.
+    response = client.post(
+        "/speech/tts", json={"text": "three"}, headers={"X-Forwarded-For": "other"}
+    )
+    assert response.status_code == 429
+    assert response.json() == {"detail": "busy"}
+    assert calls == ["one", "two"]
+    assert client.get("/speech/config").json()["remaining_daily_chars"] == 59994
+    assert client.get("/speech/config").json()["azure_per_minute"] == 2
+    now[0] = 30
+    assert client.post("/speech/tts", json={"text": "three"}).status_code == 200
+    assert client.post("/speech/tts", json={"text": "four"}).status_code == 429
+    now[0] = 600
+    assert speech.azure_bucket.acquire()
+    assert speech.azure_bucket.acquire()
+    assert not speech.azure_bucket.acquire()
+
+
+def test_azure_429_is_busy_and_not_cached(monkeypatch: pytest.MonkeyPatch) -> None:
+    configure(monkeypatch)
+    monkeypatch.setattr(speech, "entra_token", lambda: "tok")
+    original = speech.synthesize
+
+    async def stub(settings, text, language, token, **kwargs):
+        return await original(
+            settings,
+            text,
+            language,
+            token,
+            httpx.MockTransport(lambda request: httpx.Response(429)),
+            **kwargs,
+        )
+
+    monkeypatch.setattr(speech, "synthesize", stub)
+    response = TestClient(app).post("/speech/tts", json={"text": "Goal"})
+    assert response.status_code == 429
+    assert response.json() == {"detail": "busy"}
+    assert not speech.cache

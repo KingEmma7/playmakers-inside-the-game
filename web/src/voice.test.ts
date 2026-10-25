@@ -127,7 +127,7 @@ describe("voice commentary", () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ azure: true, region: "westeurope" })),
+        new Response(JSON.stringify({ azure: true, region: "westeurope", azure_per_minute: 12 })),
       )
       .mockResolvedValueOnce(new Response(new Blob(["mp3"])));
     vi.stubGlobal("fetch", fetchMock);
@@ -149,6 +149,7 @@ describe("voice commentary", () => {
     vi.stubGlobal("Audio", FakeAudio);
     const speaker = await chooseSpeaker("http://api");
     expect(speaker).toBeInstanceOf(AzureSpeaker);
+    expect(speaker.routineIntervalMs).toBe(5000);
     await speaker.speak("Goal", "en");
     const [url, init] = fetchMock.mock.calls[1];
     expect(url).toBe("http://api/speech/tts");
@@ -261,17 +262,17 @@ it("reads only the selected fan language, deduplicates recovery, and cancels on 
     traces: [], session: "match7", kill: undefined as string | undefined,
   };
   const { rerender, unmount } = renderHook((props: Parameters<typeof useVoice>[0]) => useVoice(props), { initialProps: base });
-  expect(f.speaker.speak).toHaveBeenCalledWith(spokenLine(base.cues[0], events), "en", "normal");
+  expect(f.speaker.speak).toHaveBeenCalledWith(spokenLine(base.cues[0], events), "en", "normal", "routine");
   await act(async () => { await f.finish(); });
   rerender({ ...base, kill: "tactics@1" });
-  expect(f.speaker.speak).toHaveBeenCalledWith(recoveryLine("agent_down", "en"), "en", "big");
+  expect(f.speaker.speak).toHaveBeenCalledWith(recoveryLine("agent_down", "en"), "en", "big", "key");
   await act(async () => { await f.finish(); });
   const calls = vi.mocked(f.speaker.speak).mock.calls.length;
   rerender({ ...base, kill: "tactics@1", cues: [...base.cues] });
   expect(f.speaker.speak).toHaveBeenCalledTimes(calls);
   rerender({ ...base, language: "fr" });
   expect(f.speaker.cancel).toHaveBeenCalledOnce();
-  expect(f.speaker.speak).toHaveBeenLastCalledWith(spokenLine(base.cues[1], events), "fr", "normal");
+  expect(f.speaker.speak).toHaveBeenLastCalledWith(spokenLine(base.cues[1], events), "fr", "normal", "routine");
   rerender({ ...base, enabled: false, language: "fr" });
   expect(f.speaker.cancel).toHaveBeenCalledTimes(2);
   unmount();
@@ -318,4 +319,74 @@ it("deduplicates cue updates and identical text while pending, active and recent
   f.queue.clear();
   f.queue.enqueue(kickoff); f.queue.tick();
   expect(f.played).toHaveLength(3);
+});
+
+
+describe("Azure rate pressure", () => {
+  it("paces routine starts, lets key lines bypass pacing, and leaves browser unpaced", async () => {
+    let now = 0;
+    let browser = false;
+    const speaker: Speaker = {
+      get name() { return browser ? "browser" : "azure"; },
+      routineIntervalMs: 5000,
+      speak: vi.fn().mockResolvedValue(undefined), cancel: vi.fn(),
+    };
+    const queue = new CommentaryQueue(speaker, () => now);
+    queue.enqueue(line("first")); queue.tick(); await flush();
+    queue.enqueue(line("second")); queue.tick(); await flush();
+    expect(speaker.speak).toHaveBeenCalledTimes(1);
+    queue.enqueue(line("key", true)); queue.tick(); await flush();
+    expect(speaker.speak).toHaveBeenLastCalledWith("key", "en", "goal", "key");
+    now = 4999; queue.tick(); await flush();
+    expect(speaker.speak).toHaveBeenCalledTimes(2);
+    now = 5000; queue.tick(); await flush();
+    expect(speaker.speak).toHaveBeenLastCalledWith("second", "en", "normal", "routine");
+    browser = true;
+    queue.enqueue(line("browser")); queue.tick(); await flush();
+    expect(speaker.speak).toHaveBeenCalledTimes(4);
+  });
+
+  it("drops busy routines, speaks busy key lines in browser, and keeps trying Azure", async () => {
+    let now = 0;
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(
+      new Response(JSON.stringify({ detail: "busy" }), { status: 429 }),
+    ));
+    vi.stubGlobal("fetch", fetchMock);
+    const fallback: Speaker = {
+      name: "browser", speak: vi.fn().mockResolvedValue(undefined), cancel: vi.fn(),
+    };
+    const speaker = new AzureSpeaker("http://api", fallback);
+    expect(speaker.routineIntervalMs).toBe(3400);
+    const queue = new CommentaryQueue(speaker, () => now);
+    queue.enqueue(line("routine")); queue.tick(); await flush();
+    expect(queue.stats).toMatchObject({ dropped: 1, spoken: 0 });
+    expect(fallback.speak).not.toHaveBeenCalled();
+    // Explicit priority also protects key lines with normal emphasis.
+    queue.enqueue({ ...line("key", true), emphasis: "normal" }); queue.tick(); await flush();
+    expect(fallback.speak).toHaveBeenCalledWith("key", "en", "normal");
+    expect(queue.stats).toMatchObject({ dropped: 1, spoken: 1 });
+    now = 3400;
+    queue.enqueue(line("next")); queue.tick(); await flush();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(queue.stats).toMatchObject({ dropped: 2, spoken: 1 });
+    expect(speaker.name).toBe("azure");
+  });
+
+  it("uses browser for the session after the daily cap and removes pacing", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ detail: "Daily speech character cap reached; use browser commentary" }),
+      { status: 429 },
+    ));
+    vi.stubGlobal("fetch", fetchMock);
+    const fallback: Speaker = {
+      name: "browser", speak: vi.fn().mockResolvedValue(undefined), cancel: vi.fn(),
+    };
+    const speaker = new AzureSpeaker("http://api", fallback);
+    const queue = new CommentaryQueue(speaker, () => 0);
+    queue.enqueue(line("one")); queue.enqueue(line("two")); queue.tick(); await flush();
+    expect(speaker.name).toBe("browser");
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fallback.speak).toHaveBeenCalledTimes(2);
+    expect(queue.stats.spoken).toBe(2);
+  });
 });

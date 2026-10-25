@@ -7,7 +7,8 @@ export type Language = "en" | "es" | "fr";
 export type Emphasis = "normal" | "goal" | "big";
 export interface Speaker {
   readonly name: "browser" | "azure";
-  speak(text: string, language: Language, emphasis?: Emphasis): Promise<void>;
+  readonly routineIntervalMs?: number;
+  speak(text: string, language: Language, emphasis?: Emphasis, priority?: "key" | "routine"): Promise<void>;
   cancel(): void;
 }
 const LOCALES = { en: "en-GB", es: "es-ES", fr: "fr-FR" };
@@ -37,15 +38,20 @@ export class BrowserSpeaker implements Speaker {
   }
 }
 
+export class SpeechBusy extends Error {}
+
 export class AzureSpeaker implements Speaker {
-  readonly name = "azure";
+  get name(): "azure" | "browser" { return this.failed ? "browser" : "azure"; }
+  get routineIntervalMs() { return Math.ceil(60000 / this.perMinute / 100) * 100; }
   private audio?: HTMLAudioElement;
   private controller?: AbortController;
   private finish?: () => void;
   private generation = 0;
   private failed = false;
-  constructor(private readonly apiBase: string, private readonly fallback: Speaker = new BrowserSpeaker()) {}
-  async speak(text: string, language: Language, emphasis: Emphasis = "normal") {
+  constructor(private readonly apiBase: string, private readonly fallback: Speaker = new BrowserSpeaker(),
+    private readonly perMinute = 18) {}
+  async speak(text: string, language: Language, emphasis: Emphasis = "normal",
+    priority: "key" | "routine" = emphasis === "normal" ? "routine" : "key") {
     if (this.failed) return this.fallback.speak(text, language, emphasis);
     const generation = this.generation;
     this.controller = new AbortController();
@@ -57,6 +63,14 @@ export class AzureSpeaker implements Speaker {
         body: JSON.stringify({ text, language, emphasis }),
         signal: this.controller.signal,
       });
+      if (response.status === 429) {
+        const body: unknown = await response.json().catch(() => null);
+        if (typeof body === "object" && body !== null && "detail" in body && body.detail === "busy") {
+          if (generation !== this.generation) return;
+          if (priority === "key") return await this.fallback.speak(text, language, emphasis);
+          throw new SpeechBusy("busy");
+        }
+      }
       if (!response.ok) throw new Error(`Speech failed: ${response.status}`);
       const blob = await response.blob();
       if (generation !== this.generation) return;
@@ -69,7 +83,8 @@ export class AzureSpeaker implements Speaker {
         audio.onerror = () => reject(new Error("Audio failed"));
         void audio.play().catch(reject);
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof SpeechBusy) throw error;
       if (generation !== this.generation) return;
       this.failed = true;
       await this.fallback.speak(text, language, emphasis);
@@ -91,7 +106,11 @@ export async function chooseSpeaker(apiBase: string): Promise<Speaker> {
     const response = await fetch(`${apiBase}/speech/config`);
     const config: unknown = await response.json();
     if (response.ok && typeof config === "object" && config !== null &&
-      "azure" in config && config.azure === true) return new AzureSpeaker(apiBase);
+      "azure" in config && config.azure === true) {
+      const rate = "azure_per_minute" in config ? config.azure_per_minute : 18;
+      return new AzureSpeaker(apiBase, new BrowserSpeaker(),
+        typeof rate === "number" && Number.isFinite(rate) && rate > 0 ? rate : 18);
+    }
   } catch { /* The browser voice needs no backend. */ }
   return new BrowserSpeaker();
 }
@@ -169,6 +188,7 @@ export class CommentaryQueue {
   private activeTextKey?: string;
   private generation = 0;
   private speed = 10;
+  private lastRoutineAt = -Infinity;
   constructor(
     private readonly speaker: Speaker,
     private readonly now: () => number,
@@ -227,17 +247,22 @@ export class CommentaryQueue {
     this.prune();
     if (this.busy) return;
     const key = this.pending.findIndex((l) => l.priority === "key");
+    if (key < 0 && this.speaker.name === "azure" &&
+      this.now() - this.lastRoutineAt < (this.speaker.routineIntervalMs ?? 3400)) return;
     const line = this.pending.splice(key < 0 ? 0 : key, 1)[0];
     if (!line) return;
+    if (line.priority === "routine" && this.speaker.name === "azure") this.lastRoutineAt = this.now();
     this.busy = true;
     this.activeTextKey = `${line.language}:${line.text.trim().replace(/\s+/g, " ")}`;
     const generation = this.generation;
-    void this.speaker.speak(line.text, line.language, line.emphasis).then(() => {
+    void this.speaker.speak(line.text, line.language, line.emphasis, line.priority).then(() => {
       if (generation !== this.generation) return;
       this.stats.spoken += line.count;
       this.stats.log.push(line.text);
       this.stats.log = this.stats.log.slice(-200);
-    }).catch(() => {}).finally(() => {
+    }).catch((error: unknown) => {
+      if (generation === this.generation && error instanceof SpeechBusy) this.stats.dropped += line.count;
+    }).finally(() => {
       if (generation !== this.generation) return;
       if (this.activeTextKey) this.recentText.set(this.activeTextKey, this.now());
       this.activeTextKey = undefined;

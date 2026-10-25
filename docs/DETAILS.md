@@ -182,7 +182,7 @@ stream adds one `recap` cue per viewer profile (priority 90, 30 s, payload `head
 `detail`, `home_goals`, `away_goals` and `moments`). `GET /model/config` returns
 `{"live": true|false}` so the Agents header can show "Offline mock model" once and hide
 millisecond timings for Tactics, Storyline and What-If when no live model is configured.
-`GET /speech/config` reports Azure AI Speech availability and remaining daily characters.
+`GET /speech/config` reports Azure AI Speech availability, `azure_per_minute`, and remaining daily characters.
 `POST /speech/tts` accepts `{text, language: "en"|"es"|"fr", emphasis: "normal"|"goal"|"big"}`
 (up to 4,000 characters) and returns MP3 audio; unconfigured Speech returns 503 `unconfigured`.
 Legacy `GET /speech/synthesize?text=…&language=en|es|fr` remains supported with
@@ -191,11 +191,15 @@ and `AZURE_SPEECH_REGION`, or the existing Entra `AZURE_SPEECH_RESOURCE_ID` path
 (with optional `AZURE_SPEECH_ENDPOINT`). Voices are Ryan (English), Henri (French),
 and Alvaro (Spanish), with SSML prosody for key moments. `PLAYMAKERS_DAILY_SPEECH_CHARS`
 defaults to 60,000 per UTC day per API process; a 256-entry LRU makes repeated audio free.
-The budget and cache are in memory and reset on process restart. Rate limits default to
+`PLAYMAKERS_SPEECH_AZURE_PER_MINUTE` defaults to 18 uncached Azure calls per minute,
+shared by all viewers in a process through a token bucket; cache hits use no tokens.
+The budget, bucket and cache are in memory and reset on process restart. Rate limits default to
 40 requests per client per minute and 120 total. The web Commentary queue speaks the
 selected fan language, prioritizes goals, red cards, What-If, recap and recovery notices,
-drops stale routine captions, and suppresses routine speech at 50× or higher. Any Azure
-failure switches to browser speech for the rest of the session. No live Azure validation
+drops stale routine captions, and suppresses routine speech at 50× or higher. Azure routine starts are paced to the configured rate (about 3.4 seconds by default);
+key lines bypass pacing. A 429 `busy` (bucket empty or Azure throttled) drops routine
+lines or uses the browser for that key line, keeping Azure active. Daily-cap 429s and
+other failures switch to browser speech for the rest of the session. Browser speech is unpaced. No live Azure validation
 has been performed.
 
 Validation: 40 offline tests cover the workflow, recovery/replay, timeout/crash backoff,

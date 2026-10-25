@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import time
 from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -86,6 +87,33 @@ class SpeechBudget:
             return max(0, cap - self.used)
 
 
+class AzureSpeechBucket:
+    """Thread-safe process-wide token bucket for uncached Azure transactions."""
+
+    def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:
+        self.clock = clock
+        self.updated = clock()
+        self.tokens = float(self.per_minute)
+        self.lock = Lock()
+
+    @property
+    def per_minute(self) -> int:
+        return _env_int("PLAYMAKERS_SPEECH_AZURE_PER_MINUTE", 18)
+
+    def acquire(self) -> bool:
+        with self.lock:
+            now = self.clock()
+            rate = self.per_minute
+            self.tokens = min(float(rate), self.tokens + (now - self.updated) * rate / 60)
+            self.updated = now
+            if self.tokens < 1:
+                return False
+            self.tokens -= 1
+            return True
+
+
+azure_bucket = AzureSpeechBucket()
+
 budget = SpeechBudget()
 cache: OrderedDict[tuple[str, Emphasis, str], bytes] = OrderedDict()
 cache_lock = Lock()
@@ -149,6 +177,7 @@ def speech_config() -> dict[str, object]:
         "azure": settings is not None,
         "region": settings.region if settings else None,
         "remaining_daily_chars": budget.remaining(),
+        "azure_per_minute": azure_bucket.per_minute,
     }
 
 
@@ -165,6 +194,8 @@ async def render_speech(request: Request, line: SpeechRequest) -> Response:
             cache.move_to_end(key)
     if audio is None:
         try:
+            if not azure_bucket.acquire():
+                raise HTTPException(status_code=429, detail="busy")
             token = "" if settings.key else await asyncio.to_thread(entra_token)
             budget.remaining(reserve=len(line.text))
             audio = await synthesize(
@@ -172,6 +203,10 @@ async def render_speech(request: Request, line: SpeechRequest) -> Response:
             )
         except HTTPException:
             raise
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 429:
+                raise HTTPException(status_code=429, detail="busy") from exc
+            raise HTTPException(status_code=502, detail="Azure AI Speech request failed") from exc
         except Exception as exc:
             raise HTTPException(status_code=502, detail="Azure AI Speech request failed") from exc
         with cache_lock:

@@ -75,7 +75,7 @@ class RateLimiter:
     @classmethod
     def for_speech(cls) -> RateLimiter:
         return cls(
-            _env_int("PLAYMAKERS_SPEECH_PER_MINUTE", 20),
+            _env_int("PLAYMAKERS_SPEECH_PER_MINUTE", 40),
             _env_int("PLAYMAKERS_SPEECH_TOTAL_PER_MINUTE", 120),
         )
 

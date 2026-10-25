@@ -1,14 +1,17 @@
+import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseStreamMessage } from "./parse";
 import type { MatchEvent, OverlayCue } from "./stream";
 import {
   AzureSpeaker,
   BrowserSpeaker,
-  MIN_GAP_MS,
+  CommentaryQueue,
+  recoveryLine,
+  useVoice,
   chooseSpeaker,
-  shouldSpeak,
   spokenLine,
-  type VoiceState,
+  type Speaker,
+  type CommentaryLine,
 } from "./voice";
 
 const event = (fields: Record<string, unknown>): MatchEvent => {
@@ -50,51 +53,9 @@ const cue = (overrides: Partial<OverlayCue>): OverlayCue => ({
   language: "es",
   ...overrides,
 });
-const fresh = (): VoiceState => ({
-  lastAt: -Infinity,
-  speaking: false,
-  spoken: new Set(),
-});
-
 afterEach(() => vi.unstubAllGlobals());
 
 describe("voice commentary", () => {
-  it("speaks only priority moments, spaced out, never twice and never stale", () => {
-    const state = fresh();
-    const goal = cue({});
-    expect(
-      shouldSpeak(
-        cue({ cue_id: "p1:tactics:viewer1" }),
-        events,
-        1000,
-        0,
-        state,
-      ),
-    ).toBe(false);
-    expect(shouldSpeak(goal, events, 1000, 0, state)).toBe(true);
-    expect(shouldSpeak(goal, events, 7000, 0, state)).toBe(false);
-    state.spoken.add(goal.cue_id);
-    state.lastAt = 0;
-    expect(shouldSpeak(goal, events, 1000, MIN_GAP_MS, state)).toBe(false);
-    const whatif = cue({
-      cue_id: "match_7:000001:what_if:viewer1",
-      template: "what_if",
-    });
-    expect(shouldSpeak(whatif, events, 1000, MIN_GAP_MS - 1, state)).toBe(
-      false,
-    );
-    expect(shouldSpeak(whatif, events, 1000, MIN_GAP_MS, state)).toBe(true);
-    expect(
-      shouldSpeak({ ...whatif, cue_id: "x" }, events, 1000, MIN_GAP_MS, {
-        ...state,
-        speaking: true,
-      }),
-    ).toBe(false);
-    const recap = cue({ cue_id: "ft:recap:viewer1", template: "recap" });
-    expect(
-      shouldSpeak(recap, events, 1000, 1, { ...state, speaking: true }),
-    ).toBe(true);
-  });
   it("builds the fan line in the selected language", () => {
     expect(
       spokenLine(
@@ -190,7 +151,128 @@ describe("voice commentary", () => {
     expect(speaker).toBeInstanceOf(AzureSpeaker);
     await speaker.speak("Goal", "en");
     const [url, init] = fetchMock.mock.calls[1];
-    expect(url).toBe("http://api/speech/synthesize?text=Goal&language=en");
-    expect(init.headers).toEqual({ "X-Playmakers-Speech": "1" });
+    expect(url).toBe("http://api/speech/tts");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual({ text: "Goal", language: "en", emphasis: "normal" });
+    expect(init.headers).toEqual({ "Content-Type": "application/json" });
   });
+});
+
+
+const line = (id: string, key = false): CommentaryLine => ({
+  id, text: id, language: "en", priority: key ? "key" : "routine",
+  emphasis: key ? "goal" : "normal",
+});
+const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
+function fixture(max = 32) {
+  let now = 0;
+  const played: string[] = [];
+  let finish: (() => void) | undefined;
+  const speaker: Speaker = {
+    name: "browser",
+    speak: vi.fn((text: string) => new Promise<void>((resolve) => {
+      played.push(text); finish = resolve;
+    })),
+    cancel: vi.fn(() => finish?.()),
+  };
+  const queue = new CommentaryQueue(speaker, () => now, 8000, max);
+  return { queue, played, speaker, advance: (ms: number) => { now += ms; },
+    finish: async () => { finish?.(); await flush(); } };
+}
+describe("full-match commentary queue", () => {
+  it("puts key moments before pending routine captions and drops stale routines only", async () => {
+    const f = fixture();
+    f.queue.enqueue(line("opening")); f.queue.tick();
+    f.queue.enqueue(line("routine")); f.queue.enqueue(line("goal", true));
+    f.advance(9000); await f.finish();
+    expect(f.played).toEqual(["opening", "goal"]);
+    await f.finish();
+    expect(f.queue.stats).toMatchObject({ spoken: 2, dropped: 1 });
+  });
+  it("bounds the queue, dropping oldest routines first and preserving key-only bursts", async () => {
+    const f = fixture(2);
+    f.queue.enqueue(line("old")); f.queue.enqueue(line("new"));
+    f.queue.enqueue(line("goal", true));
+    expect(f.queue.length).toBe(2);
+    f.queue.tick(); await f.finish(); await f.finish();
+    expect(f.played).toEqual(["goal", "new"]);
+    expect(f.queue.stats.dropped).toBe(1);
+    for (let i = 0; i < 4; i++) f.queue.enqueue(line(`key${i}`, true));
+    expect(f.queue.length).toBe(2);
+    f.queue.tick(); await f.finish(); await f.finish();
+    expect(f.queue.stats.spoken).toBe(6);
+  });
+  it("clears pending and active speech without resurrecting it on completion", async () => {
+    const f = fixture();
+    f.queue.enqueue(line("active")); f.queue.tick();
+    f.queue.enqueue(line("pending", true)); f.queue.clear();
+    await flush();
+    expect(f.speaker.cancel).toHaveBeenCalledOnce();
+    expect(f.queue.length).toBe(0);
+    expect(f.queue.stats.spoken).toBe(0);
+    expect(f.played).toEqual(["active"]);
+  });
+  it.each(["en", "es", "fr"] as const)("queues localized recovery as key lines in %s", async (language) => {
+    const f = fixture(); f.queue.setSpeed(50);
+    for (const action of ["agent_down", "caught_up"]) {
+      f.queue.enqueue({ ...line(action, true), text: recoveryLine(action, language)!, language });
+    }
+    f.queue.tick(); await f.finish(); await f.finish();
+    expect(f.played).toEqual([recoveryLine("agent_down", language), recoveryLine("caught_up", language)]);
+    expect(f.queue.stats).toMatchObject({ spoken: 2, dropped: 0 });
+  });
+  it("reports spoken vs dropped for a seed-like stream at 10x and 50x", async () => {
+    for (const speed of [10, 50]) {
+      const f = fixture(); f.queue.setSpeed(speed);
+      for (let i = 0; i < 60; i++) {
+        f.advance(30000 / speed);
+        f.queue.enqueue(line(`event${i}`, i % 10 === 0));
+        f.queue.tick(); await f.finish();
+      }
+      const expected = speed === 10 ? { spoken: 60, dropped: 0 } : { spoken: 6, dropped: 54 };
+      console.info(`${speed}x commentary`, f.queue.stats.spoken, "spoken", f.queue.stats.dropped, "dropped");
+      expect(f.queue.stats).toMatchObject(expected);
+      expect(f.played.filter((text) => Number(text.slice(5)) % 10 === 0)).toHaveLength(6);
+    }
+  });
+  it("discards queued routine captions when speed changes to 50x", () => {
+    const f = fixture(); f.queue.enqueue(line("routine")); f.queue.enqueue(line("key", true));
+    f.queue.setSpeed(50); f.queue.tick();
+    expect(f.played).toEqual(["key"]); expect(f.queue.stats.dropped).toBe(1);
+  });
+  it.each([429, 503, 502])("falls back for the entire session after HTTP %s", async (status) => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("unavailable", { status }));
+    vi.stubGlobal("fetch", fetchMock);
+    const fallback: Speaker = { name: "browser", speak: vi.fn().mockResolvedValue(undefined), cancel: vi.fn() };
+    const speaker = new AzureSpeaker("http://api", fallback);
+    await speaker.speak("Goal", "en", "goal"); await speaker.speak("Next", "fr", "normal");
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fallback.speak).toHaveBeenNthCalledWith(1, "Goal", "en", "goal");
+    expect(fallback.speak).toHaveBeenNthCalledWith(2, "Next", "fr", "normal");
+  });
+});
+
+
+it("reads only the selected fan language, deduplicates recovery, and cancels on language/off changes", async () => {
+  const f = fixture();
+  const base: Parameters<typeof useVoice>[0] = {
+    enabled: true, cues: [cue({ cue_id: "p1:tactics:fan", language: "en" }), cue({ cue_id: "p1:tactics:fr", language: "fr" })],
+    events, clock: 1000, speaker: f.speaker, language: "en" as const, speed: 10,
+    traces: [], session: "match7", kill: undefined as string | undefined,
+  };
+  const { rerender, unmount } = renderHook((props: Parameters<typeof useVoice>[0]) => useVoice(props), { initialProps: base });
+  expect(f.speaker.speak).toHaveBeenCalledWith(spokenLine(base.cues[0], events), "en", "normal");
+  await act(async () => { await f.finish(); });
+  rerender({ ...base, kill: "tactics@1" });
+  expect(f.speaker.speak).toHaveBeenCalledWith(recoveryLine("agent_down", "en"), "en", "big");
+  await act(async () => { await f.finish(); });
+  const calls = vi.mocked(f.speaker.speak).mock.calls.length;
+  rerender({ ...base, kill: "tactics@1", cues: [...base.cues] });
+  expect(f.speaker.speak).toHaveBeenCalledTimes(calls);
+  rerender({ ...base, language: "fr" });
+  expect(f.speaker.cancel).toHaveBeenCalledOnce();
+  expect(f.speaker.speak).toHaveBeenLastCalledWith(spokenLine(base.cues[1], events), "fr", "normal");
+  rerender({ ...base, enabled: false, language: "fr" });
+  expect(f.speaker.cancel).toHaveBeenCalledTimes(2);
+  unmount();
 });

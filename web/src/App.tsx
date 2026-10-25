@@ -172,17 +172,22 @@ function Playmakers() {
   const event = displayedAnalyst.events.find((e) => e.sequence === sequence);
   const clock = event?.clock_ms ?? 0;
   const restoring = Boolean(held && clock <= held.clock);
-  useVoice({
-    enabled: voice && running && !replaying,
-    cues: fan.cues,
-    events: fan.events,
-    clock,
-    speaker,
-  });
   const traces = [
     ...analyst.traces.filter((t) => t.sequence <= sequence),
     ...fan.traces.filter((t) => t.sequence <= sequence),
   ].sort((a, b) => a.sequence - b.sequence);
+  useVoice({
+    enabled: voice && running,
+    cues: fan.cues,
+    events: fan.events,
+    clock,
+    speaker,
+    language,
+    speed,
+    traces,
+    session: `${seed}-${speed}-${favourite}`,
+    kill,
+  });
   function restart() {
     setHeld(undefined);
     setReplayFrom(0);
@@ -282,14 +287,14 @@ function Playmakers() {
             </div>
             <button
               type="button"
-              className="control voice-toggle"
+              className="control commentary-toggle"
               aria-pressed={voice}
               onClick={() => {
                 if (!speaker) void chooseSpeaker(apiBaseUrl()).then(setSpeaker);
                 setVoice(!voice);
               }}
             >
-              <span>Voice</span> <b>{voice ? "On" : "Off"}</b>
+              <span>Commentary</span> <b>{voice ? "On" : "Off"}</b>
             </button>
             <div className="control favourite-control">
               <label htmlFor="favourite">Following</label>

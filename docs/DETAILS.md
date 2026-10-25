@@ -181,10 +181,21 @@ stream adds one `recap` cue per viewer profile (priority 90, 30 s, payload `head
 `detail`, `home_goals`, `away_goals` and `moments`). `GET /model/config` returns
 `{"live": true|false}` so the Agents header can show "Offline mock model" once and hide
 millisecond timings for Tactics, Storyline and What-If when no live model is configured.
-`GET /speech/config` reports whether
-Azure AI Speech is configured; `GET /speech/synthesize?text=…&language=en|es|fr` (header
-`X-Playmakers-Speech: 1`, at most 280 characters) returns MP3 audio, or 503 when Speech is
-not configured.
+`GET /speech/config` reports Azure AI Speech availability and remaining daily characters.
+`POST /speech/tts` accepts `{text, language: "en"|"es"|"fr", emphasis: "normal"|"goal"|"big"}`
+(up to 4,000 characters) and returns MP3 audio; unconfigured Speech returns 503 `unconfigured`.
+Legacy `GET /speech/synthesize?text=…&language=en|es|fr` remains supported with
+`X-Playmakers-Speech: 1` and its 280-character limit. Set server-only `AZURE_SPEECH_KEY`
+and `AZURE_SPEECH_REGION`, or the existing Entra `AZURE_SPEECH_RESOURCE_ID` path
+(with optional `AZURE_SPEECH_ENDPOINT`). Voices are Ryan (English), Henri (French),
+and Alvaro (Spanish), with SSML prosody for key moments. `PLAYMAKERS_DAILY_SPEECH_CHARS`
+defaults to 60,000 per UTC day per API process; a 256-entry LRU makes repeated audio free.
+The budget and cache are in memory and reset on process restart. Rate limits default to
+40 requests per client per minute and 120 total. The web Commentary queue speaks the
+selected fan language, prioritizes goals, red cards, What-If, recap and recovery notices,
+drops stale routine captions, and suppresses routine speech at 50× or higher. Any Azure
+failure switches to browser speech for the rest of the session. No live Azure validation
+has been performed.
 
 Validation: 40 offline tests cover the workflow, recovery/replay, timeout/crash backoff,
 What-If determinism, personalization, translation fallback, scripts and SSE/WS/MCP.

@@ -1196,17 +1196,17 @@ header {
 .offline-demo {
   color: var(--secondary);
 }
-.voice-toggle {
+.commentary-toggle {
   border: 0;
   background: none;
   padding: 0;
   font: inherit;
   cursor: pointer;
 }
-.voice-toggle span {
+.commentary-toggle span {
   color: var(--secondary);
 }
-.voice-toggle b {
+.commentary-toggle b {
   font-weight: 600;
 }
 .pitch-status {

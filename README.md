@@ -4,7 +4,7 @@
 
 Playmakers is a multi-agent TV production crew for football. It reads a live match event stream, works out what matters, explains it with cited evidence, renders timed broadcast overlays, and tailors the output for each viewer. Built for the Inside the Game: Developer Hackathon from Microsoft and the Premier League, in the Best Multi-Agent System category.
 
-Demo video: <YouTube link>
+Demo video: [Watch on YouTube](https://youtu.be/f73q0NZIVsE)
 Live demo: https://ca-playmakers-web.mangodune-1ccf56dc.eastus2.azurecontainerapps.io (desktop Chrome or Edge; first load after idle can take about 30 s)
 
 The crew is two AI agents and a set of rule-based steps around them, all in one Microsoft Agent Framework workflow. Tactics and Storyline write with a language model (Storyline also writes the full-time recap). Director, Stats, Compliance, Graphics and Audience are deterministic executors. What-If runs seeded simulations and uses a model only for its one-line explanation.

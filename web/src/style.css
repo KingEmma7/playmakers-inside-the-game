@@ -582,13 +582,6 @@ summary {
   .playmakers-layout {
     grid-template-columns: minmax(0, 1fr) 336px;
   }
-  .broadcast {
-    max-height: 420px;
-  }
-  canvas {
-    max-height: 420px;
-    object-fit: contain;
-  }
 }
 @media (max-width: 1200px) {
   header {
@@ -1402,13 +1395,6 @@ header {
   }
 }
 
-/* Leave room for both captions and the complete dominance chart on shorter screens. */
-@media (min-width: 901px) and (max-height: 950px) {
-  .broadcast canvas {
-    max-height: 288px;
-  }
-}
-
 /* Keep controls visible at the 1440 by 900 demo viewport. */
 .trace-panel .agent-grid > div {
   padding: 6px 0;
@@ -1432,15 +1418,12 @@ header {
 
 .cue.referenced-event { border-left: 2px dashed var(--home); padding-left: 8px; }
 
-/* Reserve room for the question and its short answer beside the match feed. */
+/* Keep the question available while the match feed scrolls. */
 @media (min-width: 901px) {
-  .casual .broadcast canvas { max-height: 270px; object-fit: contain; }
+  .ask-crew { position: sticky; bottom: 0; background: var(--surface); }
   .ask-crew form { display: flex; align-items: center; gap: 8px; }
   .ask-crew label { flex-shrink: 0; margin: 0; }
   .ask-controls { flex: 1; min-width: 0; }
-}
-@media (min-width: 901px) and (max-height: 950px) {
-  .casual .broadcast canvas { max-height: 190px; }
 }
 
 .goal-threat { font-size: var(--text-xs); color: var(--ink); }
@@ -1448,14 +1431,10 @@ header {
 .goal-threat-probability { color: var(--muted); }
 /* Keep the analyst simulation and both quiet threat readings visible. */
 @media (min-width: 901px) {
-  .analyst .broadcast canvas { max-height: 270px; object-fit: contain; }
   .analyst .lower-thirds { margin-top: 8px; gap: 6px; }
   .analyst .cue + .cue { padding-top: 6px; }
   .analyst .evidence { margin-top: 4px; }
   .analyst .cue.whatif p { margin-bottom: 4px; line-height: 1.35; }
   .analyst .momentum { margin-top: 4px; }
   .analyst .dominance-bars { margin: 0; }
-}
-@media (min-width: 901px) and (max-height: 950px) {
-  .analyst .broadcast canvas { max-height: 170px; }
 }

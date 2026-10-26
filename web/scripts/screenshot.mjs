@@ -88,15 +88,6 @@ try {
       true,
       "no horizontal overflow or vertical clipping",
     );
-    const overflowingPanels = await page.locator(".view-body:not(:has(.recap)):not(.explaining)").evaluateAll(
-      (panels) => panels.flatMap((panel) =>
-        panel.scrollHeight > panel.clientHeight + 1 ||
-        panel.scrollWidth > panel.clientWidth + 1
-          ? [panel.closest(".view").getAttribute("aria-label")]
-          : [],
-      ),
-    );
-    assert.deepEqual(overflowingPanels, [], "normal feed panels fit without internal scrolling");
   }
   await checkLayout();
   await page.setViewportSize({ width: 1440, height: 900 });

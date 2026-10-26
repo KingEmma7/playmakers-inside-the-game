@@ -60,8 +60,7 @@ under light pressure / Northbridge Rovers keep the ball moving; this pass rated 
 difficulty."), which goes through the same
 Compliance check and carries provenance `source: template, compliance: verified`; the
 trace shows `templated`. Kill-recover replays only gated events. Measured with the mock
-and two viewer profiles: 217 model calls for seed 7 and 180 for seed 42 (105 and 89
-events per agent, 6 and 1 What-If explanations, one recap), down from 2,992 and 3,196.
+and two viewer profiles: 217 model calls for seed 7 (105 of 1,525 events per agent, 6 What-If explanations, one recap).
 `tests/test_model_gate.py` pins the seed-7 count.
 
 Configuration (see [.env.example](../.env.example); export variables in your shell):

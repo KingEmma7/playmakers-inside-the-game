@@ -47,7 +47,7 @@ Target category: **Best Multi-Agent System** (also eligible for Grand Prize).
 5. **Category Adherence:** Microsoft tech actually in the code — **Microsoft Agent Framework** (workflow,
    executors, checkpoints; runs in every mode), a **custom Stats MCP server**, **Microsoft Foundry / Azure
    OpenAI** model clients, **Application Insights** tracing and an **azd + Bicep template for Azure
-   Container Apps**. The last three are written and tested offline but have not run against Azure yet.
+   Container Apps**. Container Apps, Foundry gpt-4.1-mini, Application Insights tracing and Azure AI Speech are deployed and live on the hosted demo in eastus2.
    Not used: Azure MCP Server, GitHub Copilot, Cosmos DB, Event Hubs. Never claim them.
 
 ## 3. Architecture
@@ -66,7 +66,7 @@ PitchSim (synthetic events) ──► replay_api (FastAPI: SSE/WS) ──► ing
                                    │
                          /playmakers/sse, /playmakers/ws  ──► web/ (React + Vite overlay UI, agent trace panel)
 Checkpoints: Agent Framework FileCheckpointStorage (local files). No database.
-Azure (template only, not deployed): Container Apps (api with /stats-mcp mounted, web), Foundry model
+Azure (deployed, eastus2): Container Apps (api with /stats-mcp mounted, web), Foundry model
 deployment, App Insights tracing, azd + Bicep in infra/. CI: GitHub Actions, offline (no eval gate).
 ```
 
@@ -83,7 +83,7 @@ packages/playmakers_agents/   Agent Framework workflow, model clients, Complianc
 services/stats_mcp/        FastMCP server exposing the stats engine as MCP tools.
 services/replay_api/       FastAPI: /healthz, /replay/*, /playmakers/sse|ws, /model/config, /speech/*, /stats-mcp.
 web/                       React + Vite + TypeScript broadcast UI; nginx image.
-infra/                     azd (azure.yaml) + Bicep: Foundry, App Insights, Container Apps. Validated locally, not deployed.
+infra/                     azd (azure.yaml) + Bicep: Foundry, App Insights, Container Apps. Deployed to rg-playmakers-demo (eastus2).
 tests/                     pytest suite (offline, mock model).
 docs/                      DETAILS.md (technical), HANDOFF.md and PLAN.md (historical), CODE-REVIEW.md.
 ```

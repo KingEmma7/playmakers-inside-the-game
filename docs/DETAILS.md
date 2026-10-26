@@ -478,7 +478,11 @@ minute and score evidence. The web holds these headlines for 60 match seconds (s
 seconds at 10×); a newer goal or red card replaces the previous one immediately.
 Fan captions describe the cited event and actors, including saved shots, incomplete
 passes, possession changes and passes under pressure. Event IDs choose a stable phrase;
-the audience step avoids repeating the previous event's line. Following-player emphasis
+the audience step avoids the last six fan phrasing templates per profile (ignoring
+favourite labels and changing player names), with eight phrasings per event type in
+each language. Both writers share the same caption for an event. Goal-threat announcements rotate four phrasings per
+language, avoiding the previous call for that team and profile, without a spoken
+time-horizon promise. Following-player emphasis
 still uses actual involvement, without adding unverified touch counts.
 
 What-If cues carry the triggering player, minute, team and home-team probability

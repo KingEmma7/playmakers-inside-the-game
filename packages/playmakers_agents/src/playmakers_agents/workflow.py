@@ -7,6 +7,7 @@ import os
 import re
 import tempfile
 import uuid
+from collections import deque
 from collections.abc import Awaitable, Callable
 from concurrent.futures import ProcessPoolExecutor
 from time import perf_counter
@@ -48,7 +49,12 @@ from playmakers_agents.contracts import (
     ViewerProfile,
 )
 from playmakers_agents.model_clients import create_playmakers_chat_client, is_live_client
-from playmakers_agents.personalize import is_significant, personalize, significant_phrase
+from playmakers_agents.personalize import (
+    goal_threat_phrase,
+    is_significant,
+    personalize,
+    significant_phrase,
+)
 from playmakers_agents.players import player_name
 from playmakers_agents.recap import (
     TEAM_NAMES,
@@ -784,6 +790,7 @@ class AudienceExecutor(Executor):
         self.profiles, self.store, self.client = profiles, store, client
         self.timeout = timeout
         self.previous_lines: dict[int, tuple[str, str]] = {}
+        self.recent_lines: dict[int, deque[str]] = {}
 
     @handler
     async def handle(
@@ -797,13 +804,23 @@ class AudienceExecutor(Executor):
                 # Both writers describe the same event with the same fan caption.
                 previous = prior_line if prior_id != event.event_id else ""
                 shaped = await personalize(
-                    cue, profile, event, self.client, index, self.timeout, previous
+                    cue,
+                    profile,
+                    event,
+                    self.client,
+                    index,
+                    self.timeout,
+                    previous,
+                    list(self.recent_lines.get(index, ())),
                 )
                 if profile.persona == "casual":
                     if prior_id == event.event_id:
                         shaped.payload["headline"] = prior_line
                     else:
                         self.previous_lines[index] = (event.event_id, shaped.payload["headline"])
+                        self.recent_lines.setdefault(index, deque(maxlen=6)).append(
+                            shaped.payload["headline"]
+                        )
                 # Verify the localized prose too, using the already approved metric evidence.
                 if shaped.provenance and shaped.provenance.compliance == "verified":
                     metrics = shaped.payload.get("metrics", {})
@@ -877,6 +894,7 @@ class Director:
             checkpoint_path = self._temporary_checkpoints.name
         self.engines: dict[str, StatsEngine] = {}
         self.threat_announcements: dict[str, ThreatAnnouncements] = {}
+        self.previous_threat_lines: dict[tuple[str, str, int], str] = {}
         self.what_if = WhatIfAgent(
             self.client,
             whatif_rollouts,
@@ -1160,11 +1178,14 @@ class Director:
                     continue
                 for index, profile in enumerate(self.profiles):
                     name = team_name(threat.team_id)
-                    headline = {
-                        "en": f"{name} are building pressure. A goal could be coming in the next few minutes.",
-                        "es": f"{name} aumenta la presión. Podría llegar un gol en los próximos minutos.",
-                        "fr": f"{name} accentue la pression. Un but pourrait arriver dans les prochaines minutes.",
-                    }[profile.language]
+                    history_key = (event.match_id, threat.team_id, index)
+                    headline = goal_threat_phrase(
+                        event.event_id,
+                        name,
+                        profile.language,
+                        self.previous_threat_lines.get(history_key, ""),
+                    )
+                    self.previous_threat_lines[history_key] = headline
                     evidence_ids = list(dict.fromkeys([event.event_id, *threat.evidence.event_ids]))
                     cue = OverlayCue(
                         cue_id=f"{event.event_id}:goal_threat:{threat.team_id}:{index}",
